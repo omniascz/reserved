@@ -26,10 +26,10 @@ MVP bez série a marketplace = 5–6 měsíců.
 ```
 Fáze 0: Setup               (týdny 1–3)       ← jsme tady
 Fáze 1: MVP Core            (týdny 4–16)       → 3 měsíce
-Fáze 2: Pro plán            (týdny 17–32)      → 4 měsíce
-Fáze 3: Business plán       (týdny 33–52)      → 5 měsíců
-Fáze 4: Marketplace         (týdny 53–72)      → 5 měsíců
-Fáze 5: Enterprise & AI     (týdny 73+)        → průběžně
+Fáze 2: Pro plán            (týdny 17–32)      → 4 měsíce  (vč. 2.7 Marketing & retence)
+Fáze 3: Business plán       (týdny 33–55)      → 5 měsíců  (vč. 3.5 i18n + PWA)
+Fáze 4: Marketplace         (týdny 56–75)      → 5 měsíců  (vč. 4.5 Premium platby)
+Fáze 5: Enterprise & AI     (týdny 76+)        → průběžně
 ```
 
 ---
@@ -218,9 +218,12 @@ Nejkomplexnější část MVP — musí být správně od začátku.
 
 **Backend:**
 - [ ] `customers` + `customer_tags` + `customer_notes` migrace (viz 13b)
+- [ ] `customer_segments` tabulka — uložené filtry (VIP, firemní, rizikový, ...)
 - [ ] `GET/POST/PATCH /api/v1/admin/customers`
 - [ ] `GET /api/v1/admin/customers/{id}/bookings`
 - [ ] Full-text search zákazníků (PostgreSQL GIN index)
+- [ ] CSV import/export zákazníků (admin endpoint)
+- [ ] GDPR endpointy — export dat zákazníka, právo na výmaz
 - [ ] Postmark integrace — všechny transakční šablony:
   - booking_confirmed
   - booking_reminder_24h
@@ -231,9 +234,11 @@ Nejkomplexnější část MVP — musí být správně od začátku.
   - email_verification
 
 **Frontend:**
-- [ ] Zákazníci list + search + filtry
-- [ ] Zákazník detail (info, rezervace, poznámky)
+- [ ] Zákazníci list + search + filtry + tag picker
+- [ ] Zákazník detail (info, rezervace, poznámky, tagy, historie)
 - [ ] Rychlé přidání poznámky
+- [ ] Segmenty: vytvoř → ulož filtr → použij v kampaních
+- [ ] GDPR akce — export dat, smazání účtu
 
 **Milník fáze 1:** První platící zákazník přijme první rezervaci přes online formulář.
 
@@ -331,6 +336,23 @@ Nejkomplexnější část MVP — musí být správně od začátku.
 - [ ] `notify_waiting_list` job
 - [ ] Zákaznický portál — sekce Moje balíčky
 
+---
+
+### Sprint 2.7 — Marketing & retence (NOVÝ, týdny 31–32 paralelně)
+
+> Vyplnění mezery v zadání: věrnostní program, recenze, up-sell — sprint 2.7 je úzce vázán na 2.6, lze běžet paralelně s ním (jiný vývojář / Claude session).
+
+- [ ] `loyalty_programs` + `loyalty_points` migrace
+- [ ] Bodový věrnostní program (admin konfiguruje pravidla: X bodů za Y Kč, X bodů → sleva)
+- [ ] Slevové kupóny — procentuální, fixní, jednorázové, opakované (`coupons` tabulka)
+- [ ] `reviews` migrace + flow: po proběhlé službě → automatický email „Ohodnoťte návštěvu" (D+1)
+- [ ] Google Reviews integrace (link na firemní profil) + interní hvězdičky
+- [ ] Up-sell engine: při rezervaci nabídnout „Přidej regeneraci za 200 Kč" dle pravidel
+  - `upsell_rules` tabulka (trigger service → suggested service + sleva)
+  - Widget v sprint 1.5b dostane addons step
+- [ ] Re-engagement job: zákazník 60 dní bez rezervace → automatický email s 15% slevou
+- [ ] Newsletter integrace (Mailchimp/Klaviyo connector přes webhook)
+
 **Milník fáze 2:** Pro plán živý, platby fungují, zákaznický portál spuštěn.
 
 ---
@@ -408,9 +430,29 @@ Největší modul. 9 týdnů. Nelze zkrátit bez kompromisů.
 - [ ] Churn detection + reaktivační emaily (`churn_detection` job)
 - [ ] Revenue reporting dashboard
 - [ ] Export (CSV + PDF) per zaměstnanec, pobočka, období
+- [ ] Export ISDOC pro CZ účetnictví (Pohoda, Money S3 import)
 - [ ] `gdpr_data_retention` job
 
-**Milník fáze 3:** Business plán živý, permanentky v produkci.
+---
+
+### Sprint 3.5 — i18n + PWA admin (NOVÝ, týdny 53–55, prolíná do fáze 4)
+
+> Vyplnění mezery: vícejazyčné UI a mobilní PWA pro admin. Spec to požaduje
+> jako core feature, ale technicky se hodí až po stabilizaci core flow.
+
+- [ ] `i18n` setup ve všech apps (apps/web, /widget, /portal) — next-intl nebo react-intl
+- [ ] Překlady do CS (default), SK, EN — všechny UI stringy + emaily
+- [ ] Tenant nastavení: default jazyk + povolené jazyky pro zákazníky
+- [ ] Locale switch ve widgetu a portálu
+- [ ] DE, PL překlady jako follow-up (komunitní příspěvky)
+- [ ] PWA manifest + service worker pro apps/web (admin)
+  - Add to home screen
+  - Offline shell (čte z cache, queue mutations)
+  - Push notifikace o nové rezervaci (Firebase FCM)
+- [ ] PWA pro apps/portal (zákazník) — minimum: install prompt + add to calendar
+- [ ] Mobile-first review existujícího admin UI — zajistit funkčnost na 360px+
+
+**Milník fáze 3:** Business plán živý, permanentky v produkci, salonář může spravovat mobilem.
 
 ---
 
@@ -466,11 +508,24 @@ Největší modul. 9 týdnů. Nelze zkrátit bez kompromisů.
 - [ ] SEO optimalizace marketplace stránek (Next.js SSR, structured data)
 - [ ] Sitemap generování (pro Google indexaci)
 
-**Milník fáze 4:** Marketplace v produkci, první Stripe Connect payout proběhl.
+---
+
+### Sprint 4.5 — Premium platební metody (NOVÝ, týdny 73–75)
+
+> Vyplnění mezery: Apple Pay / Google Pay / BNPL podle zadání.
+
+- [ ] Apple Pay přes Stripe Elements (PaymentRequest API)
+- [ ] Google Pay přes Stripe Elements
+- [ ] Klarna BNPL pro dražší procedury (laser, ortodoncie, balíčky)
+- [ ] Pay by bank (Trustly) pro CZ/EU
+- [ ] Saved cards: zákazník si uloží kartu pro rychlý checkout
+- [ ] Subscription billing pro permanentky (Stripe Subscriptions)
+
+**Milník fáze 4:** Marketplace v produkci, první Stripe Connect payout proběhl, plné platební portfolio včetně premium metod.
 
 ---
 
-## FÁZE 5 — Enterprise & AI (týdny 73+)
+## FÁZE 5 — Enterprise & AI (týdny 76+)
 
 Průběžně dle poptávky a revenue.
 
