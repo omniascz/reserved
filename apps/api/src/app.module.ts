@@ -1,9 +1,11 @@
 import { MiddlewareConsumer, Module, NestModule, RequestMethod } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { AuthModule } from './auth/auth.module.js';
+import { AvailabilityModule } from './availability/availability.module.js';
 import { DbModule } from './db/db.module.js';
 import { EmployeesModule } from './employees/employees.module.js';
 import { HealthController } from './health/health.controller.js';
+import { PublicModule } from './public/public.module.js';
 import { ServicesModule } from './services/services.module.js';
 import { TenantModule } from './tenant/tenant.module.js';
 import { TenantMiddleware } from './tenant/tenant.middleware.js';
@@ -19,20 +21,16 @@ import { TenantMiddleware } from './tenant/tenant.middleware.js';
     AuthModule,
     ServicesModule,
     EmployeesModule,
+    AvailabilityModule,
+    PublicModule,
   ],
   controllers: [HealthController],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer): void {
-    // TenantMiddleware běží na všech endpointech KROMĚ:
-    //   - /api/v1/health   — bez tenant kontextu (monitoring)
-    //   - /api/v1/auth/register — vytváří NOVÝ tenant, nemá ho v hostname
-    //   - /api/v1/auth/refresh, /logout — sub-claim z refresh tokenu nese
-    //                                     userId; tenant resolution by selhal
-    //                                     na localhost dev bez X-Tenant-ID
-    // TenantMiddleware běží jen na public/customer endpointech (login, widget,
-    // customer portal). Admin a platform endpointy mají tenant v JWT claimu
-    // a tenant resolution z URL je tam zbytečná (na localhost dev navíc selže).
+    // TenantMiddleware běží jen na customer-facing endpointech (login,
+    // customer portal). Admin/platform mají tenant v JWT, public endpointy
+    // si ho resolvují přímo ze slugu v URL.
     consumer
       .apply(TenantMiddleware)
       .exclude(
@@ -42,6 +40,7 @@ export class AppModule implements NestModule {
         { path: 'auth/logout', method: RequestMethod.POST },
         { path: 'admin/(.*)', method: RequestMethod.ALL },
         { path: 'platform/(.*)', method: RequestMethod.ALL },
+        { path: 'public/(.*)', method: RequestMethod.ALL },
       )
       .forRoutes('*');
   }

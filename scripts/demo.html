@@ -294,6 +294,67 @@
       </div>
     </div>
 
+    <h2 style="margin-top: 40px">🛒 Sprint 1.4 — pohled zákazníka</h2>
+    <p class="subtitle">
+      Zákazník se na web podívá BEZ přihlášení. Volá public endpointy se slug-em
+      tvého salonu v URL. Vidí jen co jsi označil jako veřejné.
+    </p>
+
+    <div class="row">
+      <!-- ─── PUBLIC info ──────────────────────────────────────── -->
+      <div class="card">
+        <h2>9️⃣ Public widget — co vidí zákazník</h2>
+        <p class="help">
+          Žádný login — endpointy `/api/v1/public/:slug/...`. Tlačítko vypíše
+          info, služby a zaměstnance dostupné na webu.
+        </p>
+        <button onclick="publicInfo()">Načíst veřejný katalog</button>
+        <pre id="public-info-out">Nejdřív vytvoř salon v kroku 1…</pre>
+      </div>
+
+      <!-- ─── AVAILABILITY ─────────────────────────────────────── -->
+      <div class="card">
+        <h2>🔟 Volné termíny</h2>
+        <p class="help">
+          Engine spočítá volné sloty pro vybraný den z pracovní doby zaměstnance,
+          aktivních rezervací, holds a buffer času.
+        </p>
+        <label>
+          Den (musí být pondělí–pátek 9–17, jak jsi nastavil v kroku 7)
+          <input id="avail-date" type="date" />
+        </label>
+        <button onclick="loadAvailability()">Načíst volné termíny</button>
+        <pre id="avail-out">…</pre>
+      </div>
+
+      <!-- ─── HOLD ───────────────────────────────────────────── -->
+      <div class="card">
+        <h2>1️⃣1️⃣ Zamknutí slotu (10 min)</h2>
+        <p class="help">
+          Zákazník klikne na termín → server slot zamkne na 10 min, dokud
+          nezaplatí. Druhý zákazník hned uvidí, že je obsazeno.
+        </p>
+        <button id="hold-btn" disabled onclick="createHold()">
+          Zamknout (klikni v 🔟 na sloty)
+        </button>
+        <button class="danger" onclick="duplicateHold()">
+          Zkusit zamknout ten samý znovu (test SLOT_TAKEN)
+        </button>
+        <pre id="hold-out">…</pre>
+      </div>
+
+      <!-- ─── DOUBLE-BOOK PROOF ──────────────────────────────── -->
+      <div class="card">
+        <h2>1️⃣2️⃣ Důkaz: po holdu slot zmizí</h2>
+        <p class="help">
+          Po zamknutí klikni znovu „Načíst volné termíny" v 🔟 — zamknutý
+          slot už mezi nimi nebude, dokud hold nevyprší (10 min) nebo se nezruší.
+        </p>
+        <button onclick="loadAvailability()">Načíst termíny znovu</button>
+        <pre id="proof-out">Použij 🔟 …</pre>
+      </div>
+    </div>
+
     <script>
       const API = 'http://localhost:3001/api/v1';
 
@@ -661,6 +722,122 @@
         } catch (e) {
           show('schedule-out', 0, { error: String(e) });
         }
+      }
+
+      // ─── Sprint 1.4 — public flow ────────────────────────────────────
+      let s14 = {
+        availableSlots: [],
+        selectedSlot: null,
+      };
+
+      function publicUrl(path) {
+        if (!state.tenantSlug) {
+          throw new Error('Nejdřív vytvoř salon v kroku 1.');
+        }
+        return API + '/public/' + state.tenantSlug + path;
+      }
+
+      async function publicInfo() {
+        try {
+          const [info, services, employees] = await Promise.all([
+            fetch(publicUrl('')).then((r) => r.json()),
+            fetch(publicUrl('/services')).then((r) => r.json()),
+            fetch(publicUrl('/employees')).then((r) => r.json()),
+          ]);
+          show('public-info-out', 200, {
+            tenant: info.data,
+            services: services.data,
+            employees: employees.data,
+          });
+        } catch (e) {
+          show('public-info-out', 0, { error: String(e) });
+        }
+      }
+
+      function nextWeekday(weekday) {
+        // weekday: 1=Mon ... 7=Sun
+        const today = new Date();
+        const result = new Date(today);
+        const diff = (weekday - today.getDay() + 7) % 7 || 7;
+        result.setDate(today.getDate() + diff);
+        return result.toISOString().slice(0, 10);
+      }
+
+      // Při načtení nastav default datum = příští pondělí
+      window.addEventListener('DOMContentLoaded', () => {
+        const inp = document.getElementById('avail-date');
+        if (inp) inp.value = nextWeekday(1); // pondělí
+      });
+
+      async function loadAvailability() {
+        try {
+          if (!s13.serviceIds[0]) {
+            show('avail-out', 0, {
+              error: 'Nejdřív vytvoř službu v kroku 5 a zaměstnance s rozpisem v kroku 7.',
+            });
+            return;
+          }
+          const date = document.getElementById('avail-date').value;
+          if (!date) {
+            show('avail-out', 0, { error: 'Vyber datum.' });
+            return;
+          }
+          const url =
+            publicUrl('/availability') +
+            '?serviceId=' + s13.serviceIds[0] +
+            '&date=' + date;
+          const r = await fetch(url);
+          const data = await r.json();
+          show('avail-out', r.status, data);
+          // Show same data in the proof card too
+          show('proof-out', r.status, {
+            datum: date,
+            pocet_volnych_slotu: (data.data?.[0]?.slots ?? []).length,
+            sloty: (data.data?.[0]?.slots ?? []).map((s) =>
+              new Date(s.startsAt).toISOString().slice(11, 16),
+            ),
+          });
+          // Save first slot pro hold tlačítko
+          const first = data.data?.[0]?.slots?.[0];
+          if (first) {
+            s14.availableSlots = data.data[0].slots;
+            s14.selectedSlot = first.startsAt;
+            const btn = document.getElementById('hold-btn');
+            btn.disabled = false;
+            btn.textContent =
+              'Zamknout slot ' +
+              new Date(first.startsAt).toLocaleString('cs-CZ', { hour: '2-digit', minute: '2-digit' });
+          }
+        } catch (e) {
+          show('avail-out', 0, { error: String(e) });
+        }
+      }
+
+      async function createHold() {
+        try {
+          if (!s14.selectedSlot || !s13.serviceIds[0] || !s13.employeeId) {
+            show('hold-out', 0, { error: 'Nejdřív načti termíny v 🔟.' });
+            return;
+          }
+          const r = await fetch(publicUrl('/holds'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              serviceId: s13.serviceIds[0],
+              employeeId: s13.employeeId,
+              startsAt: s14.selectedSlot,
+            }),
+          });
+          const data = await r.json();
+          show('hold-out', r.status, data);
+        } catch (e) {
+          show('hold-out', 0, { error: String(e) });
+        }
+      }
+
+      async function duplicateHold() {
+        // Stejné jako createHold, ale očekáváme 400 SLOT_TAKEN
+        await createHold();
       }
 
       async function fullSnapshot() {

@@ -14,3 +14,4 @@ export * from './sessions.js';
 export * from './onboarding.js';
 export * from './services.js';
 export * from './employees.js';
+export * from './bookings.js';

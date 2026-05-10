@@ -43,6 +43,20 @@
       "when": 1778438258541,
       "tag": "0005_rls_services_employees",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1778439022312,
+      "tag": "0006_bookings_holds_blocks",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1778439031568,
+      "tag": "0007_rls_bookings_exclude",
+      "breakpoints": true
     }
   ]
 }
