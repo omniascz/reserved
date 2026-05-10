@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "build": "nest build",
-    "dev": "nest start --watch",
+    "dev": "tsx watch src/main.ts",
     "start": "node dist/main.js",
     "start:prod": "NODE_ENV=production node dist/main.js",
     "lint": "eslint \"{src,test}/**/*.ts\"",
@@ -20,6 +20,8 @@
     "@nestjs/platform-express": "^10.4.0",
     "@nestjs/terminus": "^10.2.0",
     "@reserved/db": "workspace:*",
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.14.1",
     "@reserved/types": "workspace:*",
     "@reserved/utils": "workspace:*",
     "reflect-metadata": "^0.2.2",
@@ -32,6 +34,7 @@
     "@nestjs/testing": "^10.4.0",
     "@types/express": "^5.0.0",
     "@types/node": "^22.10.0",
+    "tsx": "^4.19.0",
     "typescript": "^5.7.0",
     "vitest": "^2.1.0"
   }
