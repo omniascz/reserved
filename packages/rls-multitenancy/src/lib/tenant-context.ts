@@ -8,8 +8,8 @@
 // do `SET LOCAL`. PostgreSQL nepodporuje parameter binding pro SET, takže
 // musíme používat string interpolaci — ale jen po regex validaci.
 
-import type { DbAdapter } from './service-container';
-import { APP_ROLES, type AppRole, type TenantContext } from '../types/tenant';
+import type { DbAdapter } from './service-container.js';
+import { APP_ROLES, type AppRole, type TenantContext } from '../types/tenant.js';
 
 /** UUID regex — RFC 4122 formát. */
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

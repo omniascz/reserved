@@ -1,7 +1,7 @@
 // Helper factory funkce pro běžné context tvary.
 // Použití v API route handlerech a background jobs.
 
-import type { TenantContext } from '../types/tenant';
+import type { TenantContext } from '../types/tenant.js';
 
 export function ownerContext(tenantId: string, userId: string): TenantContext {
   return { tenantId, userId, role: 'owner' };

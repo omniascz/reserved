@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
-import { withTenantContext } from '../lib/tenant-context';
-import { ownerContext, customerContext, serviceContext } from '../lib/tenant-helpers';
-import type { DbAdapter } from '../lib/service-container';
+import { withTenantContext } from '../lib/tenant-context.js';
+import { ownerContext, customerContext, serviceContext } from '../lib/tenant-helpers.js';
+import type { DbAdapter } from '../lib/service-container.js';
 
 const VALID_UUID_1 = '11111111-1111-4111-8111-111111111111';
 const VALID_UUID_2 = '22222222-2222-4222-8222-222222222222';
