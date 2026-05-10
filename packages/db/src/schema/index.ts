@@ -7,8 +7,8 @@
 //   - UUID v7 pro ID (časově řazené, lepší index locality)
 //   - tenant_id v každé tenant-scoped tabulce + RLS policy
 
-export * from './tenants';
-export * from './branches';
-export * from './users';
-export * from './sessions';
-export * from './onboarding';
+export * from './tenants.js';
+export * from './branches.js';
+export * from './users.js';
+export * from './sessions.js';
+export * from './onboarding.js';

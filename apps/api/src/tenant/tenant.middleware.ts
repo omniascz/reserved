@@ -12,10 +12,11 @@
 // Pro local dev: localhost neresolvuje subdoménu, vyžaduje X-Tenant-ID nebo
 // X-Tenant-Slug.
 
-import { Injectable, NestMiddleware, NotFoundException } from '@nestjs/common';
+import { Inject, Injectable, NestMiddleware, NotFoundException } from '@nestjs/common';
 import type { Request, Response, NextFunction } from 'express';
 import { TenantConfig } from './tenant.config.js';
 import { extractTenantCandidates } from './tenant.resolver.js';
+import { DrizzleTenantLookup } from './tenant-lookup.service.js';
 import type { ResolvedTenant } from './tenant.types.js';
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -35,8 +36,8 @@ export interface TenantLookup {
 @Injectable()
 export class TenantMiddleware implements NestMiddleware {
   constructor(
-    private readonly config: TenantConfig,
-    private readonly lookup: TenantLookup,
+    @Inject(TenantConfig) private readonly config: TenantConfig,
+    @Inject(DrizzleTenantLookup) private readonly lookup: TenantLookup,
   ) {}
 
   async use(req: Request, _res: Response, next: NextFunction): Promise<void> {

@@ -1,5 +1,5 @@
 import { pgTable, uuid, boolean, timestamp, jsonb, index } from 'drizzle-orm/pg-core';
-import { tenants } from './tenants';
+import { tenants } from './tenants.js';
 
 // Reference: reserved-docs/17_onboarding_flow.md
 //
