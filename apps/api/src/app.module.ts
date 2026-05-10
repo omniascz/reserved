@@ -2,7 +2,9 @@ import { MiddlewareConsumer, Module, NestModule, RequestMethod } from '@nestjs/c
 import { ConfigModule } from '@nestjs/config';
 import { AuthModule } from './auth/auth.module.js';
 import { AvailabilityModule } from './availability/availability.module.js';
+import { BookingsModule } from './bookings/bookings.module.js';
 import { DbModule } from './db/db.module.js';
+import { EmailModule } from './email/email.module.js';
 import { EmployeesModule } from './employees/employees.module.js';
 import { HealthController } from './health/health.controller.js';
 import { PublicModule } from './public/public.module.js';
@@ -22,6 +24,8 @@ import { TenantMiddleware } from './tenant/tenant.middleware.js';
     ServicesModule,
     EmployeesModule,
     AvailabilityModule,
+    EmailModule,
+    BookingsModule,
     PublicModule,
   ],
   controllers: [HealthController],

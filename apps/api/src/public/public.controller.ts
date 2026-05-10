@@ -21,8 +21,10 @@ import { Public } from '../auth/decorators/public.decorator.js';
 import { ZodValidationPipe } from '../auth/zod-validation.pipe.js';
 import { DbService } from '../db/db.service.js';
 import { AvailabilityService } from '../availability/availability.service.js';
+import { BookingsService } from '../bookings/bookings.service.js';
+import { ConfirmBookingSchema, type ConfirmBookingDto } from '../bookings/dto/booking.dto.js';
 import { DrizzleTenantLookup } from '../tenant/tenant-lookup.service.js';
-import { randomUUID, randomBytes } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 
 const HoldSchema = z.object({
   serviceId: z.string().uuid(),
@@ -36,6 +38,7 @@ export class PublicController {
     @Inject(DbService) private readonly dbService: DbService,
     @Inject(DrizzleTenantLookup) private readonly tenantLookup: DrizzleTenantLookup,
     @Inject(AvailabilityService) private readonly availability: AvailabilityService,
+    @Inject(BookingsService) private readonly bookings: BookingsService,
   ) {}
 
   /** GET /api/v1/public/:slug — info o tenant (název, currency, timezone). */
@@ -268,6 +271,27 @@ export class PublicController {
         throw err;
       }
     });
+  }
+
+  /** POST /api/v1/public/:slug/bookings — finalizuje rezervaci ze slot holdu. */
+  @Public()
+  @Post('bookings')
+  @HttpCode(201)
+  async confirmBooking(
+    @Param('slug') slug: string,
+    @Body(new ZodValidationPipe(ConfirmBookingSchema)) dto: ConfirmBookingDto,
+  ) {
+    const tenant = await this.resolveTenant(slug);
+    const booking = await this.bookings.confirmFromHold(tenant.id, dto);
+    return {
+      data: {
+        id: booking.id,
+        referenceCode: booking.referenceCode,
+        startsAt: booking.startsAt,
+        endsAt: booking.endsAt,
+        status: booking.status,
+      },
+    };
   }
 
   // ─── Helpers ──────────────────────────────────────────────────────────

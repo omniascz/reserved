@@ -1,0 +1,594 @@
+// BookingsService — všechna logika kolem rezervací:
+//   - confirmFromHold: konverze slot_hold → booking (public flow)
+//   - adminCreate, cancel, reschedule, list (admin flow)
+//   - status historie + email queue v jedné transakci
+
+import {
+  BadRequestException,
+  ForbiddenException,
+  Inject,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { and, asc, desc, eq, gte, inArray, lte } from 'drizzle-orm';
+import { schema } from '@reserved/db';
+import { type AppRole, type TenantContext, serviceContext } from '@reserved/rls-multitenancy';
+import { randomBytes } from 'node:crypto';
+import { DbService } from '../db/db.service.js';
+import { EmailService } from '../email/email.service.js';
+import type {
+  AdminCreateBookingDto,
+  CancelBookingDto,
+  ConfirmBookingDto,
+  RescheduleBookingDto,
+} from './dto/booking.dto.js';
+
+const MANAGE_ROLES: AppRole[] = ['owner', 'manager', 'employee', 'receptionist'];
+
+function ctxFor(tenantId: string, userId: string, role: AppRole): TenantContext {
+  return { tenantId, userId, role };
+}
+
+function assertCanManage(role: AppRole): void {
+  if (!MANAGE_ROLES.includes(role)) {
+    throw new ForbiddenException({
+      error: {
+        code: 'INSUFFICIENT_ROLE',
+        message: 'Pouze zaměstnanec, recepce, manager nebo owner mohou spravovat rezervace.',
+      },
+    });
+  }
+}
+
+function generateReferenceCode(): string {
+  // Krátký lidsky čitelný kód, např. "B-K3F9-2L7M"
+  const part = () =>
+    randomBytes(2)
+      .toString('hex')
+      .toUpperCase()
+      .replace(/[0OIL1]/g, 'X');
+  return `B-${part()}-${part()}`;
+}
+
+@Injectable()
+export class BookingsService {
+  constructor(
+    @Inject(DbService) private readonly dbService: DbService,
+    @Inject(EmailService) private readonly email: EmailService,
+  ) {}
+
+  // ─── Public: confirm from hold ───────────────────────────────────────
+
+  async confirmFromHold(tenantId: string, dto: ConfirmBookingDto) {
+    return this.dbService
+      .withRlsContext(serviceContext(tenantId), async (tx) => {
+        // 1. Najdi hold
+        const holdRows = await tx
+          .select()
+          .from(schema.slotHolds)
+          .where(
+            and(
+              eq(schema.slotHolds.tenantId, tenantId),
+              eq(schema.slotHolds.sessionToken, dto.sessionToken),
+              eq(schema.slotHolds.status, 'active'),
+            ),
+          )
+          .limit(1);
+        const hold = holdRows[0];
+
+        if (!hold) {
+          throw new NotFoundException({
+            error: { code: 'HOLD_NOT_FOUND', message: 'Hold neexistuje nebo už byl použit.' },
+          });
+        }
+
+        if (hold.expiresAt.getTime() < Date.now()) {
+          await tx
+            .update(schema.slotHolds)
+            .set({ status: 'expired' })
+            .where(eq(schema.slotHolds.id, hold.id));
+          throw new BadRequestException({
+            error: {
+              code: 'HOLD_EXPIRED',
+              message: 'Hold vypršel (10 min limit). Začni znovu výběrem termínu.',
+            },
+          });
+        }
+
+        // 2. Načti service (pro priceHellers)
+        const svcRows = await tx
+          .select()
+          .from(schema.services)
+          .where(eq(schema.services.id, hold.serviceId))
+          .limit(1);
+        const service = svcRows[0]!;
+
+        // 3. Vytvoř booking
+        const refCode = generateReferenceCode();
+        const [booking] = await tx
+          .insert(schema.bookings)
+          .values({
+            tenantId,
+            branchId: hold.branchId,
+            serviceId: hold.serviceId,
+            employeeId: hold.employeeId,
+            customerUserId: dto.customerUserId ?? null,
+            customerName: dto.customerName,
+            customerEmail: dto.customerEmail,
+            customerPhone: dto.customerPhone ?? null,
+            startsAt: hold.startsAt,
+            endsAt: hold.endsAt,
+            bufferStartsAt: hold.bufferStartsAt,
+            bufferEndsAt: hold.bufferEndsAt,
+            status: 'confirmed',
+            pricePaidHellers: service.priceHellers,
+            currency: service.currency,
+            customerNote: dto.customerNote ?? null,
+            referenceCode: refCode,
+            metadata: { source: 'public_widget' },
+          })
+          .returning();
+
+        // 4. Mark hold as converted
+        await tx
+          .update(schema.slotHolds)
+          .set({ status: 'converted', convertedToBookingId: booking!.id })
+          .where(eq(schema.slotHolds.id, hold.id));
+
+        // 5. Status history
+        await tx.insert(schema.bookingStatusHistory).values({
+          tenantId,
+          bookingId: booking!.id,
+          fromStatus: null,
+          toStatus: 'confirmed',
+          changedBy: 'customer',
+          metadata: { source: 'public_widget' },
+        });
+
+        return { booking: booking!, service };
+      })
+      .then(async (result) => {
+        // 6. Pošli confirmation email (mimo transakci)
+        const empRows = await this.dbService.withRlsContext(
+          serviceContext(tenantId),
+          async (tx) => {
+            return tx
+              .select()
+              .from(schema.employees)
+              .where(eq(schema.employees.id, result.booking.employeeId!))
+              .limit(1);
+          },
+        );
+        const emp = empRows[0];
+
+        const tenantRows = await this.dbService.withRlsContext(
+          serviceContext(tenantId),
+          async (tx) => {
+            return tx.select().from(schema.tenants).where(eq(schema.tenants.id, tenantId)).limit(1);
+          },
+        );
+        const tenant = tenantRows[0]!;
+
+        await this.email.enqueue({
+          tenantId,
+          templateCode: 'booking_confirmed',
+          recipient: dto.customerEmail,
+          relatedBookingId: result.booking.id,
+          vars: {
+            customerName: dto.customerName,
+            serviceName: result.service.name,
+            employeeName: emp
+              ? (emp.displayName ?? `${emp.firstName} ${emp.lastName}`)
+              : 'Zaměstnanec',
+            tenantName: tenant.name,
+            startsAt: result.booking.startsAt.toISOString(),
+            endsAt: result.booking.endsAt.toISOString(),
+            referenceCode: result.booking.referenceCode,
+          },
+        });
+
+        return result.booking;
+      });
+  }
+
+  // ─── Admin endpointy ────────────────────────────────────────────────
+
+  async listForAdmin(
+    tenantId: string,
+    userId: string,
+    role: AppRole,
+    filters: { from?: string; to?: string; status?: string },
+  ) {
+    return this.dbService.withRlsContext(ctxFor(tenantId, userId, role), async (tx) => {
+      const conditions = [eq(schema.bookings.tenantId, tenantId)];
+      if (filters.from) {
+        conditions.push(gte(schema.bookings.startsAt, new Date(filters.from)));
+      }
+      if (filters.to) {
+        conditions.push(lte(schema.bookings.startsAt, new Date(filters.to)));
+      }
+      if (filters.status) {
+        conditions.push(eq(schema.bookings.status, filters.status));
+      }
+
+      return tx
+        .select()
+        .from(schema.bookings)
+        .where(and(...conditions))
+        .orderBy(asc(schema.bookings.startsAt))
+        .limit(200);
+    });
+  }
+
+  async getForAdmin(tenantId: string, userId: string, role: AppRole, bookingId: string) {
+    const rows = await this.dbService.withRlsContext(ctxFor(tenantId, userId, role), async (tx) => {
+      return tx
+        .select()
+        .from(schema.bookings)
+        .where(and(eq(schema.bookings.id, bookingId), eq(schema.bookings.tenantId, tenantId)))
+        .limit(1);
+    });
+    if (!rows[0]) {
+      throw new NotFoundException({
+        error: { code: 'BOOKING_NOT_FOUND', message: 'Rezervace nenalezena.' },
+      });
+    }
+    return rows[0];
+  }
+
+  async adminCreate(tenantId: string, userId: string, role: AppRole, dto: AdminCreateBookingDto) {
+    assertCanManage(role);
+    return this.dbService
+      .withRlsContext(ctxFor(tenantId, userId, role), async (tx) => {
+        // 1. Load service
+        const svcRows = await tx
+          .select()
+          .from(schema.services)
+          .where(and(eq(schema.services.id, dto.serviceId), eq(schema.services.tenantId, tenantId)))
+          .limit(1);
+        const service = svcRows[0];
+        if (!service) {
+          throw new NotFoundException({
+            error: { code: 'SERVICE_NOT_FOUND', message: 'Služba nenalezena.' },
+          });
+        }
+
+        // 2. Resolve branch
+        let branchId = dto.branchId ?? null;
+        if (!branchId) {
+          const empBranchRows = await tx
+            .select({ branchId: schema.employeeBranches.branchId })
+            .from(schema.employeeBranches)
+            .where(eq(schema.employeeBranches.employeeId, dto.employeeId))
+            .limit(1);
+          branchId = empBranchRows[0]?.branchId ?? null;
+          if (!branchId) {
+            const def = await tx
+              .select({ id: schema.branches.id })
+              .from(schema.branches)
+              .where(eq(schema.branches.tenantId, tenantId))
+              .limit(1);
+            branchId = def[0]?.id ?? null;
+          }
+        }
+        if (!branchId) {
+          throw new BadRequestException({
+            error: { code: 'BRANCH_REQUIRED', message: 'Nelze určit pobočku — vyber.' },
+          });
+        }
+
+        // 3. Compute times + insert
+        const startsAt = new Date(dto.startsAt);
+        const endsAt = new Date(startsAt.getTime() + service.durationMinutes * 60_000);
+        const bufferStartsAt = new Date(startsAt.getTime() - service.bufferBeforeMinutes * 60_000);
+        const bufferEndsAt = new Date(endsAt.getTime() + service.bufferAfterMinutes * 60_000);
+        const refCode = generateReferenceCode();
+
+        try {
+          const [booking] = await tx
+            .insert(schema.bookings)
+            .values({
+              tenantId,
+              branchId,
+              serviceId: dto.serviceId,
+              employeeId: dto.employeeId,
+              customerName: dto.customerName,
+              customerEmail: dto.customerEmail,
+              customerPhone: dto.customerPhone ?? null,
+              startsAt,
+              endsAt,
+              bufferStartsAt,
+              bufferEndsAt,
+              status: 'confirmed',
+              pricePaidHellers: service.priceHellers,
+              currency: service.currency,
+              customerNote: dto.customerNote ?? null,
+              internalNote: dto.internalNote ?? null,
+              referenceCode: refCode,
+              metadata: { source: 'admin', createdByUserId: userId },
+            })
+            .returning();
+
+          await tx.insert(schema.bookingStatusHistory).values({
+            tenantId,
+            bookingId: booking!.id,
+            fromStatus: null,
+            toStatus: 'confirmed',
+            changedBy: userId,
+            metadata: { source: 'admin' },
+          });
+
+          return { booking: booking!, service, skipEmail: dto.skipEmail };
+        } catch (err) {
+          const e = err as { code?: string; message?: string; cause?: unknown };
+          const cause = e.cause as { code?: string; message?: string } | undefined;
+          const pgCode = e.code ?? cause?.code;
+          if (pgCode === '23P01') {
+            throw new BadRequestException({
+              error: {
+                code: 'SLOT_TAKEN',
+                message: 'V tomto čase už zaměstnanec rezervaci má. Vyber jiný čas.',
+              },
+            });
+          }
+          throw err;
+        }
+      })
+      .then(async (result) => {
+        if (result.skipEmail) return result.booking;
+
+        const empRows = await this.dbService.withRlsContext(
+          serviceContext(tenantId),
+          async (tx) => {
+            return tx
+              .select()
+              .from(schema.employees)
+              .where(eq(schema.employees.id, result.booking.employeeId!))
+              .limit(1);
+          },
+        );
+        const emp = empRows[0];
+
+        const tenantRows = await this.dbService.withRlsContext(
+          serviceContext(tenantId),
+          async (tx) => {
+            return tx.select().from(schema.tenants).where(eq(schema.tenants.id, tenantId)).limit(1);
+          },
+        );
+
+        await this.email.enqueue({
+          tenantId,
+          templateCode: 'booking_confirmed',
+          recipient: result.booking.customerEmail,
+          relatedBookingId: result.booking.id,
+          vars: {
+            customerName: result.booking.customerName,
+            serviceName: result.service.name,
+            employeeName: emp
+              ? (emp.displayName ?? `${emp.firstName} ${emp.lastName}`)
+              : 'Zaměstnanec',
+            tenantName: tenantRows[0]!.name,
+            startsAt: result.booking.startsAt.toISOString(),
+            endsAt: result.booking.endsAt.toISOString(),
+            referenceCode: result.booking.referenceCode,
+          },
+        });
+
+        return result.booking;
+      });
+  }
+
+  async cancel(
+    tenantId: string,
+    userId: string,
+    role: AppRole,
+    bookingId: string,
+    dto: CancelBookingDto,
+  ) {
+    assertCanManage(role);
+    const result = await this.dbService.withRlsContext(
+      ctxFor(tenantId, userId, role),
+      async (tx) => {
+        const rows = await tx
+          .select()
+          .from(schema.bookings)
+          .where(and(eq(schema.bookings.id, bookingId), eq(schema.bookings.tenantId, tenantId)))
+          .limit(1);
+        const existing = rows[0];
+        if (!existing) {
+          throw new NotFoundException({
+            error: { code: 'BOOKING_NOT_FOUND', message: 'Rezervace nenalezena.' },
+          });
+        }
+        if (existing.status === 'cancelled') {
+          throw new BadRequestException({
+            error: { code: 'ALREADY_CANCELLED', message: 'Rezervace už je zrušena.' },
+          });
+        }
+
+        const [updated] = await tx
+          .update(schema.bookings)
+          .set({
+            status: 'cancelled',
+            cancelledAt: new Date(),
+            cancelledReason: dto.reason ?? null,
+            updatedAt: new Date(),
+          })
+          .where(eq(schema.bookings.id, bookingId))
+          .returning();
+
+        await tx.insert(schema.bookingStatusHistory).values({
+          tenantId,
+          bookingId,
+          fromStatus: existing.status,
+          toStatus: 'cancelled',
+          changedBy: userId,
+          reason: dto.reason ?? null,
+        });
+
+        return updated!;
+      },
+    );
+
+    if (dto.notifyCustomer) {
+      await this.sendBookingEmail(tenantId, result, 'booking_cancelled', { reason: dto.reason });
+    }
+
+    return result;
+  }
+
+  async reschedule(
+    tenantId: string,
+    userId: string,
+    role: AppRole,
+    bookingId: string,
+    dto: RescheduleBookingDto,
+  ) {
+    assertCanManage(role);
+
+    const result = await this.dbService.withRlsContext(
+      ctxFor(tenantId, userId, role),
+      async (tx) => {
+        const rows = await tx
+          .select()
+          .from(schema.bookings)
+          .where(and(eq(schema.bookings.id, bookingId), eq(schema.bookings.tenantId, tenantId)))
+          .limit(1);
+        const existing = rows[0];
+        if (!existing) {
+          throw new NotFoundException({
+            error: { code: 'BOOKING_NOT_FOUND', message: 'Rezervace nenalezena.' },
+          });
+        }
+        if (existing.status === 'cancelled' || existing.status === 'completed') {
+          throw new BadRequestException({
+            error: {
+              code: 'CANNOT_RESCHEDULE',
+              message: 'Zrušenou nebo dokončenou rezervaci nelze přesunout.',
+            },
+          });
+        }
+
+        // Načti service pro buffer čas
+        const svcRows = await tx
+          .select()
+          .from(schema.services)
+          .where(eq(schema.services.id, existing.serviceId))
+          .limit(1);
+        const service = svcRows[0]!;
+
+        const newStartsAt = new Date(dto.newStartsAt);
+        const newEndsAt = new Date(newStartsAt.getTime() + service.durationMinutes * 60_000);
+        const newBufferStartsAt = new Date(
+          newStartsAt.getTime() - service.bufferBeforeMinutes * 60_000,
+        );
+        const newBufferEndsAt = new Date(newEndsAt.getTime() + service.bufferAfterMinutes * 60_000);
+
+        try {
+          const [updated] = await tx
+            .update(schema.bookings)
+            .set({
+              startsAt: newStartsAt,
+              endsAt: newEndsAt,
+              bufferStartsAt: newBufferStartsAt,
+              bufferEndsAt: newBufferEndsAt,
+              employeeId: dto.newEmployeeId ?? existing.employeeId,
+              updatedAt: new Date(),
+            })
+            .where(eq(schema.bookings.id, bookingId))
+            .returning();
+
+          await tx.insert(schema.bookingStatusHistory).values({
+            tenantId,
+            bookingId,
+            fromStatus: existing.status,
+            toStatus: existing.status, // status sám se nemění
+            changedBy: userId,
+            reason: dto.reason ?? 'reschedule',
+            metadata: {
+              action: 'rescheduled',
+              oldStartsAt: existing.startsAt.toISOString(),
+              newStartsAt: newStartsAt.toISOString(),
+            },
+          });
+
+          return { booking: updated!, oldStartsAt: existing.startsAt };
+        } catch (err) {
+          const e = err as { code?: string; cause?: { code?: string } };
+          const pgCode = e.code ?? e.cause?.code;
+          if (pgCode === '23P01') {
+            throw new BadRequestException({
+              error: {
+                code: 'SLOT_TAKEN',
+                message: 'Nový čas je obsazený, vyber jiný.',
+              },
+            });
+          }
+          throw err;
+        }
+      },
+    );
+
+    if (dto.notifyCustomer) {
+      await this.sendBookingEmail(tenantId, result.booking, 'booking_rescheduled', {
+        oldStartsAt: result.oldStartsAt.toISOString(),
+      });
+    }
+
+    return result.booking;
+  }
+
+  // ─── Helper: email odeslání s lookup employee/tenant ────────────────
+
+  private async sendBookingEmail(
+    tenantId: string,
+    booking: typeof schema.bookings.$inferSelect,
+    templateCode: string,
+    extraVars: { reason?: string | null; oldStartsAt?: string } = {},
+  ): Promise<void> {
+    const data = await this.dbService.withRlsContext(serviceContext(tenantId), async (tx) => {
+      const empRows = booking.employeeId
+        ? await tx
+            .select()
+            .from(schema.employees)
+            .where(eq(schema.employees.id, booking.employeeId))
+            .limit(1)
+        : [];
+      const svcRows = await tx
+        .select()
+        .from(schema.services)
+        .where(eq(schema.services.id, booking.serviceId))
+        .limit(1);
+      const tenantRows = await tx
+        .select()
+        .from(schema.tenants)
+        .where(eq(schema.tenants.id, tenantId))
+        .limit(1);
+      return {
+        employee: empRows[0],
+        service: svcRows[0]!,
+        tenant: tenantRows[0]!,
+      };
+    });
+
+    await this.email.enqueue({
+      tenantId,
+      templateCode,
+      recipient: booking.customerEmail,
+      relatedBookingId: booking.id,
+      vars: {
+        customerName: booking.customerName,
+        serviceName: data.service.name,
+        employeeName: data.employee
+          ? (data.employee.displayName ?? `${data.employee.firstName} ${data.employee.lastName}`)
+          : 'Zaměstnanec',
+        tenantName: data.tenant.name,
+        startsAt: booking.startsAt.toISOString(),
+        endsAt: booking.endsAt.toISOString(),
+        referenceCode: booking.referenceCode,
+        reason: extraVars.reason ?? undefined,
+        oldStartsAt: extraVars.oldStartsAt,
+      },
+    });
+  }
+}
