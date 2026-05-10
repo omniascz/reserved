@@ -355,6 +355,75 @@
       </div>
     </div>
 
+    <h2 style="margin-top: 40px">✉️ Sprint 1.5a — rezervace + email</h2>
+    <p class="subtitle">
+      Závěr cesty zákazníka: po zamknutí slotu vyplní kontakt → dostane potvrzovací
+      email do Mailhogu → admin to vidí v seznamu rezervací → může to zrušit.
+    </p>
+
+    <div class="row">
+      <!-- ─── CONFIRM BOOKING ─────────────────────────────────── -->
+      <div class="card">
+        <h2>1️⃣3️⃣ Dokončit rezervaci</h2>
+        <p class="help">
+          Zákazník vyplní kontakt a klikne „Potvrdit". Hold se promění v reálnou
+          rezervaci a odejde email.
+        </p>
+        <label>
+          Jméno
+          <input id="cust-name" value="Petr Novák" />
+        </label>
+        <label>
+          Email zákazníka (uvidíš ho v Mailhogu)
+          <input id="cust-email" type="email" value="petr@example.cz" />
+        </label>
+        <label>
+          Telefon (volitelně)
+          <input id="cust-phone" value="+420 777 123 456" />
+        </label>
+        <button onclick="confirmBooking()">Potvrdit rezervaci</button>
+        <pre id="confirm-out">Nejdřív zamkni slot v 1️⃣1️⃣…</pre>
+      </div>
+
+      <!-- ─── MAILHOG ────────────────────────────────────────── -->
+      <div class="card">
+        <h2>1️⃣4️⃣ Email v Mailhogu</h2>
+        <p class="help">
+          Mailhog je lokální „falešný" SMTP server. V dev módu chytá emaily
+          místo aby je doopravdy posílal.
+        </p>
+        <button onclick="window.open('http://localhost:8026', '_blank')">
+          Otevřít Mailhog (http://localhost:8026)
+        </button>
+        <p class="help" style="margin-top: 8px">
+          Po každé rezervaci/zrušení se tu objeví nový email.
+        </p>
+      </div>
+
+      <!-- ─── ADMIN LIST ────────────────────────────────────── -->
+      <div class="card">
+        <h2>1️⃣5️⃣ Admin pohled — všechny rezervace</h2>
+        <p class="help">
+          Co admin uvidí v dashboardu. Vyžaduje přihlášení (= access token z 1️⃣).
+        </p>
+        <button onclick="listAdminBookings()">Načíst seznam rezervací</button>
+        <pre id="admin-bookings-out">…</pre>
+      </div>
+
+      <!-- ─── CANCEL ──────────────────────────────────────────── -->
+      <div class="card">
+        <h2>1️⃣6️⃣ Admin zruší rezervaci</h2>
+        <p class="help">
+          Admin klikne „Zrušit" → status se změní na cancelled, zákazník dostane
+          email s důvodem.
+        </p>
+        <button class="danger" onclick="cancelBooking()">
+          Zrušit poslední rezervaci
+        </button>
+        <pre id="cancel-out">Nejdřív vytvoř rezervaci v 1️⃣3️⃣…</pre>
+      </div>
+    </div>
+
     <script>
       const API = 'http://localhost:3001/api/v1';
 
@@ -830,6 +899,9 @@
           });
           const data = await r.json();
           show('hold-out', r.status, data);
+          if (r.ok && data.data && data.data.sessionToken) {
+            s15.sessionToken = data.data.sessionToken;
+          }
         } catch (e) {
           show('hold-out', 0, { error: String(e) });
         }
@@ -838,6 +910,69 @@
       async function duplicateHold() {
         // Stejné jako createHold, ale očekáváme 400 SLOT_TAKEN
         await createHold();
+      }
+
+      // ─── Sprint 1.5a — confirm booking + admin cancel ──────────────
+      let s15 = { sessionToken: null, bookingId: null };
+
+      async function confirmBooking() {
+        try {
+          if (!state.tenantSlug) {
+            show('confirm-out', 0, { error: 'Nejdřív vytvoř salon v 1️⃣.' });
+            return;
+          }
+          if (!s15.sessionToken) {
+            show('confirm-out', 0, {
+              error: 'Nejdřív zamkni slot v 1️⃣1️⃣ — potřebujeme sessionToken.',
+            });
+            return;
+          }
+          const r = await fetch(publicUrl('/bookings'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              sessionToken: s15.sessionToken,
+              customerName: document.getElementById('cust-name').value,
+              customerEmail: document.getElementById('cust-email').value,
+              customerPhone: document.getElementById('cust-phone').value || null,
+            }),
+          });
+          const data = await r.json();
+          show('confirm-out', r.status, data);
+          if (r.ok && data.data) s15.bookingId = data.data.id;
+        } catch (e) {
+          show('confirm-out', 0, { error: String(e) });
+        }
+      }
+
+      async function listAdminBookings() {
+        try {
+          const r = await authedFetch('/admin/bookings');
+          const data = await r.json();
+          show('admin-bookings-out', r.status, data);
+        } catch (e) {
+          show('admin-bookings-out', 0, { error: String(e) });
+        }
+      }
+
+      async function cancelBooking() {
+        try {
+          if (!s15.bookingId) {
+            show('cancel-out', 0, { error: 'Nejdřív vytvoř rezervaci v 1️⃣3️⃣.' });
+            return;
+          }
+          const r = await authedFetch('/admin/bookings/' + s15.bookingId + '/cancel', {
+            method: 'POST',
+            body: JSON.stringify({
+              reason: 'Demo zrušení z webové stránky',
+              notifyCustomer: true,
+            }),
+          });
+          const data = await r.json();
+          show('cancel-out', r.status, data);
+        } catch (e) {
+          show('cancel-out', 0, { error: String(e) });
+        }
       }
 
       async function fullSnapshot() {
