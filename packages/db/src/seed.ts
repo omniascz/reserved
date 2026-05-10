@@ -1,5 +1,5 @@
-import { db } from './client.js';
-import { tenants, branches, users } from './schema/index.js';
+import { db } from './client';
+import { tenants, branches, users } from './schema';
 
 async function seed(): Promise<void> {
   console.log('Seeding dev data...');

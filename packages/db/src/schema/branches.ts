@@ -1,5 +1,5 @@
 import { pgTable, uuid, varchar, text, timestamp, jsonb, index } from 'drizzle-orm/pg-core';
-import { tenants } from './tenants.js';
+import { tenants } from './tenants';
 
 // Reference: reserved-docs/13a_db_schema_core.md, 05_hr_a_pobocky.md
 //
