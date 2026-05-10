@@ -1,27 +1,33 @@
-// JWT konfigurace načtená z env při startu modulu.
-// Validuje se před prvním requestem — chybný env shodí app na startu, ne až při loginu.
+// JWT konfigurace načtená z env. Validuje se v konstruktoru — chybný env shodí
+// app při instantiation modulu, ne až při loginu.
 
-import { Injectable, OnModuleInit } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { z } from 'zod';
 
 const AuthEnvSchema = z.object({
   JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters'),
   JWT_ISSUER: z.string().min(1).default('reserved'),
   JWT_AUDIENCE: z.string().min(1).default('reserved-api'),
-  JWT_ACCESS_TTL_SECONDS: z.coerce.number().int().positive().default(900), // 15 min
-  JWT_REFRESH_TTL_SECONDS: z.coerce.number().int().positive().default(604800), // 7 dní
+  JWT_ACCESS_TTL_SECONDS: z.coerce.number().int().positive().default(900),
+  JWT_REFRESH_TTL_SECONDS: z.coerce.number().int().positive().default(604800),
 });
 
 export type AuthEnv = z.infer<typeof AuthEnvSchema>;
 
 @Injectable()
-export class AuthConfig implements OnModuleInit {
-  private _env!: AuthEnv;
-  private _secret!: Uint8Array;
+export class AuthConfig {
+  private readonly _env: AuthEnv;
+  private readonly _secret: Uint8Array;
 
-  onModuleInit(): void {
+  constructor() {
     this._env = AuthEnvSchema.parse(process.env);
     this._secret = new TextEncoder().encode(this._env.JWT_SECRET);
+  }
+
+  /** Pro testy: re-initialize z aktuálního process.env. */
+  onModuleInit(): void {
+    // no-op: env je načten v konstruktoru. Tato metoda existuje pro
+    // backward compat s testy, které ji volaly explicitně.
   }
 
   get secret(): Uint8Array {

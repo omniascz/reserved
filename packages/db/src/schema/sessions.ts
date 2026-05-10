@@ -1,6 +1,6 @@
 import { pgTable, uuid, varchar, text, timestamp, boolean, index } from 'drizzle-orm/pg-core';
-import { tenants } from './tenants';
-import { users } from './users';
+import { tenants } from './tenants.js';
+import { users } from './users.js';
 
 // Reference: reserved-docs/13b_db_schema_users_customers.md
 //

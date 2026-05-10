@@ -5,7 +5,7 @@
 //   - Konfigurace z AuthConfig (Zod-validated env), ne přímé čtení process.env
 //   - jose import zachován, HS256 algorithm
 
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { SignJWT, jwtVerify, type JWTPayload } from 'jose';
 import { randomUUID } from 'node:crypto';
 import { APP_ROLES, type AppRole } from '@reserved/rls-multitenancy';
@@ -25,7 +25,7 @@ export interface SignAccessTokenInput {
 
 @Injectable()
 export class JwtService {
-  constructor(private readonly config: AuthConfig) {}
+  constructor(@Inject(AuthConfig) private readonly config: AuthConfig) {}
 
   async signAccessToken(
     input: SignAccessTokenInput,

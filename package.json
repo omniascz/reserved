@@ -37,6 +37,7 @@
   "pnpm": {
     "onlyBuiltDependencies": [
       "@nestjs/core",
+      "argon2",
       "esbuild"
     ]
   }
