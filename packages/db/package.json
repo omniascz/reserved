@@ -17,7 +17,8 @@
     "db:seed": "tsx src/seed.ts",
     "build": "tsc",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
+    "test": "vitest run --passWithNoTests",
+    "test:e2e": "vitest run __tests__/rls.e2e.test.ts",
     "lint": "echo 'lint not configured yet'"
   },
   "dependencies": {

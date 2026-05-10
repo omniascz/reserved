@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { TerminusModule } from '@nestjs/terminus';
+import { AuthModule } from './auth/auth.module.js';
 import { HealthController } from './health/health.controller.js';
 
 @Module({
@@ -9,7 +9,7 @@ import { HealthController } from './health/health.controller.js';
       isGlobal: true,
       envFilePath: ['.env.local', '.env'],
     }),
-    TerminusModule,
+    AuthModule,
   ],
   controllers: [HealthController],
 })
