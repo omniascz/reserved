@@ -1,5 +1,5 @@
 {
-  "name": "@reserved/utils",
+  "name": "@reserved/rls-multitenancy",
   "version": "0.0.1",
   "private": true,
   "type": "module",
@@ -12,7 +12,8 @@
     "build": "tsc",
     "typecheck": "tsc --noEmit",
     "lint": "echo 'lint not configured yet'",
-    "test": "vitest run --passWithNoTests"
+    "test": "vitest run --passWithNoTests",
+    "test:watch": "vitest"
   },
   "devDependencies": {
     "typescript": "^5.7.0",

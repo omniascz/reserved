@@ -17,7 +17,7 @@
     "db:seed": "tsx src/seed.ts",
     "build": "tsc",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
+    "test": "vitest run --passWithNoTests",
     "lint": "echo 'lint not configured yet'"
   },
   "dependencies": {
