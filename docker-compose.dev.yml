@@ -14,12 +14,12 @@ services:
       POSTGRES_PASSWORD: dev
       PGDATA: /var/lib/postgresql/data/pgdata
     ports:
-      - "5432:5432"
+      - '5432:5432'
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./packages/db/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U dev -d reserved_dev"]
+      test: ['CMD-SHELL', 'pg_isready -U dev -d reserved_dev']
       interval: 5s
       timeout: 5s
       retries: 5
@@ -30,11 +30,11 @@ services:
     restart: unless-stopped
     command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
     ports:
-      - "6379:6379"
+      - '6379:6379'
     volumes:
       - redis_data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ['CMD', 'redis-cli', 'ping']
       interval: 5s
       timeout: 3s
       retries: 5
@@ -44,8 +44,8 @@ services:
     container_name: reserved-mailhog
     restart: unless-stopped
     ports:
-      - "1026:1025"   # SMTP (host 1026 — tixly-mailhog drží 1025)
-      - "8026:8025"   # Web UI: http://localhost:8026
+      - '1026:1025' # SMTP (host 1026 — tixly-mailhog drží 1025)
+      - '8026:8025' # Web UI: http://localhost:8026
 
 volumes:
   postgres_data:

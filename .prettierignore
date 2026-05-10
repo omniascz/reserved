@@ -1,0 +1,10 @@
+node_modules
+dist
+build
+.next
+.turbo
+out
+coverage
+pnpm-lock.yaml
+packages/db/drizzle
+reserved-docs

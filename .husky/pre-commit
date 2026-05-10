@@ -1,0 +1,24 @@
+#!/usr/bin/env sh
+
+# Reserved pre-commit hook
+# - lint-staged: Prettier on staged TS/JSON/MD/YAML files
+# - typecheck: full monorepo typecheck (Turborepo cached after first run)
+# - gitleaks: secret scan (only if installed; install via `winget install gitleaks.gitleaks`)
+
+# 1. Format staged files
+pnpm exec lint-staged || exit 1
+
+# 2. Typecheck (Turborepo caches per package)
+pnpm typecheck || exit 1
+
+# 3. Optional: gitleaks secret scan
+if command -v gitleaks >/dev/null 2>&1; then
+  gitleaks protect --staged --no-banner --redact || {
+    echo "gitleaks detected potential secrets in staged changes."
+    echo "Review the report above. If false positive, add to .gitleaksignore."
+    exit 1
+  }
+else
+  echo "[hint] gitleaks not installed — skipping secret scan."
+  echo "       Install: winget install gitleaks.gitleaks"
+fi

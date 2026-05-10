@@ -33,18 +33,18 @@ Mailhog (zachycené emaily): http://localhost:8025
 
 ## Struktura
 
-| Cesta | Účel |
-|---|---|
-| `apps/api` | NestJS backend (REST + WebSockets) |
-| `apps/web` | Admin panel |
-| `apps/widget` | Embeddable booking widget |
-| `apps/portal` | Zákaznický portál |
-| `apps/workers` | BullMQ background jobs |
-| `packages/db` | Drizzle schema + migrace + seed |
-| `packages/types` | Sdílené typy |
-| `packages/ui` | Sdílené UI komponenty |
-| `packages/rules-engine` | Rules evaluátor |
-| `packages/utils` | Sdílené helpery |
+| Cesta                   | Účel                               |
+| ----------------------- | ---------------------------------- |
+| `apps/api`              | NestJS backend (REST + WebSockets) |
+| `apps/web`              | Admin panel                        |
+| `apps/widget`           | Embeddable booking widget          |
+| `apps/portal`           | Zákaznický portál                  |
+| `apps/workers`          | BullMQ background jobs             |
+| `packages/db`           | Drizzle schema + migrace + seed    |
+| `packages/types`        | Sdílené typy                       |
+| `packages/ui`           | Sdílené UI komponenty              |
+| `packages/rules-engine` | Rules evaluátor                    |
+| `packages/utils`        | Sdílené helpery                    |
 
 ## Konvence
 

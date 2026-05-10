@@ -1,0 +1,6 @@
+# Reserved .gitleaksignore
+# Add fingerprint:rule:file lines here for known false positives.
+# Format: <commit_sha>:<file>:<rule>:<line>
+#
+# Example:
+# abc123def:apps/api/test/fixtures.ts:generic-api-key:42

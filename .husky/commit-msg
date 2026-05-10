@@ -1,0 +1,6 @@
+#!/usr/bin/env sh
+
+# Reserved commit-msg hook
+# Validates Conventional Commits format (feat:, fix:, chore:, refactor:, test:, docs:, ...)
+
+pnpm exec commitlint --edit "$1"
