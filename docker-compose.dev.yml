@@ -1,0 +1,54 @@
+# Reserved — local dev infrastructure
+# Spuštění: docker compose -f docker-compose.dev.yml up -d
+# Ukončení: docker compose -f docker-compose.dev.yml down
+# Reset:    docker compose -f docker-compose.dev.yml down -v
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: reserved-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: reserved_dev
+      POSTGRES_USER: dev
+      POSTGRES_PASSWORD: dev
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./packages/db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dev -d reserved_dev"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: reserved-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: reserved-mailhog
+    restart: unless-stopped
+    ports:
+      - "1025:1025"   # SMTP
+      - "8025:8025"   # Web UI: http://localhost:8025
+
+volumes:
+  postgres_data:
+    name: reserved_postgres_data
+  redis_data:
+    name: reserved_redis_data

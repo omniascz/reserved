@@ -1,0 +1,40 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "globalDependencies": ["**/.env.*"],
+  "globalEnv": ["NODE_ENV"],
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**", ".next/**", "!.next/cache/**"]
+    },
+    "dev": {
+      "cache": false,
+      "persistent": true
+    },
+    "lint": {
+      "outputs": []
+    },
+    "test": {
+      "dependsOn": ["^build"],
+      "outputs": ["coverage/**"]
+    },
+    "test:watch": {
+      "cache": false,
+      "persistent": true
+    },
+    "typecheck": {
+      "dependsOn": ["^build"],
+      "outputs": []
+    },
+    "clean": {
+      "cache": false
+    },
+    "db:generate": {
+      "cache": false,
+      "outputs": ["drizzle/**"]
+    },
+    "db:migrate": {
+      "cache": false
+    }
+  }
+}

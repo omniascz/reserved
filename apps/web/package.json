@@ -1,0 +1,13 @@
+{
+  "name": "@reserved/web",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Reserved admin panel — placeholder. Sprint 1.2 zakládá Next.js setup.",
+  "scripts": {
+    "build": "echo 'web app not yet scaffolded'",
+    "dev": "echo 'web app not yet scaffolded'",
+    "lint": "echo 'web app not yet scaffolded'",
+    "typecheck": "echo 'web app not yet scaffolded'",
+    "test": "echo 'web app not yet scaffolded'"
+  }
+}

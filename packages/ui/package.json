@@ -1,0 +1,12 @@
+{
+  "name": "@reserved/ui",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Shared UI components (shadcn/ui based) — placeholder. Sprint 1.2 zakládá první komponenty.",
+  "scripts": {
+    "build": "echo 'ui package not yet scaffolded'",
+    "lint": "echo 'ui package not yet scaffolded'",
+    "typecheck": "echo 'ui package not yet scaffolded'",
+    "test": "echo 'ui package not yet scaffolded'"
+  }
+}

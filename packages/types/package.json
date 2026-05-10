@@ -1,0 +1,23 @@
+{
+  "name": "@reserved/types",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "lint": "echo 'lint not configured yet'",
+    "test": "echo 'no tests yet'"
+  },
+  "dependencies": {
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0"
+  }
+}

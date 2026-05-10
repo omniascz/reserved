@@ -1,0 +1,13 @@
+{
+  "name": "@reserved/widget",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Embeddable booking widget — placeholder. Sprint 1.5 zakládá Next.js setup.",
+  "scripts": {
+    "build": "echo 'widget app not yet scaffolded'",
+    "dev": "echo 'widget app not yet scaffolded'",
+    "lint": "echo 'widget app not yet scaffolded'",
+    "typecheck": "echo 'widget app not yet scaffolded'",
+    "test": "echo 'widget app not yet scaffolded'"
+  }
+}

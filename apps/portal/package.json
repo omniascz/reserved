@@ -1,0 +1,13 @@
+{
+  "name": "@reserved/portal",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Customer portal — placeholder. Sprint 2.3 zakládá Next.js setup.",
+  "scripts": {
+    "build": "echo 'portal app not yet scaffolded'",
+    "dev": "echo 'portal app not yet scaffolded'",
+    "lint": "echo 'portal app not yet scaffolded'",
+    "typecheck": "echo 'portal app not yet scaffolded'",
+    "test": "echo 'portal app not yet scaffolded'"
+  }
+}

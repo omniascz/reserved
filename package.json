@@ -1,0 +1,32 @@
+{
+  "name": "reserved",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Reserved — booking SaaS platforma (multi-tenant, multi-branch, white-label).",
+  "packageManager": "pnpm@10.33.0",
+  "engines": {
+    "node": ">=22",
+    "pnpm": ">=10"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "lint": "turbo run lint",
+    "test": "turbo run test",
+    "test:watch": "turbo run test:watch",
+    "typecheck": "turbo run typecheck",
+    "clean": "turbo run clean && rm -rf node_modules",
+    "db:generate": "pnpm --filter @reserved/db db:generate",
+    "db:migrate": "pnpm --filter @reserved/db db:migrate",
+    "db:studio": "pnpm --filter @reserved/db db:studio",
+    "db:seed": "pnpm --filter @reserved/db db:seed",
+    "format": "prettier --write \"**/*.{ts,tsx,json,md}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,json,md}\""
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "prettier": "^3.4.0",
+    "turbo": "^2.3.0",
+    "typescript": "^5.7.0"
+  }
+}

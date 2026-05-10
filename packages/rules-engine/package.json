@@ -1,0 +1,12 @@
+{
+  "name": "@reserved/rules-engine",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Rules evaluator (display + booking limit + visibility + no-show + payment policy) — placeholder. Sprint 1.4 zakládá display rules, sprint 2.5 plný engine.",
+  "scripts": {
+    "build": "echo 'rules-engine not yet scaffolded'",
+    "lint": "echo 'rules-engine not yet scaffolded'",
+    "typecheck": "echo 'rules-engine not yet scaffolded'",
+    "test": "echo 'rules-engine not yet scaffolded'"
+  }
+}
