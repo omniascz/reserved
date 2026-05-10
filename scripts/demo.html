@@ -1,0 +1,692 @@
+<!doctype html>
+<html lang="cs">
+  <head>
+    <meta charset="utf-8" />
+    <title>Reserved — Demo</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        font-family:
+          -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        max-width: 980px;
+        margin: 32px auto;
+        padding: 0 16px;
+        line-height: 1.5;
+      }
+      h1 {
+        margin-bottom: 4px;
+      }
+      .subtitle {
+        color: #666;
+        margin-top: 0;
+      }
+      .row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 24px;
+        margin-top: 16px;
+      }
+      @media (max-width: 720px) {
+        .row {
+          grid-template-columns: 1fr;
+        }
+      }
+      .card {
+        border: 1px solid rgba(127, 127, 127, 0.3);
+        border-radius: 8px;
+        padding: 16px;
+      }
+      .card h2 {
+        margin: 0 0 12px;
+        font-size: 18px;
+      }
+      label {
+        display: block;
+        font-size: 13px;
+        color: #555;
+        margin-top: 8px;
+      }
+      input,
+      button {
+        font: inherit;
+        padding: 8px 10px;
+        margin-top: 4px;
+        width: 100%;
+        border-radius: 6px;
+      }
+      input {
+        border: 1px solid rgba(127, 127, 127, 0.5);
+      }
+      button {
+        cursor: pointer;
+        background: #2563eb;
+        color: #fff;
+        border: none;
+        font-weight: 600;
+        margin-top: 12px;
+      }
+      button:hover {
+        background: #1d4ed8;
+      }
+      button.secondary {
+        background: #6b7280;
+      }
+      button.secondary:hover {
+        background: #4b5563;
+      }
+      button.danger {
+        background: #dc2626;
+      }
+      button.danger:hover {
+        background: #b91c1c;
+      }
+      pre {
+        background: rgba(127, 127, 127, 0.1);
+        padding: 12px;
+        border-radius: 6px;
+        overflow-x: auto;
+        font-size: 12px;
+        max-height: 300px;
+      }
+      .status {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 12px;
+        font-size: 12px;
+        font-weight: 600;
+      }
+      .ok {
+        background: #d1fae5;
+        color: #065f46;
+      }
+      .fail {
+        background: #fee2e2;
+        color: #991b1b;
+      }
+      .info {
+        background: #dbeafe;
+        color: #1e40af;
+      }
+      .warn {
+        background: #fef3c7;
+        color: #92400e;
+      }
+      .api-status {
+        font-weight: 600;
+        margin: 8px 0;
+      }
+      .help {
+        font-size: 12px;
+        color: #666;
+        margin-top: 4px;
+      }
+      .token-display {
+        font-family: monospace;
+        font-size: 11px;
+        word-break: break-all;
+        color: #555;
+        margin-top: 4px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>🟢 Reserved — interaktivní demo</h1>
+    <p class="subtitle">
+      Tato stránka volá tvé lokální API na <code>http://localhost:3001</code> a zobrazuje, co
+      vrátilo. Klikej, vyplňuj, dívej se, jak to funguje.
+    </p>
+
+    <div class="card">
+      <h2>API stav</h2>
+      <div class="api-status">
+        Healthcheck: <span id="health-status" class="status info">kontroluji…</span>
+      </div>
+      <div class="help">
+        Pokud je červené, API není spuštěné. V terminálu spusť: <code>pnpm --filter @reserved/api dev</code>
+      </div>
+      <button onclick="checkHealth()">Znovu zkontrolovat</button>
+    </div>
+
+    <div class="row">
+      <!-- ─── REGISTRACE ─────────────────────────────────────────────── -->
+      <div class="card">
+        <h2>1️⃣ Vytvořit nový salon</h2>
+        <p class="help">
+          Zaregistruje nový tenant + první admin účet. Po úspěchu se uloží přístupové
+          tokeny do paměti stránky.
+        </p>
+        <label>
+          Slug salonu (URL přívlastek)
+          <input id="reg-slug" placeholder="muj-salon-123" />
+        </label>
+        <label>
+          Název salonu
+          <input id="reg-name" value="Můj Salon" />
+        </label>
+        <label>
+          Email majitele
+          <input id="reg-email" type="email" />
+        </label>
+        <label>
+          Heslo (min. 10 znaků)
+          <input id="reg-password" type="password" value="velmibezpecneheslo123" />
+        </label>
+        <label>
+          Jméno
+          <input id="reg-fname" value="Jan" />
+        </label>
+        <label>
+          Příjmení
+          <input id="reg-lname" value="Novák" />
+        </label>
+        <button onclick="register()">Vytvořit salon</button>
+        <pre id="reg-out">Klikni na „Vytvořit salon"…</pre>
+      </div>
+
+      <!-- ─── LOGIN ─────────────────────────────────────────────────── -->
+      <div class="card">
+        <h2>2️⃣ Přihlášení</h2>
+        <p class="help">
+          Po registraci se hodnoty automaticky vyplní. Zkus i špatné heslo, uvidíš jak vrátí
+          401.
+        </p>
+        <label>
+          Slug salonu (X-Tenant-ID)
+          <input id="login-slug" placeholder="muj-salon-123" />
+        </label>
+        <label>
+          Email
+          <input id="login-email" type="email" />
+        </label>
+        <label>
+          Heslo
+          <input id="login-password" type="password" />
+        </label>
+        <button onclick="login()">Přihlásit</button>
+        <button class="secondary" onclick="loginBad()">Zkusit špatné heslo</button>
+        <pre id="login-out">Klikni na „Přihlásit"…</pre>
+      </div>
+
+      <!-- ─── REFRESH ───────────────────────────────────────────────── -->
+      <div class="card">
+        <h2>3️⃣ Obnovit klíč (refresh)</h2>
+        <p class="help">
+          Vystaví nový pár tokenů a starý zruší. Pokud zkusíš použít ten starý znovu,
+          systém detekuje pokus o znovupoužití a vrátí 401.
+        </p>
+        <button onclick="refresh()">Obnovit token</button>
+        <button class="danger" onclick="refreshOld()">
+          Zkusit STARÝ token (musí selhat)
+        </button>
+        <div id="token-info" class="token-display"></div>
+        <pre id="refresh-out">Nejdřív se přihlaš…</pre>
+      </div>
+
+      <!-- ─── LOGOUT ────────────────────────────────────────────────── -->
+      <div class="card">
+        <h2>4️⃣ Odhlášení</h2>
+        <p class="help">
+          Označí session jako revokovanou. Po odhlášení už nelze obnovit token.
+        </p>
+        <button class="danger" onclick="logout()">Odhlásit</button>
+        <pre id="logout-out">…</pre>
+      </div>
+    </div>
+
+    <h2 style="margin-top: 40px">📋 Sprint 1.3 — služby, zaměstnanci, pracovní doba</h2>
+    <p class="subtitle">
+      Tyto endpointy vyžadují přihlášeného uživatele. Nejdřív klikni výše „Vytvořit
+      salon" nebo „Přihlásit", pak teprve klikej tady.
+    </p>
+
+    <div class="row">
+      <!-- ─── KATEGORIE A SLUŽBY ─────────────────────────────────── -->
+      <div class="card">
+        <h2>5️⃣ Kategorie a služby</h2>
+        <p class="help">
+          Vytvoří kategorii „Vlasy" a v ní službu „Dámský střih" 45 min za 890 Kč.
+          Pak ti vypíše seznam všech služeb tenantu.
+        </p>
+        <button onclick="createSampleCategory()">Vytvořit kategorii „Vlasy"</button>
+        <button onclick="createSampleService()">Vytvořit službu „Dámský střih"</button>
+        <button class="secondary" onclick="listServices()">Vypsat všechny služby</button>
+        <pre id="services-out">Klikni na „Vytvořit kategorii"…</pre>
+      </div>
+
+      <!-- ─── ZAMĚSTNANEC ────────────────────────────────────────── -->
+      <div class="card">
+        <h2>6️⃣ Zaměstnanec</h2>
+        <p class="help">
+          Vytvoří zaměstnankyni „Jana Nováková" jako Senior stylistku, která umí
+          poskytovat všechny služby z předchozího kroku.
+        </p>
+        <button onclick="createSampleEmployee()">Vytvořit „Jana Nováková"</button>
+        <button class="secondary" onclick="listEmployees()">Vypsat zaměstnance</button>
+        <pre id="employees-out">…</pre>
+      </div>
+
+      <!-- ─── PRACOVNÍ DOBA ─────────────────────────────────────── -->
+      <div class="card">
+        <h2>7️⃣ Pracovní doba</h2>
+        <p class="help">
+          Nastaví zaměstnanci pracovní dobu Po–Čt 9:00–17:00 a Pá 9:00–15:00. Pak
+          rozpis přečte zpátky a uvidíš ho ve struktuře.
+        </p>
+        <button onclick="setSampleSchedule()">Nastavit Po–Pá rozpis</button>
+        <button class="secondary" onclick="getSchedule()">Načíst rozpis zpět</button>
+        <pre id="schedule-out">Nejdřív vytvoř zaměstnance v kroku 6…</pre>
+      </div>
+
+      <!-- ─── KOMPLETNÍ DEMO TENANTU ─────────────────────────────── -->
+      <div class="card">
+        <h2>8️⃣ Co všechno teď máš v databázi?</h2>
+        <p class="help">
+          Stiskni tlačítko a uvidíš kompletní snapshot tvého tenantu — kategorie,
+          služby, zaměstnance, jejich rozpisy. Vše dohromady v jedné odpovědi.
+        </p>
+        <button onclick="fullSnapshot()">Vypsat všechno</button>
+        <pre id="snapshot-out">…</pre>
+      </div>
+    </div>
+
+    <script>
+      const API = 'http://localhost:3001/api/v1';
+
+      // Stav: tokeny v paměti stránky (žádné cookies, žádný localStorage)
+      let state = {
+        tenantSlug: null,
+        accessToken: null,
+        refreshToken: null,
+        oldRefreshToken: null,
+      };
+
+      function setStatus(elId, status, text) {
+        const el = document.getElementById(elId);
+        el.className = 'status ' + status;
+        el.textContent = text;
+      }
+
+      async function checkHealth() {
+        try {
+          const r = await fetch(API + '/health');
+          if (r.ok) {
+            const data = await r.json();
+            setStatus('health-status', 'ok', '✓ API běží — ' + data.service);
+          } else {
+            setStatus('health-status', 'fail', '✗ API odpovědělo ' + r.status);
+          }
+        } catch (e) {
+          setStatus(
+            'health-status',
+            'fail',
+            '✗ API neběží (chyba spojení)',
+          );
+        }
+      }
+      checkHealth();
+
+      function show(elId, status, payload) {
+        const el = document.getElementById(elId);
+        el.textContent =
+          (status >= 200 && status < 300 ? '✓ ' : '✗ ') +
+          'HTTP ' +
+          status +
+          '\n\n' +
+          JSON.stringify(payload, null, 2);
+      }
+
+      function updateTokenInfo() {
+        const ti = document.getElementById('token-info');
+        if (!state.accessToken) {
+          ti.textContent = '';
+          return;
+        }
+        ti.innerHTML =
+          '<strong>Aktuální tokeny v paměti:</strong><br>' +
+          'access:&nbsp;' +
+          (state.accessToken ? state.accessToken.slice(0, 32) + '…' : '—') +
+          '<br>refresh: ' +
+          (state.refreshToken ? state.refreshToken.slice(0, 32) + '…' : '—');
+      }
+
+      async function register() {
+        const slug = (document.getElementById('reg-slug').value || '').trim();
+        if (!slug) {
+          // Auto-generate unique slug
+          const r = 'demo-' + Math.random().toString(36).slice(2, 8);
+          document.getElementById('reg-slug').value = r;
+        }
+        const body = {
+          tenantSlug: document.getElementById('reg-slug').value.trim(),
+          tenantName: document.getElementById('reg-name').value,
+          email:
+            document.getElementById('reg-email').value ||
+            'admin@' + document.getElementById('reg-slug').value.trim() + '.test',
+          password: document.getElementById('reg-password').value,
+          firstName: document.getElementById('reg-fname').value,
+          lastName: document.getElementById('reg-lname').value,
+        };
+        document.getElementById('reg-email').value = body.email;
+
+        const r = await fetch(API + '/auth/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        const data = await r.json().catch(() => ({}));
+        show('reg-out', r.status, data);
+
+        if (r.ok && data.tokens) {
+          state.tenantSlug = body.tenantSlug;
+          state.accessToken = data.tokens.accessToken;
+          state.refreshToken = data.tokens.refreshToken;
+          state.oldRefreshToken = null;
+          // Předvyplň login formulář
+          document.getElementById('login-slug').value = body.tenantSlug;
+          document.getElementById('login-email').value = body.email;
+          document.getElementById('login-password').value = body.password;
+          updateTokenInfo();
+        }
+      }
+
+      async function login() {
+        const slug = document.getElementById('login-slug').value.trim();
+        const r = await fetch(API + '/auth/login', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Tenant-ID': slug,
+          },
+          body: JSON.stringify({
+            email: document.getElementById('login-email').value,
+            password: document.getElementById('login-password').value,
+          }),
+        });
+        const data = await r.json().catch(() => ({}));
+        show('login-out', r.status, data);
+        if (r.ok && data.accessToken) {
+          state.tenantSlug = slug;
+          state.accessToken = data.accessToken;
+          state.refreshToken = data.refreshToken;
+          state.oldRefreshToken = null;
+          updateTokenInfo();
+        }
+      }
+
+      async function loginBad() {
+        const slug = document.getElementById('login-slug').value.trim();
+        const r = await fetch(API + '/auth/login', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Tenant-ID': slug,
+          },
+          body: JSON.stringify({
+            email: document.getElementById('login-email').value,
+            password: 'tohleneniSpravneHeslo',
+          }),
+        });
+        const data = await r.json().catch(() => ({}));
+        show('login-out', r.status, data);
+      }
+
+      async function refresh() {
+        if (!state.refreshToken) {
+          show(
+            'refresh-out',
+            0,
+            { error: 'Nejdřív se zaregistruj nebo přihlaš.' },
+          );
+          return;
+        }
+        const r = await fetch(API + '/auth/refresh', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refreshToken: state.refreshToken }),
+        });
+        const data = await r.json().catch(() => ({}));
+        show('refresh-out', r.status, data);
+        if (r.ok && data.accessToken) {
+          state.oldRefreshToken = state.refreshToken;
+          state.accessToken = data.accessToken;
+          state.refreshToken = data.refreshToken;
+          updateTokenInfo();
+        }
+      }
+
+      async function refreshOld() {
+        if (!state.oldRefreshToken) {
+          show(
+            'refresh-out',
+            0,
+            {
+              error:
+                'Nejdřív klikni na „Obnovit token", aby existoval starý token na test reuse detekce.',
+            },
+          );
+          return;
+        }
+        const r = await fetch(API + '/auth/refresh', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refreshToken: state.oldRefreshToken }),
+        });
+        const data = await r.json().catch(() => ({}));
+        show('refresh-out', r.status, {
+          info: 'Použili jsme STARÝ token, který byl rotací znehodnocen. Server musí vrátit 401.',
+          serverResponse: data,
+        });
+      }
+
+      async function logout() {
+        if (!state.refreshToken) {
+          show('logout-out', 0, { error: 'Nejsi přihlášen.' });
+          return;
+        }
+        const r = await fetch(API + '/auth/logout', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refreshToken: state.refreshToken }),
+        });
+        const out =
+          r.status === 204
+            ? { info: 'Odhlášeno (HTTP 204 = bez těla, úspěch).' }
+            : await r.json().catch(() => ({}));
+        show('logout-out', r.status, out);
+        if (r.ok) {
+          state.oldRefreshToken = state.refreshToken;
+          state.accessToken = null;
+          state.refreshToken = null;
+          updateTokenInfo();
+        }
+      }
+
+      // ─── Sprint 1.3 — služby, zaměstnanci, pracovní doba ─────────────
+      let s13 = {
+        categoryId: null,
+        serviceIds: [],
+        employeeId: null,
+      };
+
+      async function authedFetch(path, init = {}) {
+        if (!state.accessToken) {
+          throw new Error('Nejsi přihlášen — klikni nejdřív na „Vytvořit salon".');
+        }
+        const headers = Object.assign(
+          {
+            Authorization: 'Bearer ' + state.accessToken,
+            'Content-Type': 'application/json',
+          },
+          init.headers || {},
+        );
+        return fetch(API + path, Object.assign({}, init, { headers }));
+      }
+
+      async function createSampleCategory() {
+        try {
+          const r = await authedFetch('/admin/service-categories', {
+            method: 'POST',
+            body: JSON.stringify({
+              name: 'Vlasy',
+              color: '#ff7700',
+              sortOrder: 1,
+            }),
+          });
+          const data = await r.json();
+          show('services-out', r.status, data);
+          if (r.ok && data.data) s13.categoryId = data.data.id;
+        } catch (e) {
+          show('services-out', 0, { error: String(e) });
+        }
+      }
+
+      async function createSampleService() {
+        try {
+          if (!s13.categoryId) {
+            show('services-out', 0, {
+              error: 'Nejdřív klikni „Vytvořit kategorii".',
+            });
+            return;
+          }
+          const r = await authedFetch('/admin/services', {
+            method: 'POST',
+            body: JSON.stringify({
+              categoryId: s13.categoryId,
+              name: 'Dámský střih',
+              durationMinutes: 45,
+              priceHellers: 89000,
+              capacity: 1,
+              color: '#ff9933',
+            }),
+          });
+          const data = await r.json();
+          show('services-out', r.status, data);
+          if (r.ok && data.data) s13.serviceIds = [data.data.id];
+        } catch (e) {
+          show('services-out', 0, { error: String(e) });
+        }
+      }
+
+      async function listServices() {
+        try {
+          const r = await authedFetch('/admin/services');
+          const data = await r.json();
+          show('services-out', r.status, data);
+        } catch (e) {
+          show('services-out', 0, { error: String(e) });
+        }
+      }
+
+      async function createSampleEmployee() {
+        try {
+          const r = await authedFetch('/admin/employees', {
+            method: 'POST',
+            body: JSON.stringify({
+              firstName: 'Jana',
+              lastName: 'Nováková',
+              displayName: 'Jana N.',
+              title: 'Senior stylistka',
+              color: '#aa00cc',
+              isPublic: true,
+              acceptsOnlineBookings: true,
+              serviceIds: s13.serviceIds,
+              branchIds: [],
+              sortOrder: 0,
+            }),
+          });
+          const data = await r.json();
+          show('employees-out', r.status, data);
+          if (r.ok && data.data) s13.employeeId = data.data.id;
+        } catch (e) {
+          show('employees-out', 0, { error: String(e) });
+        }
+      }
+
+      async function listEmployees() {
+        try {
+          const r = await authedFetch('/admin/employees');
+          const data = await r.json();
+          show('employees-out', r.status, data);
+        } catch (e) {
+          show('employees-out', 0, { error: String(e) });
+        }
+      }
+
+      async function setSampleSchedule() {
+        try {
+          if (!s13.employeeId) {
+            show('schedule-out', 0, {
+              error: 'Nejdřív vytvoř zaměstnance v kroku 6.',
+            });
+            return;
+          }
+          const r = await authedFetch(
+            '/admin/employees/' + s13.employeeId + '/schedule',
+            {
+              method: 'PUT',
+              body: JSON.stringify({
+                schedule: [
+                  { dayOfWeek: 1, startTime: '09:00', endTime: '17:00' },
+                  { dayOfWeek: 2, startTime: '09:00', endTime: '17:00' },
+                  { dayOfWeek: 3, startTime: '09:00', endTime: '17:00' },
+                  { dayOfWeek: 4, startTime: '09:00', endTime: '17:00' },
+                  { dayOfWeek: 5, startTime: '09:00', endTime: '15:00' },
+                ],
+              }),
+            },
+          );
+          const data = await r.json();
+          show('schedule-out', r.status, data);
+        } catch (e) {
+          show('schedule-out', 0, { error: String(e) });
+        }
+      }
+
+      async function getSchedule() {
+        try {
+          if (!s13.employeeId) {
+            show('schedule-out', 0, { error: 'Nejdřív vytvoř zaměstnance.' });
+            return;
+          }
+          const r = await authedFetch(
+            '/admin/employees/' + s13.employeeId + '/schedule',
+          );
+          const data = await r.json();
+          show('schedule-out', r.status, data);
+        } catch (e) {
+          show('schedule-out', 0, { error: String(e) });
+        }
+      }
+
+      async function fullSnapshot() {
+        try {
+          const [cats, svcs, emps] = await Promise.all([
+            authedFetch('/admin/service-categories').then((r) => r.json()),
+            authedFetch('/admin/services').then((r) => r.json()),
+            authedFetch('/admin/employees').then((r) => r.json()),
+          ]);
+          let scheduleData = null;
+          if (s13.employeeId) {
+            scheduleData = await authedFetch(
+              '/admin/employees/' + s13.employeeId + '/schedule',
+            ).then((r) => r.json());
+          }
+          show('snapshot-out', 200, {
+            tenant: state.tenantSlug,
+            kategorie: cats.data,
+            sluzby: svcs.data,
+            zamestnanci: emps.data,
+            rozpis_prvniho_zamestnance: scheduleData?.data ?? null,
+          });
+        } catch (e) {
+          show('snapshot-out', 0, { error: String(e) });
+        }
+      }
+    </script>
+  </body>
+</html>

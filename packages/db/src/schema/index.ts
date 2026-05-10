@@ -12,3 +12,5 @@ export * from './branches.js';
 export * from './users.js';
 export * from './sessions.js';
 export * from './onboarding.js';
+export * from './services.js';
+export * from './employees.js';
