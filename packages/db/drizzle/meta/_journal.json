@@ -29,6 +29,20 @@
       "when": 1778419569591,
       "tag": "0003_app_role",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1778438250359,
+      "tag": "0004_services_employees",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1778438258541,
+      "tag": "0005_rls_services_employees",
+      "breakpoints": true
     }
   ]
 }

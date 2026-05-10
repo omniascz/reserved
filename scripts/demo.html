@@ -238,6 +238,62 @@
       </div>
     </div>
 
+    <h2 style="margin-top: 40px">📋 Sprint 1.3 — služby, zaměstnanci, pracovní doba</h2>
+    <p class="subtitle">
+      Tyto endpointy vyžadují přihlášeného uživatele. Nejdřív klikni výše „Vytvořit
+      salon" nebo „Přihlásit", pak teprve klikej tady.
+    </p>
+
+    <div class="row">
+      <!-- ─── KATEGORIE A SLUŽBY ─────────────────────────────────── -->
+      <div class="card">
+        <h2>5️⃣ Kategorie a služby</h2>
+        <p class="help">
+          Vytvoří kategorii „Vlasy" a v ní službu „Dámský střih" 45 min za 890 Kč.
+          Pak ti vypíše seznam všech služeb tenantu.
+        </p>
+        <button onclick="createSampleCategory()">Vytvořit kategorii „Vlasy"</button>
+        <button onclick="createSampleService()">Vytvořit službu „Dámský střih"</button>
+        <button class="secondary" onclick="listServices()">Vypsat všechny služby</button>
+        <pre id="services-out">Klikni na „Vytvořit kategorii"…</pre>
+      </div>
+
+      <!-- ─── ZAMĚSTNANEC ────────────────────────────────────────── -->
+      <div class="card">
+        <h2>6️⃣ Zaměstnanec</h2>
+        <p class="help">
+          Vytvoří zaměstnankyni „Jana Nováková" jako Senior stylistku, která umí
+          poskytovat všechny služby z předchozího kroku.
+        </p>
+        <button onclick="createSampleEmployee()">Vytvořit „Jana Nováková"</button>
+        <button class="secondary" onclick="listEmployees()">Vypsat zaměstnance</button>
+        <pre id="employees-out">…</pre>
+      </div>
+
+      <!-- ─── PRACOVNÍ DOBA ─────────────────────────────────────── -->
+      <div class="card">
+        <h2>7️⃣ Pracovní doba</h2>
+        <p class="help">
+          Nastaví zaměstnanci pracovní dobu Po–Čt 9:00–17:00 a Pá 9:00–15:00. Pak
+          rozpis přečte zpátky a uvidíš ho ve struktuře.
+        </p>
+        <button onclick="setSampleSchedule()">Nastavit Po–Pá rozpis</button>
+        <button class="secondary" onclick="getSchedule()">Načíst rozpis zpět</button>
+        <pre id="schedule-out">Nejdřív vytvoř zaměstnance v kroku 6…</pre>
+      </div>
+
+      <!-- ─── KOMPLETNÍ DEMO TENANTU ─────────────────────────────── -->
+      <div class="card">
+        <h2>8️⃣ Co všechno teď máš v databázi?</h2>
+        <p class="help">
+          Stiskni tlačítko a uvidíš kompletní snapshot tvého tenantu — kategorie,
+          služby, zaměstnance, jejich rozpisy. Vše dohromady v jedné odpovědi.
+        </p>
+        <button onclick="fullSnapshot()">Vypsat všechno</button>
+        <pre id="snapshot-out">…</pre>
+      </div>
+    </div>
+
     <script>
       const API = 'http://localhost:3001/api/v1';
 
@@ -447,6 +503,188 @@
           state.accessToken = null;
           state.refreshToken = null;
           updateTokenInfo();
+        }
+      }
+
+      // ─── Sprint 1.3 — služby, zaměstnanci, pracovní doba ─────────────
+      let s13 = {
+        categoryId: null,
+        serviceIds: [],
+        employeeId: null,
+      };
+
+      async function authedFetch(path, init = {}) {
+        if (!state.accessToken) {
+          throw new Error('Nejsi přihlášen — klikni nejdřív na „Vytvořit salon".');
+        }
+        const headers = Object.assign(
+          {
+            Authorization: 'Bearer ' + state.accessToken,
+            'Content-Type': 'application/json',
+          },
+          init.headers || {},
+        );
+        return fetch(API + path, Object.assign({}, init, { headers }));
+      }
+
+      async function createSampleCategory() {
+        try {
+          const r = await authedFetch('/admin/service-categories', {
+            method: 'POST',
+            body: JSON.stringify({
+              name: 'Vlasy',
+              color: '#ff7700',
+              sortOrder: 1,
+            }),
+          });
+          const data = await r.json();
+          show('services-out', r.status, data);
+          if (r.ok && data.data) s13.categoryId = data.data.id;
+        } catch (e) {
+          show('services-out', 0, { error: String(e) });
+        }
+      }
+
+      async function createSampleService() {
+        try {
+          if (!s13.categoryId) {
+            show('services-out', 0, {
+              error: 'Nejdřív klikni „Vytvořit kategorii".',
+            });
+            return;
+          }
+          const r = await authedFetch('/admin/services', {
+            method: 'POST',
+            body: JSON.stringify({
+              categoryId: s13.categoryId,
+              name: 'Dámský střih',
+              durationMinutes: 45,
+              priceHellers: 89000,
+              capacity: 1,
+              color: '#ff9933',
+            }),
+          });
+          const data = await r.json();
+          show('services-out', r.status, data);
+          if (r.ok && data.data) s13.serviceIds = [data.data.id];
+        } catch (e) {
+          show('services-out', 0, { error: String(e) });
+        }
+      }
+
+      async function listServices() {
+        try {
+          const r = await authedFetch('/admin/services');
+          const data = await r.json();
+          show('services-out', r.status, data);
+        } catch (e) {
+          show('services-out', 0, { error: String(e) });
+        }
+      }
+
+      async function createSampleEmployee() {
+        try {
+          const r = await authedFetch('/admin/employees', {
+            method: 'POST',
+            body: JSON.stringify({
+              firstName: 'Jana',
+              lastName: 'Nováková',
+              displayName: 'Jana N.',
+              title: 'Senior stylistka',
+              color: '#aa00cc',
+              isPublic: true,
+              acceptsOnlineBookings: true,
+              serviceIds: s13.serviceIds,
+              branchIds: [],
+              sortOrder: 0,
+            }),
+          });
+          const data = await r.json();
+          show('employees-out', r.status, data);
+          if (r.ok && data.data) s13.employeeId = data.data.id;
+        } catch (e) {
+          show('employees-out', 0, { error: String(e) });
+        }
+      }
+
+      async function listEmployees() {
+        try {
+          const r = await authedFetch('/admin/employees');
+          const data = await r.json();
+          show('employees-out', r.status, data);
+        } catch (e) {
+          show('employees-out', 0, { error: String(e) });
+        }
+      }
+
+      async function setSampleSchedule() {
+        try {
+          if (!s13.employeeId) {
+            show('schedule-out', 0, {
+              error: 'Nejdřív vytvoř zaměstnance v kroku 6.',
+            });
+            return;
+          }
+          const r = await authedFetch(
+            '/admin/employees/' + s13.employeeId + '/schedule',
+            {
+              method: 'PUT',
+              body: JSON.stringify({
+                schedule: [
+                  { dayOfWeek: 1, startTime: '09:00', endTime: '17:00' },
+                  { dayOfWeek: 2, startTime: '09:00', endTime: '17:00' },
+                  { dayOfWeek: 3, startTime: '09:00', endTime: '17:00' },
+                  { dayOfWeek: 4, startTime: '09:00', endTime: '17:00' },
+                  { dayOfWeek: 5, startTime: '09:00', endTime: '15:00' },
+                ],
+              }),
+            },
+          );
+          const data = await r.json();
+          show('schedule-out', r.status, data);
+        } catch (e) {
+          show('schedule-out', 0, { error: String(e) });
+        }
+      }
+
+      async function getSchedule() {
+        try {
+          if (!s13.employeeId) {
+            show('schedule-out', 0, { error: 'Nejdřív vytvoř zaměstnance.' });
+            return;
+          }
+          const r = await authedFetch(
+            '/admin/employees/' + s13.employeeId + '/schedule',
+          );
+          const data = await r.json();
+          show('schedule-out', r.status, data);
+        } catch (e) {
+          show('schedule-out', 0, { error: String(e) });
+        }
+      }
+
+      async function fullSnapshot() {
+        try {
+          const [cats, svcs, emps] = await Promise.all([
+            authedFetch('/admin/service-categories').then((r) => r.json()),
+            authedFetch('/admin/services').then((r) => r.json()),
+            authedFetch('/admin/employees').then((r) => r.json()),
+          ]);
+          let scheduleData = null;
+          if (s13.employeeId) {
+            scheduleData = await authedFetch(
+              '/admin/employees/' + s13.employeeId + '/schedule',
+            ).then((r) => r.json());
+          }
+          show('snapshot-out', 200, {
+            tenant: state.tenantSlug,
+            kategorie: cats.data,
+            sluzby: svcs.data,
+            zamestnanci: emps.data,
+            rozpis_prvniho_zamestnance: scheduleData?.data ?? null,
+          });
+        } catch (e) {
+          show('snapshot-out', 0, { error: String(e) });
         }
       }
     </script>

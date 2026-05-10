@@ -41,6 +41,15 @@ export class TenantMiddleware implements NestMiddleware {
   ) {}
 
   async use(req: Request, _res: Response, next: NextFunction): Promise<void> {
+    // Pokud je v requestu Bearer token, tenant je v něm — JwtGuard ho ověří
+    // a zpřístupní přes @CurrentUser(). Middleware skipuje resolution.
+    // Tohle pokrývá všechny chráněné admin endpointy.
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      next();
+      return;
+    }
+
     const candidates = extractTenantCandidates(
       {
         host: req.hostname,
