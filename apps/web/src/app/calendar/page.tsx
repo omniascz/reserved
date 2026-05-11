@@ -12,7 +12,6 @@ import {
   cancelBooking,
   clearAuth,
   getAccessToken,
-  getTenantSlug,
   listBookings,
   listEmployees,
   listServices,
@@ -21,6 +20,7 @@ import {
   type AdminEmployee,
   type AdminService,
 } from '@/lib/api';
+import { NavHeader } from '@/components/NavHeader';
 
 interface CalendarEvent {
   id: string;
@@ -160,29 +160,17 @@ export default function CalendarPage() {
     }
   }
 
-  function handleLogout() {
-    clearAuth();
-    router.replace('/login');
-  }
-
   return (
     <div className="min-h-screen flex flex-col">
-      <header className="bg-white border-b border-slate-200 px-6 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <h1 className="text-lg font-bold">Reserved Admin</h1>
-          <span className="text-sm text-slate-500">salon: {getTenantSlug()}</span>
-        </div>
-        <div className="flex items-center gap-3 text-sm">
-          <LegendDot color={STATUS_COLORS.pending!} label="Čeká" />
-          <LegendDot color={STATUS_COLORS.confirmed!} label="Potvrzeno" />
-          <LegendDot color={STATUS_COLORS.completed!} label="Dokončeno" />
-          <LegendDot color={STATUS_COLORS.cancelled!} label="Zrušeno" />
-          <LegendDot color={STATUS_COLORS.no_show!} label="Nepřišel" />
-          <button onClick={handleLogout} className="ml-3 text-slate-500 hover:text-slate-900">
-            Odhlásit
-          </button>
-        </div>
-      </header>
+      <NavHeader />
+
+      <div className="bg-white border-b border-slate-100 px-6 py-2 flex items-center gap-3 text-xs">
+        <LegendDot color={STATUS_COLORS.pending!} label="Čeká" />
+        <LegendDot color={STATUS_COLORS.confirmed!} label="Potvrzeno" />
+        <LegendDot color={STATUS_COLORS.completed!} label="Dokončeno" />
+        <LegendDot color={STATUS_COLORS.cancelled!} label="Zrušeno" />
+        <LegendDot color={STATUS_COLORS.no_show!} label="Nepřišel" />
+      </div>
 
       <main className="flex-1 p-6">
         {error && (

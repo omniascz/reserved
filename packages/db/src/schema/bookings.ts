@@ -57,6 +57,8 @@ export const bookings = pgTable(
     }),
     /** Volitelně přihlášený zákazník (link na users.id pokud měl účet). */
     customerUserId: uuid('customer_user_id').references(() => users.id),
+    /** Customer entity (sprint 1.7). Nullable pro backward compat. */
+    customerId: uuid('customer_id'),
     /** Údaje zákazníka — kopie pro audit i kdyby user smazán. */
     customerName: varchar('customer_name', { length: 200 }).notNull(),
     customerEmail: varchar('customer_email', { length: 255 }).notNull(),
