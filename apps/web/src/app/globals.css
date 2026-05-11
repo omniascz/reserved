@@ -1,0 +1,24 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  @apply bg-slate-100 text-slate-900;
+}
+
+/* FullCalendar tweaks */
+.fc {
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+.fc-toolbar-title {
+  @apply text-xl font-bold;
+}
+.fc-event {
+  @apply cursor-pointer border-0;
+}
