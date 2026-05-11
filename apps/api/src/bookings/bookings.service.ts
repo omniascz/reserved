@@ -14,6 +14,7 @@ import { and, asc, desc, eq, gte, inArray, lte } from 'drizzle-orm';
 import { schema } from '@reserved/db';
 import { type AppRole, type TenantContext, serviceContext } from '@reserved/rls-multitenancy';
 import { randomBytes } from 'node:crypto';
+import { CustomersService } from '../customers/customers.service.js';
 import { DbService } from '../db/db.service.js';
 import { EmailService } from '../email/email.service.js';
 import type {
@@ -55,6 +56,7 @@ export class BookingsService {
   constructor(
     @Inject(DbService) private readonly dbService: DbService,
     @Inject(EmailService) private readonly email: EmailService,
+    @Inject(CustomersService) private readonly customers: CustomersService,
   ) {}
 
   // ─── Public: confirm from hold ───────────────────────────────────────
@@ -103,6 +105,17 @@ export class BookingsService {
           .limit(1);
         const service = svcRows[0]!;
 
+        // 2b. Najdi nebo vytvoř customer entity (sprint 1.7 CRM)
+        const nameParts = dto.customerName.trim().split(/\s+/);
+        const firstName = nameParts[0] ?? dto.customerName;
+        const lastName = nameParts.slice(1).join(' ') || firstName;
+        const { id: customerId } = await this.customers.findOrCreate(tx, tenantId, {
+          firstName,
+          lastName,
+          email: dto.customerEmail,
+          phone: dto.customerPhone ?? null,
+        });
+
         // 3. Vytvoř booking
         const refCode = generateReferenceCode();
         const [booking] = await tx
@@ -113,6 +126,7 @@ export class BookingsService {
             serviceId: hold.serviceId,
             employeeId: hold.employeeId,
             customerUserId: dto.customerUserId ?? null,
+            customerId,
             customerName: dto.customerName,
             customerEmail: dto.customerEmail,
             customerPhone: dto.customerPhone ?? null,

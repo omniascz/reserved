@@ -174,3 +174,115 @@ export async function listEmployees(): Promise<AdminEmployee[]> {
   const { data } = await fetchApi<{ data: AdminEmployee[] }>(`/admin/employees`);
   return data;
 }
+
+// ─── Customers (sprint 1.7) ──────────────────────────────────────────
+
+export interface AdminCustomer {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string | null;
+  customerType: string;
+  createdAt: string;
+}
+
+export interface AdminCustomerTag {
+  id: string;
+  tag: string;
+  color: string | null;
+  createdAt: string;
+}
+
+export interface AdminCustomerNote {
+  id: string;
+  note: string;
+  category: string;
+  visibility: string;
+  createdBy: string | null;
+  createdAt: string;
+}
+
+export interface AdminCustomerBooking {
+  id: string;
+  startsAt: string;
+  endsAt: string;
+  status: string;
+  serviceId: string;
+  employeeId: string | null;
+  referenceCode: string;
+  pricePaidHellers: number;
+}
+
+export interface AdminCustomerDetail {
+  customer: AdminCustomer & {
+    marketingOptIn: boolean;
+    country: string | null;
+    metadata: Record<string, unknown>;
+  };
+  tags: AdminCustomerTag[];
+  notes: AdminCustomerNote[];
+  bookings: AdminCustomerBooking[];
+  stats: {
+    totalBookings: number;
+    completedCount: number;
+    cancelledCount: number;
+    noShowCount: number;
+    totalSpentHellers: number;
+  };
+}
+
+export async function listCustomers(opts: {
+  search?: string;
+  tag?: string;
+}): Promise<AdminCustomer[]> {
+  const params = new URLSearchParams();
+  if (opts.search) params.append('search', opts.search);
+  if (opts.tag) params.append('tag', opts.tag);
+  const { data } = await fetchApi<{ data: AdminCustomer[] }>(
+    `/admin/customers?${params.toString()}`,
+  );
+  return data;
+}
+
+export async function listCustomerTags(): Promise<
+  Array<{ tag: string; color: string | null; count: number }>
+> {
+  const { data } = await fetchApi<{
+    data: Array<{ tag: string; color: string | null; count: number }>;
+  }>(`/admin/customers/tags`);
+  return data;
+}
+
+export async function getCustomerDetail(id: string): Promise<AdminCustomerDetail> {
+  const { data } = await fetchApi<{ data: AdminCustomerDetail }>(`/admin/customers/${id}`);
+  return data;
+}
+
+export async function addCustomerTag(
+  customerId: string,
+  tag: string,
+  color?: string,
+): Promise<void> {
+  await fetchApi(`/admin/customers/${customerId}/tags`, {
+    method: 'POST',
+    body: JSON.stringify({ tag, color: color ?? null }),
+  });
+}
+
+export async function removeCustomerTag(customerId: string, tag: string): Promise<void> {
+  await fetchApi(`/admin/customers/${customerId}/tags/${encodeURIComponent(tag)}`, {
+    method: 'DELETE',
+  });
+}
+
+export async function addCustomerNote(
+  customerId: string,
+  note: string,
+  category: string = 'general',
+): Promise<void> {
+  await fetchApi(`/admin/customers/${customerId}/notes`, {
+    method: 'POST',
+    body: JSON.stringify({ note, category, visibility: 'all' }),
+  });
+}
