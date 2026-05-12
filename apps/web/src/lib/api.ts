@@ -453,3 +453,85 @@ export async function updateBranch(
 export async function deleteBranch(id: string): Promise<void> {
   await fetchApi(`/admin/branches/${id}`, { method: 'DELETE' });
 }
+
+// ─── Rules (sprint 2.5) ──────────────────────────────────────────────
+
+export interface AdminRule {
+  id: string;
+  name: string;
+  description: string | null;
+  triggerEvent: string;
+  conditions: unknown;
+  actions: Array<{ type: string; config: Record<string, unknown> }>;
+  isEnabled: boolean;
+  priority: number;
+  triggerCount: number;
+  lastTriggeredAt: string | null;
+  createdAt: string;
+}
+
+export interface AdminRuleExecution {
+  id: string;
+  ruleId: string;
+  eventType: string;
+  eventPayload: Record<string, unknown>;
+  matched: boolean;
+  actionResults: Array<{ action: string; status: string; message?: string }>;
+  durationMs: number | null;
+  error: string | null;
+  createdAt: string;
+}
+
+export async function listRules(): Promise<AdminRule[]> {
+  const { data } = await fetchApi<{ data: AdminRule[] }>(`/admin/rules`);
+  return data;
+}
+
+export async function createRule(input: {
+  name: string;
+  description?: string;
+  triggerEvent: string;
+  conditions: unknown;
+  actions: Array<{ type: string; config: Record<string, unknown> }>;
+  isEnabled?: boolean;
+  priority?: number;
+}): Promise<AdminRule> {
+  const { data } = await fetchApi<{ data: AdminRule }>(`/admin/rules`, {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+  return data;
+}
+
+export async function updateRule(
+  id: string,
+  input: Partial<{
+    name: string;
+    description: string | null;
+    triggerEvent: string;
+    conditions: unknown;
+    actions: Array<{ type: string; config: Record<string, unknown> }>;
+    isEnabled: boolean;
+    priority: number;
+  }>,
+): Promise<AdminRule> {
+  const { data } = await fetchApi<{ data: AdminRule }>(`/admin/rules/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(input),
+  });
+  return data;
+}
+
+export async function deleteRule(id: string): Promise<void> {
+  await fetchApi(`/admin/rules/${id}`, { method: 'DELETE' });
+}
+
+export async function listRuleExecutions(
+  ruleId: string,
+  limit = 20,
+): Promise<AdminRuleExecution[]> {
+  const { data } = await fetchApi<{ data: AdminRuleExecution[] }>(
+    `/admin/rules/${ruleId}/executions?limit=${limit}`,
+  );
+  return data;
+}

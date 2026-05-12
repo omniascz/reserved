@@ -21,6 +21,7 @@
     "@nestjs/terminus": "^10.2.0",
     "@reserved/db": "workspace:*",
     "@reserved/rls-multitenancy": "workspace:*",
+    "@reserved/rules-engine": "workspace:*",
     "@reserved/types": "workspace:*",
     "@reserved/utils": "workspace:*",
     "argon2": "^0.41.1",

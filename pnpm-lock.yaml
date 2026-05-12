@@ -56,6 +56,9 @@ importers:
       '@reserved/rls-multitenancy':
         specifier: workspace:*
         version: link:../../packages/rls-multitenancy
+      '@reserved/rules-engine':
+        specifier: workspace:*
+        version: link:../../packages/rules-engine
       '@reserved/types':
         specifier: workspace:*
         version: link:../../packages/types
@@ -286,7 +289,18 @@ importers:
         specifier: ^2.1.0
         version: 2.1.9(@types/node@22.19.18)(terser@5.47.1)
 
-  packages/rules-engine: {}
+  packages/rules-engine:
+    dependencies:
+      zod:
+        specifier: ^3.23.0
+        version: 3.25.76
+    devDependencies:
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.0
+        version: 2.1.9(@types/node@22.19.18)(terser@5.47.1)
 
   packages/types:
     dependencies:

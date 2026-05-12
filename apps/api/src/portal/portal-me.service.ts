@@ -14,7 +14,9 @@ import { schema } from '@reserved/db';
 import type { TenantContext } from '@reserved/rls-multitenancy';
 import { DbService } from '../db/db.service.js';
 import { EmailService } from '../email/email.service.js';
+import { EventBus } from '../rules/events.bus.js';
 import { extractBookingRules } from '../settings/settings.types.js';
+import type { BookingEventPayload, TriggerEvent } from '@reserved/rules-engine';
 import type {
   CancelMyBookingDto,
   RescheduleMyBookingDto,
@@ -30,6 +32,7 @@ export class PortalMeService {
   constructor(
     @Inject(DbService) private readonly dbService: DbService,
     @Inject(EmailService) private readonly email: EmailService,
+    @Inject(EventBus) private readonly eventBus: EventBus,
   ) {}
 
   // ---------------------------------------------------------------------------
@@ -205,6 +208,9 @@ export class PortalMeService {
       reason: dto.reason,
     });
 
+    // Emit domain event → rules engine reaguje
+    await this.emitBookingEvent('booking_cancelled', tenantId, result.booking, dto.reason);
+
     return result.booking;
   }
 
@@ -340,7 +346,37 @@ export class PortalMeService {
       { oldStartsAt: result.oldStartsAt.toISOString() },
     );
 
+    await this.emitBookingEvent('booking_rescheduled', tenantId, result.booking, dto.reason);
+
     return result.booking;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Emit domain event (rules engine input)
+  // ---------------------------------------------------------------------------
+  private async emitBookingEvent(
+    eventType: TriggerEvent,
+    tenantId: string,
+    booking: typeof schema.bookings.$inferSelect,
+    reason?: string | null,
+  ): Promise<void> {
+    const payload: BookingEventPayload = {
+      bookingId: booking.id,
+      customerId: booking.customerId,
+      customerEmail: booking.customerEmail,
+      customerName: booking.customerName,
+      serviceId: booking.serviceId,
+      employeeId: booking.employeeId,
+      branchId: booking.branchId,
+      startsAt: booking.startsAt.toISOString(),
+      endsAt: booking.endsAt.toISOString(),
+      status: booking.status,
+      pricePaidHellers: booking.pricePaidHellers,
+      hoursUntilStart: (booking.startsAt.getTime() - Date.now()) / 3_600_000,
+      triggeredBy: 'customer',
+      reason: reason ?? null,
+    };
+    await this.eventBus.emit({ tenantId, type: eventType, payload });
   }
 
   // ---------------------------------------------------------------------------
