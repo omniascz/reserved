@@ -7,6 +7,7 @@ import { and, eq, gte, lte, inArray, or, isNull, gt } from 'drizzle-orm';
 import { schema } from '@reserved/db';
 import { serviceContext } from '@reserved/rls-multitenancy';
 import { DbService } from '../db/db.service.js';
+import { extractBookingRules } from '../settings/settings.types.js';
 import { calculateAvailableSlots } from './availability-calculator.js';
 import type { AvailableSlot, TimeRange } from './availability.types.js';
 
@@ -33,6 +34,23 @@ export class AvailabilityService {
 
   async query(input: QueryAvailabilityInput): Promise<AvailabilityForEmployee[]> {
     return this.dbService.withRlsContext(serviceContext(input.tenantId), async (tx) => {
+      // 0. Načti booking rules + check max_days_ahead / min_hours_before
+      const tenantRows = await tx
+        .select({ settings: schema.tenants.settings })
+        .from(schema.tenants)
+        .where(eq(schema.tenants.id, input.tenantId))
+        .limit(1);
+      const rules = extractBookingRules(tenantRows[0]?.settings);
+
+      const today = new Date();
+      const targetDate = new Date(`${input.date}T00:00:00Z`);
+      const daysAhead = Math.floor(
+        (targetDate.getTime() - today.getTime()) / (24 * 60 * 60 * 1000),
+      );
+      if (daysAhead > rules.maxDaysAhead) {
+        return []; // beyond booking window
+      }
+
       // 1. Načti službu (duration + buffers)
       const serviceRows = await tx
         .select()
@@ -229,14 +247,18 @@ export class AvailabilityService {
           activeHolds: empHolds,
           blocks: empBlocks,
           isHoliday,
-          slotIntervalMinutes: 15,
+          slotIntervalMinutes: rules.slotIntervalMinutes,
           timezone: input.timezone,
         });
+
+        // Filter slots by minHoursBefore (cutoff)
+        const minStartMs = today.getTime() + rules.minHoursBefore * 60 * 60 * 1000;
+        const filtered = slots.filter((s) => s.startsAt.getTime() >= minStartMs);
 
         results.push({
           employeeId: emp.id,
           employeeName: emp.displayName ?? `${emp.firstName} ${emp.lastName}`,
-          slots,
+          slots: filtered,
         });
       }
 
