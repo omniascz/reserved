@@ -15,6 +15,8 @@ import {
   listBookings,
   listEmployees,
   listServices,
+  markBookingCompleted,
+  markBookingNoShow,
   rescheduleBooking,
   type AdminBooking,
   type AdminEmployee,
@@ -160,6 +162,29 @@ export default function CalendarPage() {
     }
   }
 
+  async function handleMarkNoShow() {
+    if (!selectedBooking) return;
+    if (!window.confirm('Označit jako „klient nedorazil"? Spustí se pravidla pro no-show.')) return;
+    try {
+      await markBookingNoShow(selectedBooking.id);
+      setSelectedBooking(null);
+      if (range) await reload(range.from, range.to);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Označení selhalo');
+    }
+  }
+
+  async function handleMarkCompleted() {
+    if (!selectedBooking) return;
+    try {
+      await markBookingCompleted(selectedBooking.id);
+      setSelectedBooking(null);
+      if (range) await reload(range.from, range.to);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Označení selhalo');
+    }
+  }
+
   return (
     <div className="min-h-screen flex flex-col">
       <NavHeader />
@@ -217,6 +242,8 @@ export default function CalendarPage() {
           booking={selectedBooking}
           onClose={() => setSelectedBooking(null)}
           onCancel={handleCancel}
+          onMarkNoShow={handleMarkNoShow}
+          onMarkCompleted={handleMarkCompleted}
           services={services}
           employees={employees}
         />
@@ -242,12 +269,16 @@ function BookingModal({
   booking,
   onClose,
   onCancel,
+  onMarkNoShow,
+  onMarkCompleted,
   services,
   employees,
 }: {
   booking: AdminBooking;
   onClose: () => void;
   onCancel: () => void;
+  onMarkNoShow: () => void;
+  onMarkCompleted: () => void;
   services: AdminService[];
   employees: AdminEmployee[];
 }) {
@@ -301,15 +332,32 @@ function BookingModal({
           {booking.customerNote && <Row label="Poznámka klienta" value={booking.customerNote} />}
         </dl>
 
-        <div className="flex justify-end gap-2 mt-6">
-          {booking.status !== 'cancelled' && (
-            <button
-              onClick={onCancel}
-              className="px-4 py-2 text-red-600 hover:bg-red-50 rounded font-medium"
-            >
-              Zrušit rezervaci
-            </button>
-          )}
+        <div className="flex justify-end gap-2 mt-6 flex-wrap">
+          {booking.status !== 'cancelled' &&
+            booking.status !== 'completed' &&
+            booking.status !== 'no_show' && (
+              <>
+                <button
+                  onClick={onMarkNoShow}
+                  className="px-4 py-2 text-orange-700 hover:bg-orange-50 rounded font-medium"
+                  title="Klient nedorazil — spustí pravidla pro no-show"
+                >
+                  Nedorazil/a
+                </button>
+                <button
+                  onClick={onMarkCompleted}
+                  className="px-4 py-2 text-emerald-700 hover:bg-emerald-50 rounded font-medium"
+                >
+                  Dokončeno
+                </button>
+                <button
+                  onClick={onCancel}
+                  className="px-4 py-2 text-red-600 hover:bg-red-50 rounded font-medium"
+                >
+                  Zrušit
+                </button>
+              </>
+            )}
           <button
             onClick={onClose}
             className="px-4 py-2 bg-slate-200 hover:bg-slate-300 rounded font-medium"

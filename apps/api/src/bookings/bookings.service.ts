@@ -17,6 +17,8 @@ import { randomBytes } from 'node:crypto';
 import { CustomersService } from '../customers/customers.service.js';
 import { DbService } from '../db/db.service.js';
 import { EmailService } from '../email/email.service.js';
+import { EventBus } from '../rules/events.bus.js';
+import type { BookingEventPayload, TriggerEvent } from '@reserved/rules-engine';
 import type {
   AdminCreateBookingDto,
   CancelBookingDto,
@@ -57,7 +59,34 @@ export class BookingsService {
     @Inject(DbService) private readonly dbService: DbService,
     @Inject(EmailService) private readonly email: EmailService,
     @Inject(CustomersService) private readonly customers: CustomersService,
+    @Inject(EventBus) private readonly eventBus: EventBus,
   ) {}
+
+  private async emitBookingEvent(
+    eventType: TriggerEvent,
+    tenantId: string,
+    booking: typeof schema.bookings.$inferSelect,
+    triggeredBy: 'customer' | 'admin' | 'system' = 'admin',
+    reason?: string | null,
+  ): Promise<void> {
+    const payload: BookingEventPayload = {
+      bookingId: booking.id,
+      customerId: booking.customerId,
+      customerEmail: booking.customerEmail,
+      customerName: booking.customerName,
+      serviceId: booking.serviceId,
+      employeeId: booking.employeeId,
+      branchId: booking.branchId,
+      startsAt: booking.startsAt.toISOString(),
+      endsAt: booking.endsAt.toISOString(),
+      status: booking.status,
+      pricePaidHellers: booking.pricePaidHellers,
+      hoursUntilStart: (booking.startsAt.getTime() - Date.now()) / 3_600_000,
+      triggeredBy,
+      reason: reason ?? null,
+    };
+    await this.eventBus.emit({ tenantId, type: eventType, payload });
+  }
 
   // ─── Public: confirm from hold ───────────────────────────────────────
 
@@ -200,6 +229,9 @@ export class BookingsService {
             referenceCode: result.booking.referenceCode,
           },
         });
+
+        // Emit booking_created event pro Rules Engine
+        await this.emitBookingEvent('booking_created', tenantId, result.booking, 'customer');
 
         return result.booking;
       });
@@ -448,6 +480,8 @@ export class BookingsService {
       await this.sendBookingEmail(tenantId, result, 'booking_cancelled', { reason: dto.reason });
     }
 
+    await this.emitBookingEvent('booking_cancelled', tenantId, result, 'admin', dto.reason);
+
     return result;
   }
 
@@ -549,7 +583,88 @@ export class BookingsService {
       });
     }
 
+    await this.emitBookingEvent(
+      'booking_rescheduled',
+      tenantId,
+      result.booking,
+      'admin',
+      dto.reason,
+    );
+
     return result.booking;
+  }
+
+  // ─── Mark no-show + completed (sprint 2.5 phase 2) ──────────────────
+
+  async markNoShow(tenantId: string, userId: string, role: AppRole, bookingId: string) {
+    return this.changeStatus(tenantId, userId, role, bookingId, 'no_show', 'booking_no_show');
+  }
+
+  async markCompleted(tenantId: string, userId: string, role: AppRole, bookingId: string) {
+    return this.changeStatus(tenantId, userId, role, bookingId, 'completed', 'booking_completed');
+  }
+
+  private async changeStatus(
+    tenantId: string,
+    userId: string,
+    role: AppRole,
+    bookingId: string,
+    newStatus: 'no_show' | 'completed',
+    eventType: TriggerEvent,
+  ) {
+    assertCanManage(role);
+    const result = await this.dbService.withRlsContext(
+      ctxFor(tenantId, userId, role),
+      async (tx) => {
+        const rows = await tx
+          .select()
+          .from(schema.bookings)
+          .where(and(eq(schema.bookings.id, bookingId), eq(schema.bookings.tenantId, tenantId)))
+          .limit(1);
+        const existing = rows[0];
+        if (!existing) {
+          throw new NotFoundException({
+            error: { code: 'BOOKING_NOT_FOUND', message: 'Rezervace nenalezena.' },
+          });
+        }
+        if (existing.status === newStatus) {
+          throw new BadRequestException({
+            error: {
+              code: 'INVALID_STATUS_CHANGE',
+              message: `Rezervace už má stav '${newStatus}'.`,
+            },
+          });
+        }
+        if (existing.status === 'cancelled') {
+          throw new BadRequestException({
+            error: {
+              code: 'INVALID_STATUS_CHANGE',
+              message: 'Zrušenou rezervaci nelze označit jako dokončenou/no-show.',
+            },
+          });
+        }
+
+        const [updated] = await tx
+          .update(schema.bookings)
+          .set({ status: newStatus, updatedAt: new Date() })
+          .where(eq(schema.bookings.id, bookingId))
+          .returning();
+
+        await tx.insert(schema.bookingStatusHistory).values({
+          tenantId,
+          bookingId,
+          fromStatus: existing.status,
+          toStatus: newStatus,
+          changedBy: userId,
+          reason: newStatus === 'no_show' ? 'admin_marked_no_show' : 'admin_marked_completed',
+        });
+
+        return updated!;
+      },
+    );
+
+    await this.emitBookingEvent(eventType, tenantId, result, 'admin');
+    return result;
   }
 
   // ─── Helper: email odeslání s lookup employee/tenant ────────────────

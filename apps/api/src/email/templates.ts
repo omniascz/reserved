@@ -25,7 +25,15 @@ export interface PortalEmailVars {
   expiresInMinutes?: number;
 }
 
-export type EmailVars = BookingEmailVars | PortalEmailVars;
+/** Vars pro custom emaily (rules engine action). Libovolné klíče. */
+export interface CustomEmailVars {
+  /** Sub schéma overrides — když action zadá vlastní subject/body, použijeme je. */
+  __customSubject?: string;
+  __customBody?: string;
+  [key: string]: unknown;
+}
+
+export type EmailVars = BookingEmailVars | PortalEmailVars | CustomEmailVars;
 
 export interface EmailTemplate {
   subject: string;
@@ -110,6 +118,18 @@ Tým {{tenantName}}`,
 };
 
 export function renderEmail(templateCode: string, vars: EmailVars): EmailTemplate {
+  // 'custom' template: subject + body přicházejí v __customSubject / __customBody.
+  // Rules engine action 'send_email' to využívá pro ad-hoc emaily.
+  if (templateCode === 'custom') {
+    const cv = vars as CustomEmailVars;
+    const subject = cv.__customSubject ?? '(bez předmětu)';
+    const body = cv.__customBody ?? '';
+    return {
+      subject: render(subject, vars as unknown as Record<string, unknown>),
+      body: render(body, vars as unknown as Record<string, unknown>),
+    };
+  }
+
   const tpl = TEMPLATES[templateCode];
   if (!tpl) {
     throw new Error(`Unknown email template: ${templateCode}`);

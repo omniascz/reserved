@@ -14,6 +14,7 @@ import {
   type AdminRule,
 } from '@/lib/api';
 import { RuleEditor, type RuleFormState } from './RuleEditor';
+import { RuleExecutions } from './RuleExecutions';
 
 const TRIGGER_LABELS: Record<string, string> = {
   booking_created: 'Vytvořena nová rezervace',
@@ -30,6 +31,7 @@ export default function RulesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState<RuleFormState | null>(null);
+  const [viewingExecutions, setViewingExecutions] = useState<string | null>(null);
 
   useEffect(() => {
     if (!getAccessToken()) router.replace('/login');
@@ -160,6 +162,10 @@ export default function RulesPage() {
           <RuleEditor form={editing} onSave={handleSave} onCancel={() => setEditing(null)} />
         )}
 
+        {viewingExecutions && (
+          <RuleExecutions ruleId={viewingExecutions} onClose={() => setViewingExecutions(null)} />
+        )}
+
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden mt-4">
           <table className="w-full text-sm">
             <thead className="bg-slate-50 border-b border-slate-200">
@@ -217,6 +223,13 @@ export default function RulesPage() {
                     )}
                   </td>
                   <td className="px-4 py-3 text-right whitespace-nowrap">
+                    <button
+                      onClick={() => setViewingExecutions(r.id)}
+                      className="text-slate-500 hover:text-slate-800 text-sm mr-3"
+                      title="Zobrazit historii spuštění"
+                    >
+                      Historie
+                    </button>
                     <button
                       onClick={() => startEdit(r)}
                       className="text-brand-600 hover:text-brand-800 text-sm mr-3"

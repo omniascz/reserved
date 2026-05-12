@@ -146,6 +146,20 @@ export async function cancelBooking(id: string, reason: string): Promise<AdminBo
   return data;
 }
 
+export async function markBookingNoShow(id: string): Promise<AdminBooking> {
+  const { data } = await fetchApi<{ data: AdminBooking }>(`/admin/bookings/${id}/mark-no-show`, {
+    method: 'POST',
+  });
+  return data;
+}
+
+export async function markBookingCompleted(id: string): Promise<AdminBooking> {
+  const { data } = await fetchApi<{ data: AdminBooking }>(`/admin/bookings/${id}/mark-completed`, {
+    method: 'POST',
+  });
+  return data;
+}
+
 // ─── Services + Employees (pro decorating events) ────────────────────
 
 export interface AdminService {
