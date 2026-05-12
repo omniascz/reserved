@@ -9,13 +9,13 @@ import { serviceContext } from '@reserved/rls-multitenancy';
 import nodemailer, { type Transporter } from 'nodemailer';
 import { DbService } from '../db/db.service.js';
 import { EmailConfig } from './email.config.js';
-import { renderEmail, type BookingEmailVars } from './templates.js';
+import { renderEmail, type EmailVars } from './templates.js';
 
 export interface EnqueueEmailInput {
   tenantId: string;
   templateCode: string;
   recipient: string;
-  vars: BookingEmailVars;
+  vars: EmailVars;
   relatedBookingId?: string | null;
 }
 

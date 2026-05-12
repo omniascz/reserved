@@ -44,6 +44,11 @@ export const customers = pgTable(
     customerType: varchar('customer_type', { length: 32 }).notNull().default('regular'),
     /** Volné metadata (lifecycle stav, source, custom fields). */
     metadata: jsonb('metadata').notNull().default({}),
+    /** Heslo pro portal login. NULL = jen magic-link login. */
+    passwordHash: varchar('password_hash', { length: 255 }),
+    /** Kdy zákazník ověřil e-mail (první magic-link). */
+    emailVerifiedAt: timestamp('email_verified_at', { withTimezone: true }),
+    lastLoginAt: timestamp('last_login_at', { withTimezone: true }),
     isActive: boolean('is_active').notNull().default(true),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
