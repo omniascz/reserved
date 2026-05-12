@@ -4,6 +4,7 @@ import { AuthModule } from './auth/auth.module.js';
 import { AvailabilityModule } from './availability/availability.module.js';
 import { BlocksModule } from './blocks/blocks.module.js';
 import { BookingsModule } from './bookings/bookings.module.js';
+import { BranchesModule } from './branches/branches.module.js';
 import { CustomersModule } from './customers/customers.module.js';
 import { DbModule } from './db/db.module.js';
 import { EmailModule } from './email/email.module.js';
@@ -27,6 +28,7 @@ import { TenantMiddleware } from './tenant/tenant.middleware.js';
     TenantModule,
     AuthModule,
     SettingsModule,
+    BranchesModule,
     ServicesModule,
     EmployeesModule,
     AvailabilityModule,

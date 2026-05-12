@@ -56,6 +56,25 @@ export async function getTenantInfo(slug: string): Promise<TenantInfo> {
   return data;
 }
 
+// ─── Pobočky (sprint 2.4) ────────────────────────────────────────────
+
+export interface PublicBranch {
+  id: string;
+  slug: string;
+  name: string;
+  address: string | null;
+  city: string | null;
+  phone: string | null;
+  email: string | null;
+  timezone: string | null;
+  isDefault: string | null;
+}
+
+export async function listBranches(slug: string): Promise<PublicBranch[]> {
+  const { data } = await fetchApi<{ data: PublicBranch[] }>(`/public/${slug}/branches`);
+  return data;
+}
+
 // ─── Služby ────────────────────────────────────────────────────────────
 
 export interface PublicService {
@@ -89,8 +108,9 @@ export interface PublicEmployee {
   color: string | null;
 }
 
-export async function listEmployees(slug: string): Promise<PublicEmployee[]> {
-  const { data } = await fetchApi<{ data: PublicEmployee[] }>(`/public/${slug}/employees`);
+export async function listEmployees(slug: string, branchId?: string): Promise<PublicEmployee[]> {
+  const qs = branchId ? `?branchId=${branchId}` : '';
+  const { data } = await fetchApi<{ data: PublicEmployee[] }>(`/public/${slug}/employees${qs}`);
   return data;
 }
 

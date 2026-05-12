@@ -390,3 +390,66 @@ export async function importCzHolidays(
   );
   return data;
 }
+
+// ─── Branches (sprint 2.4) ───────────────────────────────────────────
+
+export interface AdminBranch {
+  id: string;
+  name: string;
+  slug: string;
+  address: string | null;
+  city: string | null;
+  postalCode: string | null;
+  country: string;
+  phone: string | null;
+  email: string | null;
+  timezone: string | null;
+  isDefault: string | null;
+  createdAt: string;
+}
+
+export async function listBranches(): Promise<AdminBranch[]> {
+  const { data } = await fetchApi<{ data: AdminBranch[] }>(`/admin/branches`);
+  return data;
+}
+
+export async function createBranch(input: {
+  name: string;
+  slug: string;
+  address?: string;
+  city?: string;
+  postalCode?: string;
+  country?: string;
+  phone?: string;
+  email?: string;
+}): Promise<AdminBranch> {
+  const { data } = await fetchApi<{ data: AdminBranch }>(`/admin/branches`, {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+  return data;
+}
+
+export async function updateBranch(
+  id: string,
+  input: Partial<{
+    name: string;
+    slug: string;
+    address: string | null;
+    city: string | null;
+    postalCode: string | null;
+    country: string;
+    phone: string | null;
+    email: string | null;
+  }>,
+): Promise<AdminBranch> {
+  const { data } = await fetchApi<{ data: AdminBranch }>(`/admin/branches/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(input),
+  });
+  return data;
+}
+
+export async function deleteBranch(id: string): Promise<void> {
+  await fetchApi(`/admin/branches/${id}`, { method: 'DELETE' });
+}

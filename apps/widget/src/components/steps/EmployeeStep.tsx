@@ -6,11 +6,13 @@ import { listEmployees, type PublicEmployee, type PublicService } from '@/lib/ap
 export function EmployeeStep({
   slug,
   service,
+  branchId,
   onPick,
   onBack,
 }: {
   slug: string;
   service: PublicService;
+  branchId?: string;
   onPick: (employee: PublicEmployee) => void;
   onBack: () => void;
 }) {
@@ -18,10 +20,10 @@ export function EmployeeStep({
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    listEmployees(slug)
+    listEmployees(slug, branchId)
       .then(setEmployees)
       .catch((e) => setError(e?.message ?? 'Chyba'));
-  }, [slug]);
+  }, [slug, branchId]);
 
   if (error) return <div className="text-red-600">{error}</div>;
   if (!employees) return <div className="text-slate-400">Načítám…</div>;
