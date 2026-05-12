@@ -88,14 +88,42 @@ export class PublicController {
     return { data };
   }
 
-  /** GET /api/v1/public/:slug/employees */
+  /** GET /api/v1/public/:slug/branches — list aktivních poboček. */
   @Public()
-  @Get('employees')
-  async listEmployees(@Param('slug') slug: string) {
+  @Get('branches')
+  async listBranches(@Param('slug') slug: string) {
     const tenant = await this.resolveTenant(slug);
     const data = await this.dbService.withRlsContext(serviceContext(tenant.id), async (tx) => {
       return tx
         .select({
+          id: schema.branches.id,
+          slug: schema.branches.slug,
+          name: schema.branches.name,
+          address: schema.branches.address,
+          city: schema.branches.city,
+          phone: schema.branches.phone,
+          email: schema.branches.email,
+          timezone: schema.branches.timezone,
+          isDefault: schema.branches.isDefault,
+        })
+        .from(schema.branches)
+        .where(and(eq(schema.branches.tenantId, tenant.id), isNull(schema.branches.deletedAt)))
+        .orderBy(asc(schema.branches.name));
+    });
+    return { data };
+  }
+
+  /**
+   * GET /api/v1/public/:slug/employees?branchId=...
+   * Pokud branchId zadáno, filtruje jen zaměstnance přiřazené k té pobočce.
+   */
+  @Public()
+  @Get('employees')
+  async listEmployees(@Param('slug') slug: string, @Query('branchId') branchId?: string) {
+    const tenant = await this.resolveTenant(slug);
+    const data = await this.dbService.withRlsContext(serviceContext(tenant.id), async (tx) => {
+      const baseQuery = tx
+        .selectDistinct({
           id: schema.employees.id,
           firstName: schema.employees.firstName,
           lastName: schema.employees.lastName,
@@ -104,18 +132,42 @@ export class PublicController {
           bio: schema.employees.bio,
           avatarUrl: schema.employees.avatarUrl,
           color: schema.employees.color,
+          sortOrder: schema.employees.sortOrder,
         })
-        .from(schema.employees)
-        .where(
-          and(
-            eq(schema.employees.tenantId, tenant.id),
-            eq(schema.employees.isPublic, true),
-            eq(schema.employees.isActive, true),
-            eq(schema.employees.acceptsOnlineBookings, true),
-            isNull(schema.employees.deletedAt),
-          ),
-        )
-        .orderBy(asc(schema.employees.sortOrder), asc(schema.employees.lastName));
+        .from(schema.employees);
+
+      const query = branchId
+        ? baseQuery
+            .innerJoin(
+              schema.employeeBranches,
+              eq(schema.employees.id, schema.employeeBranches.employeeId),
+            )
+            .where(
+              and(
+                eq(schema.employees.tenantId, tenant.id),
+                eq(schema.employees.isPublic, true),
+                eq(schema.employees.isActive, true),
+                eq(schema.employees.acceptsOnlineBookings, true),
+                isNull(schema.employees.deletedAt),
+                eq(schema.employeeBranches.branchId, branchId),
+              ),
+            )
+        : baseQuery.where(
+            and(
+              eq(schema.employees.tenantId, tenant.id),
+              eq(schema.employees.isPublic, true),
+              eq(schema.employees.isActive, true),
+              eq(schema.employees.acceptsOnlineBookings, true),
+              isNull(schema.employees.deletedAt),
+            ),
+          );
+
+      const rows = await query.orderBy(
+        asc(schema.employees.sortOrder),
+        asc(schema.employees.lastName),
+      );
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      return rows.map(({ sortOrder: _ignored, ...e }) => e);
     });
     return { data };
   }
@@ -159,6 +211,8 @@ export class PublicController {
     });
     return { data };
   }
+
+  // (availability query nyní volitelně přijímá branchId — viz availability.service.ts)
 
   /** POST /api/v1/public/:slug/holds — zamkne slot na 10 min. */
   @Public()
