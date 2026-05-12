@@ -2,12 +2,29 @@
   "name": "@reserved/portal",
   "version": "0.0.1",
   "private": true,
-  "description": "Customer portal — placeholder. Sprint 2.3 zakládá Next.js setup.",
+  "type": "module",
+  "description": "Customer portal — self-service rezervace.",
   "scripts": {
-    "build": "echo 'portal app not yet scaffolded'",
-    "dev": "echo 'portal app not yet scaffolded'",
-    "lint": "echo 'portal app not yet scaffolded'",
-    "typecheck": "echo 'portal app not yet scaffolded'",
-    "test": "echo 'portal app not yet scaffolded'"
+    "dev": "next dev -p 3005",
+    "build": "next build",
+    "start": "next start -p 3005",
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "next": "^14.2.18",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.49",
+    "tailwindcss": "^3.4.14",
+    "typescript": "^5.7.0",
+    "vitest": "^2.1.0"
   }
 }
