@@ -7,6 +7,9 @@ import { clearAuth, getTenantSlug } from '@/lib/api';
 const NAV = [
   { href: '/calendar', label: 'Kalendář' },
   { href: '/customers', label: 'Zákazníci' },
+  { href: '/blocks', label: 'Blokace' },
+  { href: '/holidays', label: 'Svátky' },
+  { href: '/settings', label: 'Nastavení' },
 ];
 
 export function NavHeader() {

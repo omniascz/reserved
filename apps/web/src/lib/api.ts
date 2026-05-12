@@ -286,3 +286,107 @@ export async function addCustomerNote(
     body: JSON.stringify({ note, category, visibility: 'all' }),
   });
 }
+
+// ─── Settings, Blocks, Holidays (sprint 1.8) ─────────────────────────
+
+export interface BookingRules {
+  maxDaysAhead: number;
+  minHoursBefore: number;
+  stornoLimitHours: number;
+  presunLimitHours: number;
+  slotIntervalMinutes: number;
+  perDayRescheduleRules: Array<{ fromDay: string; toDay: string | null }>;
+}
+
+export async function getBookingRules(): Promise<BookingRules> {
+  const { data } = await fetchApi<{ data: BookingRules }>(`/admin/settings/booking`);
+  return data;
+}
+
+export async function updateBookingRules(rules: Partial<BookingRules>): Promise<BookingRules> {
+  const { data } = await fetchApi<{ data: BookingRules }>(`/admin/settings/booking`, {
+    method: 'PATCH',
+    body: JSON.stringify(rules),
+  });
+  return data;
+}
+
+export interface AdminBlock {
+  id: string;
+  startsAt: string;
+  endsAt: string;
+  blockType: string;
+  title: string | null;
+  note: string | null;
+  branchId: string | null;
+  employeeId: string | null;
+}
+
+export async function listBlocks(from?: string, to?: string): Promise<AdminBlock[]> {
+  const params = new URLSearchParams();
+  if (from) params.append('from', from);
+  if (to) params.append('to', to);
+  const { data } = await fetchApi<{ data: AdminBlock[] }>(`/admin/blocks?${params.toString()}`);
+  return data;
+}
+
+export async function createBlock(input: {
+  startsAt: string;
+  endsAt: string;
+  blockType: string;
+  title?: string;
+  note?: string;
+  employeeId?: string;
+}): Promise<AdminBlock> {
+  const { data } = await fetchApi<{ data: AdminBlock }>(`/admin/blocks`, {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+  return data;
+}
+
+export async function deleteBlock(id: string): Promise<void> {
+  await fetchApi(`/admin/blocks/${id}`, { method: 'DELETE' });
+}
+
+export interface AdminHoliday {
+  id: string;
+  date: string;
+  name: string;
+  source: string;
+  isOpen: boolean;
+}
+
+export async function listHolidays(from?: string, to?: string): Promise<AdminHoliday[]> {
+  const params = new URLSearchParams();
+  if (from) params.append('from', from);
+  if (to) params.append('to', to);
+  const { data } = await fetchApi<{ data: AdminHoliday[] }>(`/admin/holidays?${params.toString()}`);
+  return data;
+}
+
+export async function createHoliday(input: {
+  date: string;
+  name: string;
+  isOpen?: boolean;
+}): Promise<AdminHoliday> {
+  const { data } = await fetchApi<{ data: AdminHoliday }>(`/admin/holidays`, {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+  return data;
+}
+
+export async function deleteHoliday(id: string): Promise<void> {
+  await fetchApi(`/admin/holidays/${id}`, { method: 'DELETE' });
+}
+
+export async function importCzHolidays(
+  year: number,
+): Promise<{ inserted: number; skipped: number }> {
+  const { data } = await fetchApi<{ data: { inserted: number; skipped: number } }>(
+    `/admin/holidays/import-cz?year=${year}`,
+    { method: 'POST' },
+  );
+  return data;
+}
