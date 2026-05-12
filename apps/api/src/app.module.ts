@@ -13,6 +13,7 @@ import { HealthController } from './health/health.controller.js';
 import { HolidaysModule } from './holidays/holidays.module.js';
 import { PortalModule } from './portal/portal.module.js';
 import { PublicModule } from './public/public.module.js';
+import { RulesModule } from './rules/rules.module.js';
 import { ServicesModule } from './services/services.module.js';
 import { SettingsModule } from './settings/settings.module.js';
 import { TenantModule } from './tenant/tenant.module.js';
@@ -39,6 +40,7 @@ import { TenantMiddleware } from './tenant/tenant.middleware.js';
     HolidaysModule,
     PortalModule,
     PublicModule,
+    RulesModule,
   ],
   controllers: [HealthController],
 })

@@ -8,6 +8,7 @@ const NAV = [
   { href: '/calendar', label: 'Kalendář' },
   { href: '/customers', label: 'Zákazníci' },
   { href: '/branches', label: 'Pobočky' },
+  { href: '/rules', label: 'Pravidla' },
   { href: '/blocks', label: 'Blokace' },
   { href: '/holidays', label: 'Svátky' },
   { href: '/settings', label: 'Nastavení' },
