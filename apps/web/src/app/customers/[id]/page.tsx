@@ -13,6 +13,7 @@ import {
   removeCustomerTag,
   type AdminCustomerDetail,
 } from '@/lib/api';
+import { CustomerCreditPacks } from './CustomerCreditPacks';
 
 const STATUS_LABEL: Record<string, string> = {
   pending: 'Čeká',
@@ -261,6 +262,10 @@ export default function CustomerDetailPage({ params }: { params: { id: string } 
               ))}
             </ul>
           )}
+        </div>
+
+        <div className="mt-6">
+          <CustomerCreditPacks customerId={params.id} />
         </div>
       </main>
     </div>

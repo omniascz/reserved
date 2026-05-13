@@ -14,6 +14,7 @@ import { and, asc, desc, eq, gte, inArray, lte } from 'drizzle-orm';
 import { schema } from '@reserved/db';
 import { type AppRole, type TenantContext, serviceContext } from '@reserved/rls-multitenancy';
 import { randomBytes } from 'node:crypto';
+import { CreditPacksService } from '../credit-packs/credit-packs.service.js';
 import { CustomersService } from '../customers/customers.service.js';
 import { DbService } from '../db/db.service.js';
 import { EmailService } from '../email/email.service.js';
@@ -60,6 +61,7 @@ export class BookingsService {
     @Inject(EmailService) private readonly email: EmailService,
     @Inject(CustomersService) private readonly customers: CustomersService,
     @Inject(EventBus) private readonly eventBus: EventBus,
+    @Inject(CreditPacksService) private readonly creditPacks: CreditPacksService,
   ) {}
 
   private async emitBookingEvent(
@@ -229,6 +231,20 @@ export class BookingsService {
             referenceCode: result.booking.referenceCode,
           },
         });
+
+        // Auto-odpocet kreditu z permanentky (pokud zakaznik nejakou ma)
+        try {
+          await this.creditPacks.deductForBooking({
+            tenantId,
+            customerId: result.booking.customerId!,
+            bookingId: result.booking.id,
+            serviceId: result.booking.serviceId,
+            branchId: result.booking.branchId,
+            performedBy: null,
+          });
+        } catch {
+          // Selhani odpoctu neblokuje rezervaci — zakaznik plati normalne.
+        }
 
         // Emit booking_created event pro Rules Engine
         await this.emitBookingEvent('booking_created', tenantId, result.booking, 'customer');
@@ -478,6 +494,17 @@ export class BookingsService {
 
     if (dto.notifyCustomer) {
       await this.sendBookingEmail(tenantId, result, 'booking_cancelled', { reason: dto.reason });
+    }
+
+    // Refund credit pokud byl drive odpocteny
+    try {
+      await this.creditPacks.refundForBooking({
+        tenantId,
+        bookingId: result.id,
+        performedBy: userId,
+      });
+    } catch {
+      // ignoruj — neblokuje cancel
     }
 
     await this.emitBookingEvent('booking_cancelled', tenantId, result, 'admin', dto.reason);

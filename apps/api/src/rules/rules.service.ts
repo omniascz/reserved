@@ -25,6 +25,7 @@ import {
   type RuleEvaluationContext,
   type RuleInput,
 } from '@reserved/rules-engine';
+import { CreditPacksService } from '../credit-packs/credit-packs.service.js';
 import { DbService } from '../db/db.service.js';
 import { EmailService } from '../email/email.service.js';
 import { EventBus, type DomainEvent } from './events.bus.js';
@@ -56,6 +57,7 @@ export class RulesService implements OnModuleInit {
     @Inject(DbService) private readonly dbService: DbService,
     @Inject(EventBus) private readonly bus: EventBus,
     @Inject(EmailService) private readonly email: EmailService,
+    @Inject(CreditPacksService) private readonly creditPacks: CreditPacksService,
   ) {}
 
   onModuleInit(): void {
@@ -165,6 +167,31 @@ export class RulesService implements OnModuleInit {
         status: 'ok',
         data: { percent, feeHellers },
       };
+    });
+
+    this.registry.register('deduct_credit_pack', async (ctx, config) => {
+      if (!ctx.payload.customerId) {
+        return { action: 'deduct_credit_pack', status: 'skipped', message: 'No customer.' };
+      }
+      const credits = Number(config.credits ?? 1);
+      const reason = String(
+        config.reason ?? `Penalty from rule (booking ${ctx.payload.bookingId})`,
+      );
+      const result = await this.creditPacks.deductPenalty({
+        tenantId: ctx.tenantId,
+        customerId: ctx.payload.customerId,
+        bookingId: ctx.payload.bookingId,
+        credits,
+        reason,
+      });
+      if (!result) {
+        return {
+          action: 'deduct_credit_pack',
+          status: 'skipped',
+          message: 'Zákazník nemá aktivní permanentku.',
+        };
+      }
+      return { action: 'deduct_credit_pack', status: 'ok', data: result };
     });
 
     // Listen on event bus

@@ -549,3 +549,124 @@ export async function listRuleExecutions(
   );
   return data;
 }
+
+// ─── Credit packs (sprint 3.1) ───────────────────────────────────────
+
+export interface AdminCreditPack {
+  id: string;
+  name: string;
+  description: string | null;
+  mode: 'per_visit' | 'per_credit';
+  totalCredits: number;
+  validityDays: number | null;
+  priceHellers: number;
+  currency: string;
+  allowedServiceIds: string[];
+  allowedBranchIds: string[];
+  creditCostsByService: Record<string, number>;
+  isActive: boolean;
+  createdAt: string;
+}
+
+export interface AdminCustomerCreditPack {
+  id: string;
+  creditPackId: string;
+  packName: string | null;
+  creditsRemaining: number;
+  creditsAtPurchase: number;
+  snapshotMode: 'per_visit' | 'per_credit';
+  validFrom: string;
+  validUntil: string | null;
+  status: 'active' | 'expired' | 'used_up' | 'refunded' | 'cancelled';
+  pricePaidHellers: number;
+  note: string | null;
+  purchasedAt: string;
+}
+
+export interface AdminCreditUse {
+  id: string;
+  bookingId: string | null;
+  creditsDeducted: number;
+  action: 'consumed' | 'refunded' | 'penalty' | 'admin_adjustment' | 'expired_balance';
+  note: string | null;
+  createdAt: string;
+}
+
+export async function listCreditPacks(): Promise<AdminCreditPack[]> {
+  const { data } = await fetchApi<{ data: AdminCreditPack[] }>(`/admin/credit-packs`);
+  return data;
+}
+
+export async function createCreditPack(input: {
+  name: string;
+  description?: string;
+  mode: 'per_visit' | 'per_credit';
+  totalCredits: number;
+  validityDays?: number | null;
+  priceHellers: number;
+  currency?: string;
+  allowedServiceIds: string[];
+  allowedBranchIds: string[];
+  creditCostsByService?: Record<string, number>;
+  isActive?: boolean;
+}): Promise<AdminCreditPack> {
+  const { data } = await fetchApi<{ data: AdminCreditPack }>(`/admin/credit-packs`, {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+  return data;
+}
+
+export async function updateCreditPack(
+  id: string,
+  input: Partial<Parameters<typeof createCreditPack>[0]>,
+): Promise<AdminCreditPack> {
+  const { data } = await fetchApi<{ data: AdminCreditPack }>(`/admin/credit-packs/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(input),
+  });
+  return data;
+}
+
+export async function deleteCreditPack(id: string): Promise<void> {
+  await fetchApi(`/admin/credit-packs/${id}`, { method: 'DELETE' });
+}
+
+export async function listCustomerCreditPacks(
+  customerId: string,
+): Promise<AdminCustomerCreditPack[]> {
+  const { data } = await fetchApi<{ data: AdminCustomerCreditPack[] }>(
+    `/admin/customers/${customerId}/credit-packs`,
+  );
+  return data;
+}
+
+export async function allocateCreditPack(
+  customerId: string,
+  input: { creditPackId: string; pricePaidHellers?: number; note?: string },
+): Promise<AdminCustomerCreditPack> {
+  const { data } = await fetchApi<{ data: AdminCustomerCreditPack }>(
+    `/admin/customers/${customerId}/credit-packs`,
+    { method: 'POST', body: JSON.stringify(input) },
+  );
+  return data;
+}
+
+export async function adjustCreditAllocation(
+  allocationId: string,
+  creditsDelta: number,
+  note: string,
+): Promise<{ allocationId: string; newRemaining: number }> {
+  const { data } = await fetchApi<{ data: { allocationId: string; newRemaining: number } }>(
+    `/admin/credit-packs/allocation/${allocationId}/adjust`,
+    { method: 'PATCH', body: JSON.stringify({ creditsDelta, note }) },
+  );
+  return data;
+}
+
+export async function listCreditUses(allocationId: string): Promise<AdminCreditUse[]> {
+  const { data } = await fetchApi<{ data: AdminCreditUse[] }>(
+    `/admin/credit-packs/allocation/${allocationId}/uses`,
+  );
+  return data;
+}

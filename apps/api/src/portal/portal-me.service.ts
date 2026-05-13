@@ -12,6 +12,7 @@ import {
 import { and, asc, desc, eq } from 'drizzle-orm';
 import { schema } from '@reserved/db';
 import type { TenantContext } from '@reserved/rls-multitenancy';
+import { CreditPacksService } from '../credit-packs/credit-packs.service.js';
 import { DbService } from '../db/db.service.js';
 import { EmailService } from '../email/email.service.js';
 import { EventBus } from '../rules/events.bus.js';
@@ -33,6 +34,7 @@ export class PortalMeService {
     @Inject(DbService) private readonly dbService: DbService,
     @Inject(EmailService) private readonly email: EmailService,
     @Inject(EventBus) private readonly eventBus: EventBus,
+    @Inject(CreditPacksService) private readonly creditPacks: CreditPacksService,
   ) {}
 
   // ---------------------------------------------------------------------------
@@ -87,6 +89,13 @@ export class PortalMeService {
 
       return this.getProfile(tenantId, customerId);
     });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Credit packs (permanentky)
+  // ---------------------------------------------------------------------------
+  async listMyCreditPacks(tenantId: string, customerId: string) {
+    return this.creditPacks.listForCustomer(tenantId, customerId, 'customer', customerId);
   }
 
   // ---------------------------------------------------------------------------
@@ -207,6 +216,17 @@ export class PortalMeService {
     await this.sendBookingEmail(tenantId, result.booking, 'booking_cancelled', result.tenantName, {
       reason: dto.reason,
     });
+
+    // Refund credit pokud byl drive odpocteny
+    try {
+      await this.creditPacks.refundForBooking({
+        tenantId,
+        bookingId: result.booking.id,
+        performedBy: customerId,
+      });
+    } catch {
+      // ignoruj
+    }
 
     // Emit domain event → rules engine reaguje
     await this.emitBookingEvent('booking_cancelled', tenantId, result.booking, dto.reason);

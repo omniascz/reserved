@@ -113,6 +113,20 @@
       "when": 1778615800000,
       "tag": "0015_rls_rules",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1778650787369,
+      "tag": "0016_melodic_the_hood",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1778700100000,
+      "tag": "0017_rls_credit_packs",
+      "breakpoints": true
     }
   ]
 }
