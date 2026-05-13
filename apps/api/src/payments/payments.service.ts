@@ -84,6 +84,8 @@ export class PaymentsService {
 
   async createCheckout(input: {
     tenantId: string;
+    /** Volajici role — pro permission check. */
+    role: AppRole;
     methodType: 'stripe' | 'gopay' | 'mock';
     amountHellers: number;
     currency: string;
@@ -95,6 +97,9 @@ export class PaymentsService {
     successUrl: string;
     cancelUrl: string;
   }): Promise<{ paymentId: string; checkoutUrl: string }> {
+    // Online checkout muze spustit jen kdo umi zaznamenavat platby
+    assertCanRecord(input.role);
+
     return this.dbService.withRlsContext(
       { tenantId: input.tenantId, role: 'service' },
       async (tx) => {
@@ -282,6 +287,27 @@ export class PaymentsService {
 
   // ─── Payment methods config ─────────────────────────────────────
 
+  /** Klíče v config, ktere obsahuji secret a NESMI se posilat zpet do API. */
+  private static readonly SECRET_CONFIG_KEYS = new Set([
+    'secretKey', // Stripe sk_test/sk_live
+    'webhookSecret', // Stripe whsec_
+    'clientSecret', // GoPay
+  ]);
+
+  /** Vrati config s maskovanymi secret hodnotami. Zachova klice (aby UI vedelo
+   *  ze klic existuje), ale hodnotu nahradi '••••••' + poslednich 4 znaku. */
+  private maskSecrets(config: Record<string, unknown>): Record<string, unknown> {
+    const masked: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(config)) {
+      if (PaymentsService.SECRET_CONFIG_KEYS.has(key) && typeof value === 'string' && value) {
+        masked[key] = `••••••${value.slice(-4)}`;
+      } else {
+        masked[key] = value;
+      }
+    }
+    return masked;
+  }
+
   async listMethods(tenantId: string, userId: string, role: AppRole) {
     return this.dbService.withRlsContext(ctxFor(tenantId, userId, role), async (tx) => {
       const rows = await tx
@@ -291,8 +317,26 @@ export class PaymentsService {
         .orderBy(schema.paymentMethods.sortOrder, schema.paymentMethods.methodType);
 
       // Filter pro receptionist — skry online brany
-      return rows.filter((r) => canViewMethod(role, r.methodType));
+      return rows
+        .filter((r) => canViewMethod(role, r.methodType))
+        .map((r) => ({ ...r, config: this.maskSecrets(r.config as Record<string, unknown>) }));
     });
+  }
+
+  /** Pokud user posle maskovany secret (•••••), nahrad ho hodnotou z DB. */
+  private mergeConfig(
+    incoming: Record<string, unknown>,
+    existing: Record<string, unknown>,
+  ): Record<string, unknown> {
+    const merged = { ...incoming };
+    for (const key of PaymentsService.SECRET_CONFIG_KEYS) {
+      const incomingVal = merged[key];
+      if (typeof incomingVal === 'string' && incomingVal.startsWith('••••••')) {
+        // Maskovany — uchovej puvodni hodnotu
+        merged[key] = existing[key] ?? '';
+      }
+    }
+    return merged;
   }
 
   async upsertMethod(tenantId: string, userId: string, role: AppRole, dto: UpsertPaymentMethodDto) {
@@ -311,18 +355,27 @@ export class PaymentsService {
         .limit(1);
 
       if (existing) {
+        // Pokud user posle maskovany secret, zachovej puvodni
+        const mergedConfig = this.mergeConfig(
+          dto.config,
+          existing.config as Record<string, unknown>,
+        );
         const [updated] = await tx
           .update(schema.paymentMethods)
           .set({
             displayName: dto.displayName ?? existing.displayName,
-            config: dto.config,
+            config: mergedConfig,
             isEnabled: dto.isEnabled,
             sortOrder: dto.sortOrder,
             updatedAt: new Date(),
           })
           .where(eq(schema.paymentMethods.id, existing.id))
           .returning();
-        return updated!;
+        // Vrat s maskovanymi secrets
+        return {
+          ...updated!,
+          config: this.maskSecrets(updated!.config as Record<string, unknown>),
+        };
       }
 
       const [created] = await tx
@@ -336,7 +389,8 @@ export class PaymentsService {
           sortOrder: dto.sortOrder,
         })
         .returning();
-      return created!;
+      // Vrat s maskovanymi secrets
+      return { ...created!, config: this.maskSecrets(created!.config as Record<string, unknown>) };
     });
   }
 

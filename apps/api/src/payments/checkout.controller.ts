@@ -38,6 +38,7 @@ export class CheckoutController {
     const baseUrl = dto.returnBaseUrl ?? process.env.PORTAL_BASE_URL ?? 'http://localhost:3005';
     const result = await this.svc.createCheckout({
       tenantId: user.tenantId,
+      role: user.role,
       methodType: dto.methodType,
       amountHellers: dto.amountHellers,
       currency: dto.currency,
