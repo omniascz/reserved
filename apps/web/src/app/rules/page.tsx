@@ -181,23 +181,56 @@ export default function RulesPage() {
                     : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                 }`}
               >
-                🌐 Vizuální (preview)
+                🌐 Vizuální
               </button>
             </div>
             {editorMode === 'form' ? (
               <RuleEditor form={editing} onSave={handleSave} onCancel={() => setEditing(null)} />
             ) : (
-              <>
-                <VisualRuleBuilder rule={editing} />
-                <div className="flex justify-end gap-2 mt-2">
-                  <button
-                    onClick={() => setEditing(null)}
-                    className="px-4 py-2 bg-slate-200 hover:bg-slate-300 rounded font-medium"
-                  >
-                    Zavřít
-                  </button>
+              <div className="space-y-3">
+                <div className="bg-white rounded-xl border border-slate-200 p-4 grid sm:grid-cols-3 gap-3">
+                  <div className="sm:col-span-2">
+                    <label className="block text-xs font-medium mb-1">Název pravidla</label>
+                    <input
+                      type="text"
+                      value={editing.name}
+                      onChange={(e) => setEditing({ ...editing, name: e.target.value })}
+                      placeholder="Pozdní storno = poplatek"
+                      required
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium mb-1">Priorita</label>
+                    <input
+                      type="number"
+                      value={editing.priority}
+                      onChange={(e) =>
+                        setEditing({ ...editing, priority: Number(e.target.value) || 100 })
+                      }
+                      min={0}
+                      max={1000}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+                    />
+                  </div>
+                  <div className="sm:col-span-3">
+                    <label className="flex items-center gap-2 cursor-pointer text-sm">
+                      <input
+                        type="checkbox"
+                        checked={editing.isEnabled}
+                        onChange={(e) => setEditing({ ...editing, isEnabled: e.target.checked })}
+                      />
+                      Aktivní (jinak se nespustí)
+                    </label>
+                  </div>
                 </div>
-              </>
+                <VisualRuleBuilder
+                  form={editing}
+                  onChange={setEditing}
+                  onSave={handleSave}
+                  onCancel={() => setEditing(null)}
+                />
+              </div>
             )}
           </div>
         )}
