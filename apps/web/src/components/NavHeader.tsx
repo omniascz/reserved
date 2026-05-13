@@ -5,6 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { clearAuth, getTenantSlug } from '@/lib/api';
 
 const NAV = [
+  { href: '/dashboard', label: 'Dashboard' },
   { href: '/calendar', label: 'Kalendář' },
   { href: '/customers', label: 'Zákazníci' },
   { href: '/branches', label: 'Pobočky' },

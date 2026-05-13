@@ -15,6 +15,7 @@ import {
 } from '@/lib/api';
 import { RuleEditor, type RuleFormState } from './RuleEditor';
 import { RuleExecutions } from './RuleExecutions';
+import { VisualRuleBuilder } from './VisualRuleBuilder';
 
 const TRIGGER_LABELS: Record<string, string> = {
   booking_created: 'Vytvořena nová rezervace',
@@ -32,6 +33,7 @@ export default function RulesPage() {
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState<RuleFormState | null>(null);
   const [viewingExecutions, setViewingExecutions] = useState<string | null>(null);
+  const [editorMode, setEditorMode] = useState<'form' | 'visual'>('form');
 
   useEffect(() => {
     if (!getAccessToken()) router.replace('/login');
@@ -159,7 +161,45 @@ export default function RulesPage() {
         )}
 
         {editing && (
-          <RuleEditor form={editing} onSave={handleSave} onCancel={() => setEditing(null)} />
+          <div>
+            <div className="flex items-center gap-2 mb-2">
+              <button
+                onClick={() => setEditorMode('form')}
+                className={`px-3 py-1.5 rounded text-sm font-medium ${
+                  editorMode === 'form'
+                    ? 'bg-brand-600 text-white'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                📝 Klasický
+              </button>
+              <button
+                onClick={() => setEditorMode('visual')}
+                className={`px-3 py-1.5 rounded text-sm font-medium ${
+                  editorMode === 'visual'
+                    ? 'bg-brand-600 text-white'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                🌐 Vizuální (preview)
+              </button>
+            </div>
+            {editorMode === 'form' ? (
+              <RuleEditor form={editing} onSave={handleSave} onCancel={() => setEditing(null)} />
+            ) : (
+              <>
+                <VisualRuleBuilder rule={editing} />
+                <div className="flex justify-end gap-2 mt-2">
+                  <button
+                    onClick={() => setEditing(null)}
+                    className="px-4 py-2 bg-slate-200 hover:bg-slate-300 rounded font-medium"
+                  >
+                    Zavřít
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
         )}
 
         {viewingExecutions && (

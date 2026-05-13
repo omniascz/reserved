@@ -22,3 +22,27 @@ body {
 .fc-event {
   @apply cursor-pointer border-0;
 }
+
+/* Print styles — pro tisk dashboardu / PDF export */
+@media print {
+  body {
+    @apply bg-white text-black;
+  }
+  /* Skryj navigaci a tlacitka pri tisku */
+  header,
+  .no-print,
+  button {
+    display: none !important;
+  }
+  /* Karty bez stinu pro print */
+  .rounded-xl {
+    @apply shadow-none border border-slate-300;
+  }
+  /* Avoid page break uvnitr karty */
+  .bg-white {
+    page-break-inside: avoid;
+  }
+  main {
+    @apply p-0 max-w-full;
+  }
+}
