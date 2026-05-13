@@ -214,6 +214,112 @@ export class PublicController {
 
   // (availability query nyní volitelně přijímá branchId — viz availability.service.ts)
 
+  /**
+   * GET /api/v1/public/:slug/check-credits?email=&serviceId=&branchId=
+   * Vrati aktivni balacky zakaznika (podle emailu) ktere by se aplikovaly
+   * pri rezervaci dane sluzby. Bez auth — slouzi widget pro info.
+   * Vraci jen 'safe' info (jmeno balacku, zbyvajici kredity), ne IDs.
+   */
+  @Public()
+  @Get('check-credits')
+  async checkCredits(
+    @Param('slug') slug: string,
+    @Query('email') email: string,
+    @Query('serviceId') serviceId: string,
+    @Query('branchId') branchId?: string,
+  ) {
+    const tenant = await this.resolveTenant(slug);
+    if (!email || !/^[^@]+@[^@]+\.[^@]+$/.test(email)) {
+      throw new BadRequestException({
+        error: { code: 'INVALID_EMAIL', message: 'email je povinný.' },
+      });
+    }
+    if (!serviceId || !/^[0-9a-f-]{36}$/i.test(serviceId)) {
+      throw new BadRequestException({
+        error: { code: 'INVALID_SERVICE_ID', message: 'serviceId musí být UUID.' },
+      });
+    }
+
+    return this.dbService.withRlsContext(serviceContext(tenant.id), async (tx) => {
+      // Najdi customera podle emailu (case-insensitive)
+      const [customer] = await tx
+        .select({ id: schema.customers.id })
+        .from(schema.customers)
+        .where(
+          and(
+            eq(schema.customers.tenantId, tenant.id),
+            eq(schema.customers.email, email.toLowerCase()),
+          ),
+        )
+        .limit(1);
+
+      if (!customer) {
+        return { data: { hasMatching: false, packs: [] } };
+      }
+
+      // Najdi aktivni balacky
+      const allocs = await tx
+        .select({
+          packId: schema.customerCreditPacks.id,
+          packName: schema.creditPacks.name,
+          creditsRemaining: schema.customerCreditPacks.creditsRemaining,
+          creditsAtPurchase: schema.customerCreditPacks.creditsAtPurchase,
+          snapshotMode: schema.customerCreditPacks.snapshotMode,
+          snapshotAllowedServiceIds: schema.customerCreditPacks.snapshotAllowedServiceIds,
+          snapshotAllowedBranchIds: schema.customerCreditPacks.snapshotAllowedBranchIds,
+          snapshotCreditCosts: schema.customerCreditPacks.snapshotCreditCosts,
+          validUntil: schema.customerCreditPacks.validUntil,
+        })
+        .from(schema.customerCreditPacks)
+        .leftJoin(
+          schema.creditPacks,
+          eq(schema.customerCreditPacks.creditPackId, schema.creditPacks.id),
+        )
+        .where(
+          and(
+            eq(schema.customerCreditPacks.tenantId, tenant.id),
+            eq(schema.customerCreditPacks.customerId, customer.id),
+            eq(schema.customerCreditPacks.status, 'active'),
+          ),
+        );
+
+      // Filter podle service+branch match a non-expired
+      const now = new Date();
+      const matching = allocs
+        .filter((a) => {
+          if (a.validUntil && a.validUntil < now) return false;
+          if (a.creditsRemaining <= 0) return false;
+          const allowedServices = (a.snapshotAllowedServiceIds as string[]) ?? [];
+          const allowedBranches = (a.snapshotAllowedBranchIds as string[]) ?? [];
+          const serviceMatch = allowedServices.length === 0 || allowedServices.includes(serviceId);
+          const branchMatch =
+            allowedBranches.length === 0 || (branchId && allowedBranches.includes(branchId));
+          return serviceMatch && branchMatch;
+        })
+        .map((a) => {
+          let cost = 1;
+          if (a.snapshotMode === 'per_credit') {
+            cost = (a.snapshotCreditCosts as Record<string, number>)?.[serviceId] ?? 1;
+          }
+          return {
+            packName: a.packName ?? 'Permanentka',
+            creditsRemaining: a.creditsRemaining,
+            creditsAtPurchase: a.creditsAtPurchase,
+            costForThisService: cost,
+            sufficientCredits: a.creditsRemaining >= cost,
+            validUntil: a.validUntil,
+          };
+        });
+
+      return {
+        data: {
+          hasMatching: matching.length > 0 && matching.some((m) => m.sufficientCredits),
+          packs: matching,
+        },
+      };
+    });
+  }
+
   /** POST /api/v1/public/:slug/holds — zamkne slot na 10 min. */
   @Public()
   @Post('holds')

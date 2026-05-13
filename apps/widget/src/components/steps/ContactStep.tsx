@@ -2,9 +2,11 @@
 
 import { useEffect, useState } from 'react';
 import {
+  checkCredits,
   confirmBooking,
   type AvailableSlot,
   type BookingConfirmation,
+  type CreditCheckResult,
   type HoldResult,
   type PublicEmployee,
   type PublicService,
@@ -39,10 +41,32 @@ export function ContactStep({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [expired, setExpired] = useState(false);
+  const [creditCheck, setCreditCheck] = useState<CreditCheckResult | null>(null);
+  const [checkingCredits, setCheckingCredits] = useState(false);
 
   useEffect(() => {
     setError(null);
   }, [name, email, phone]);
+
+  // Debounced check kreditu po vyplneni emailu
+  useEffect(() => {
+    if (!email || !email.includes('@')) {
+      setCreditCheck(null);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      setCheckingCredits(true);
+      try {
+        const result = await checkCredits(slug, email, service.id);
+        setCreditCheck(result);
+      } catch {
+        setCreditCheck(null);
+      } finally {
+        setCheckingCredits(false);
+      }
+    }, 600); // 600ms debounce
+    return () => clearTimeout(timer);
+  }, [email, slug, service.id]);
 
   async function handleSubmit(ev: React.FormEvent) {
     ev.preventDefault();
@@ -104,6 +128,34 @@ export function ContactStep({
         </div>
         <CountdownTimer expiresAt={hold.expiresAt} onExpire={() => setExpired(true)} />
       </div>
+
+      {checkingCredits ? (
+        <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 text-sm text-slate-500">
+          Kontroluji vaše permanentky…
+        </div>
+      ) : creditCheck?.hasMatching ? (
+        <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 text-sm flex items-start gap-2">
+          <span className="text-xl">🎫</span>
+          <div className="flex-1">
+            <div className="font-semibold text-emerald-900">Máte aktivní permanentku!</div>
+            {creditCheck.packs
+              .filter((p) => p.sufficientCredits)
+              .map((p, idx) => (
+                <div key={idx} className="text-emerald-800 mt-1">
+                  <strong>{p.packName}</strong>: {p.creditsRemaining}/{p.creditsAtPurchase} kreditů.
+                  {p.costForThisService === 1
+                    ? ' Po rezervaci se odečte 1 kredit.'
+                    : ` Po rezervaci se odečte ${p.costForThisService} kreditů.`}
+                </div>
+              ))}
+          </div>
+        </div>
+      ) : email && email.includes('@') && creditCheck && creditCheck.packs.length === 0 ? (
+        <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 text-sm text-slate-600">
+          Pro <strong>{email}</strong> jsme nenašli aktivní permanentku k této službě. Pokud ji máte
+          pod jiným e-mailem, zadejte ho výše.
+        </div>
+      ) : null}
 
       {error && (
         <div className="bg-red-50 border border-red-200 text-red-800 text-sm p-3 rounded">

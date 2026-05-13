@@ -188,3 +188,33 @@ export async function confirmBooking(
   });
   return data;
 }
+
+// ─── Credit packs check (sprint 3.1 + polish) ───────────────────────
+
+export interface CreditPackMatch {
+  packName: string;
+  creditsRemaining: number;
+  creditsAtPurchase: number;
+  costForThisService: number;
+  sufficientCredits: boolean;
+  validUntil: string | null;
+}
+
+export interface CreditCheckResult {
+  hasMatching: boolean;
+  packs: CreditPackMatch[];
+}
+
+export async function checkCredits(
+  slug: string,
+  email: string,
+  serviceId: string,
+  branchId?: string,
+): Promise<CreditCheckResult> {
+  const params = new URLSearchParams({ email, serviceId });
+  if (branchId) params.append('branchId', branchId);
+  const { data } = await fetchApi<{ data: CreditCheckResult }>(
+    `/public/${slug}/check-credits?${params.toString()}`,
+  );
+  return data;
+}
