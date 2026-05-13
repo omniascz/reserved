@@ -367,7 +367,7 @@ export default function DashboardPage() {
             {/* Email / notification stats */}
             {emailStats && emailStats.totals.total > 0 && (
               <Card title={`Notifikace (${emailStats.totals.total})`}>
-                <div className="grid grid-cols-4 gap-3 mb-3">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">
                   <KpiCard label="Celkem" value={emailStats.totals.total} />
                   <KpiCard label="Odesláno" value={emailStats.totals.sent} color="emerald" />
                   <KpiCard

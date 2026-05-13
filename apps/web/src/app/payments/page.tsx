@@ -132,7 +132,7 @@ export default function PaymentsPage() {
         </div>
 
         {/* KPI summary */}
-        <div className="grid grid-cols-3 gap-3 mb-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
           <SummaryCard
             label="Vybráno"
             value={`${(totalSucceeded / 100).toLocaleString('cs-CZ')} Kč`}
