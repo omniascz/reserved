@@ -698,9 +698,18 @@ export interface ReportOverview {
   activeCreditPacks: number;
 }
 
-export async function getReportOverview(filters: ReportFilters): Promise<ReportOverview> {
+export interface ReportOverviewWithCompare {
+  current: ReportOverview;
+  previous: ReportOverview;
+}
+
+export async function getReportOverview(
+  filters: ReportFilters,
+): Promise<ReportOverviewWithCompare> {
   const qs = buildReportQuery(filters);
-  const { data } = await fetchApi<{ data: ReportOverview }>(`/admin/reports/overview?${qs}`);
+  const { data } = await fetchApi<{ data: ReportOverviewWithCompare }>(
+    `/admin/reports/overview?${qs}`,
+  );
   return data;
 }
 
@@ -769,5 +778,24 @@ export interface CreditPackSummary {
 
 export async function getCreditPacksSummary(): Promise<CreditPackSummary[]> {
   const { data } = await fetchApi<{ data: CreditPackSummary[] }>(`/admin/reports/credit-packs`);
+  return data;
+}
+
+export interface EmailStatsRow {
+  template: string;
+  total: number;
+  sent: number;
+  failed: number;
+  pending: number;
+}
+
+export interface EmailStats {
+  totals: { total: number; sent: number; failed: number; pending: number };
+  perTemplate: EmailStatsRow[];
+}
+
+export async function getEmailStats(filters: ReportFilters): Promise<EmailStats> {
+  const qs = buildReportQuery(filters);
+  const { data } = await fetchApi<{ data: EmailStats }>(`/admin/reports/emails?${qs}`);
   return data;
 }

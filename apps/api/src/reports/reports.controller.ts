@@ -25,7 +25,24 @@ export class ReportsController {
     @Query('branchId') branchId?: string,
   ) {
     return {
-      data: await this.svc.overview(
+      data: await this.svc.overviewWithComparison(
+        user.tenantId,
+        user.sub,
+        user.role,
+        parseFilters(from, to, branchId),
+      ),
+    };
+  }
+
+  @Get('emails')
+  async emails(
+    @CurrentUser() user: AccessTokenPayload,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('branchId') branchId?: string,
+  ) {
+    return {
+      data: await this.svc.emailStats(
         user.tenantId,
         user.sub,
         user.role,

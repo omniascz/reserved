@@ -36,7 +36,28 @@ export interface ReportFilters {
 export class ReportsService {
   constructor(@Inject(DbService) private readonly dbService: DbService) {}
 
-  // ─── Overview KPI ──────────────────────────────────────────────────
+  // ─── Overview KPI s trend comparison ───────────────────────────────
+
+  /**
+   * Vraci aktuální období + předchozí stejně dlouhé období pro porovnání.
+   * Pokud filter je 30 dní, previous = 30 dní pred tím.
+   */
+  async overviewWithComparison(
+    tenantId: string,
+    userId: string,
+    role: AppRole,
+    filters: ReportFilters,
+  ) {
+    const current = await this.overview(tenantId, userId, role, filters);
+    const periodMs = filters.to.getTime() - filters.from.getTime();
+    const previousFilters: ReportFilters = {
+      from: new Date(filters.from.getTime() - periodMs),
+      to: filters.from,
+      branchId: filters.branchId,
+    };
+    const previous = await this.overview(tenantId, userId, role, previousFilters);
+    return { current, previous };
+  }
 
   async overview(tenantId: string, userId: string, role: AppRole, filters: ReportFilters) {
     assertCanView(role);
@@ -266,6 +287,61 @@ export class ReportsService {
           spentHellers: r.spentHellers ?? 0,
           noShowCount: r.noShowCount,
         }));
+    });
+  }
+
+  // ─── Email / notification stats ────────────────────────────────
+
+  async emailStats(tenantId: string, userId: string, role: AppRole, filters: ReportFilters) {
+    assertCanView(role);
+    return this.dbService.withRlsContext(ctxFor(tenantId, userId, role), async (tx) => {
+      const conditions = [
+        eq(schema.notifications.tenantId, tenantId),
+        gte(schema.notifications.createdAt, filters.from),
+        lt(schema.notifications.createdAt, filters.to),
+      ];
+
+      const rows = await tx
+        .select({
+          templateCode: schema.notifications.templateCode,
+          status: schema.notifications.status,
+          c: count(),
+        })
+        .from(schema.notifications)
+        .where(and(...conditions))
+        .groupBy(schema.notifications.templateCode, schema.notifications.status);
+
+      // Agreguj per template
+      const byTemplate = new Map<
+        string,
+        { template: string; total: number; sent: number; failed: number; pending: number }
+      >();
+      for (const r of rows) {
+        const tpl = r.templateCode;
+        let entry = byTemplate.get(tpl);
+        if (!entry) {
+          entry = { template: tpl, total: 0, sent: 0, failed: 0, pending: 0 };
+          byTemplate.set(tpl, entry);
+        }
+        entry.total += r.c;
+        if (r.status === 'sent') entry.sent += r.c;
+        else if (r.status === 'failed') entry.failed += r.c;
+        else if (r.status === 'pending') entry.pending += r.c;
+      }
+
+      const perTemplate = Array.from(byTemplate.values()).sort((a, b) => b.total - a.total);
+
+      const totals = perTemplate.reduce(
+        (acc, t) => ({
+          total: acc.total + t.total,
+          sent: acc.sent + t.sent,
+          failed: acc.failed + t.failed,
+          pending: acc.pending + t.pending,
+        }),
+        { total: 0, sent: 0, failed: 0, pending: 0 },
+      );
+
+      return { totals, perTemplate };
     });
   }
 
