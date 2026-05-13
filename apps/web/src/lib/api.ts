@@ -670,3 +670,104 @@ export async function listCreditUses(allocationId: string): Promise<AdminCreditU
   );
   return data;
 }
+
+// ─── Reports (sprint 4.1) ────────────────────────────────────────────
+
+export interface ReportFilters {
+  from?: string;
+  to?: string;
+  branchId?: string;
+}
+
+function buildReportQuery(f: ReportFilters): string {
+  const params = new URLSearchParams();
+  if (f.from) params.append('from', f.from);
+  if (f.to) params.append('to', f.to);
+  if (f.branchId) params.append('branchId', f.branchId);
+  return params.toString();
+}
+
+export interface ReportOverview {
+  totalBookings: number;
+  revenueHellers: number;
+  completedCount: number;
+  cancelledCount: number;
+  noShowCount: number;
+  confirmedCount: number;
+  uniqueCustomers: number;
+  activeCreditPacks: number;
+}
+
+export async function getReportOverview(filters: ReportFilters): Promise<ReportOverview> {
+  const qs = buildReportQuery(filters);
+  const { data } = await fetchApi<{ data: ReportOverview }>(`/admin/reports/overview?${qs}`);
+  return data;
+}
+
+export interface BookingPerDay {
+  day: string;
+  count: number;
+  revenueHellers: number;
+}
+
+export async function getBookingsPerDay(filters: ReportFilters): Promise<BookingPerDay[]> {
+  const qs = buildReportQuery(filters);
+  const { data } = await fetchApi<{ data: BookingPerDay[] }>(
+    `/admin/reports/bookings-per-day?${qs}`,
+  );
+  return data;
+}
+
+export interface TopServiceRow {
+  serviceId: string;
+  serviceName: string;
+  bookings: number;
+  revenueHellers: number;
+}
+
+export async function getTopServices(filters: ReportFilters): Promise<TopServiceRow[]> {
+  const qs = buildReportQuery(filters);
+  const { data } = await fetchApi<{ data: TopServiceRow[] }>(`/admin/reports/top-services?${qs}`);
+  return data;
+}
+
+export interface TopEmployeeRow {
+  employeeId: string | null;
+  name: string;
+  bookings: number;
+  completedCount: number;
+  revenueHellers: number;
+}
+
+export async function getTopEmployees(filters: ReportFilters): Promise<TopEmployeeRow[]> {
+  const qs = buildReportQuery(filters);
+  const { data } = await fetchApi<{ data: TopEmployeeRow[] }>(`/admin/reports/top-employees?${qs}`);
+  return data;
+}
+
+export interface TopCustomerRow {
+  customerId: string;
+  name: string;
+  email: string;
+  bookings: number;
+  spentHellers: number;
+  noShowCount: number;
+}
+
+export async function getTopCustomers(filters: ReportFilters): Promise<TopCustomerRow[]> {
+  const qs = buildReportQuery(filters);
+  const { data } = await fetchApi<{ data: TopCustomerRow[] }>(`/admin/reports/top-customers?${qs}`);
+  return data;
+}
+
+export interface CreditPackSummary {
+  status: string;
+  count: number;
+  totalCreditsRemaining: number;
+  totalRevenueHellers: number;
+}
+
+export async function getCreditPacksSummary(): Promise<CreditPackSummary[]> {
+  const { data } = await fetchApi<{ data: CreditPackSummary[] }>(`/admin/reports/credit-packs`);
+  return data;
+}

@@ -19,7 +19,7 @@ export default function LoginPage() {
     try {
       const tokens = await login(tenantSlug, email, password);
       setAuth(tokens.accessToken, tokens.refreshToken, tenantSlug);
-      router.replace('/calendar');
+      router.replace('/dashboard');
     } catch (e) {
       if (e instanceof AdminApiError) {
         setError(e.message);
