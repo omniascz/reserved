@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import {
+  createCheckout,
   listPaymentMethods,
   listPayments,
   recordPayment,
@@ -63,6 +64,22 @@ export function CustomerPayments({ customerId }: { customerId: string }) {
       return;
     }
     try {
+      // Online brany — otevřít checkout
+      if (form.methodType === 'stripe' || form.methodType === 'gopay') {
+        const result = await createCheckout({
+          methodType: form.methodType,
+          amountHellers: Math.round(amount * 100),
+          description: form.description || `Platba (${amount.toLocaleString('cs-CZ')} Kč)`,
+          customerId,
+        });
+        // Otevři checkout v novém okně
+        window.open(result.checkoutUrl, '_blank');
+        setShowForm(false);
+        setForm({ methodType: 'cash', amount: '', description: '' });
+        reload();
+        return;
+      }
+
       await recordPayment({
         customerId,
         methodType: form.methodType,

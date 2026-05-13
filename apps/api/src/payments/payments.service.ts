@@ -22,6 +22,8 @@ import { schema } from '@reserved/db';
 import { type AppRole, type TenantContext } from '@reserved/rls-multitenancy';
 import { DbService } from '../db/db.service.js';
 import { generateSpaydString } from './qr-generator.js';
+import { PaymentProviderRegistry } from './providers/provider.registry.js';
+import type { WebhookEvent } from './providers/payment-provider.interface.js';
 import type {
   ListPaymentsQueryDto,
   PaymentMethodType,
@@ -73,7 +75,210 @@ function canViewMethod(role: AppRole, methodType: string): boolean {
 
 @Injectable()
 export class PaymentsService {
-  constructor(@Inject(DbService) private readonly dbService: DbService) {}
+  constructor(
+    @Inject(DbService) private readonly dbService: DbService,
+    @Inject(PaymentProviderRegistry) private readonly providers: PaymentProviderRegistry,
+  ) {}
+
+  // ─── Online checkout (Stripe/GoPay/Mock) ────────────────────────
+
+  async createCheckout(input: {
+    tenantId: string;
+    methodType: 'stripe' | 'gopay' | 'mock';
+    amountHellers: number;
+    currency: string;
+    description: string;
+    customerId?: string;
+    customerEmail?: string;
+    bookingId?: string;
+    creditPackAllocationId?: string;
+    successUrl: string;
+    cancelUrl: string;
+  }): Promise<{ paymentId: string; checkoutUrl: string }> {
+    return this.dbService.withRlsContext(
+      { tenantId: input.tenantId, role: 'service' },
+      async (tx) => {
+        // 1. Najdi config
+        const [method] = await tx
+          .select({ config: schema.paymentMethods.config })
+          .from(schema.paymentMethods)
+          .where(
+            and(
+              eq(schema.paymentMethods.tenantId, input.tenantId),
+              eq(schema.paymentMethods.methodType, input.methodType),
+              eq(schema.paymentMethods.isEnabled, true),
+            ),
+          )
+          .limit(1);
+        if (!method) {
+          throw new BadRequestException({
+            error: {
+              code: 'METHOD_NOT_CONFIGURED',
+              message: `Metoda ${input.methodType} není pro tenant zapnuta.`,
+            },
+          });
+        }
+
+        // 2. Vytvor pending payment
+        const [payment] = await tx
+          .insert(schema.payments)
+          .values({
+            tenantId: input.tenantId,
+            customerId: input.customerId ?? null,
+            bookingId: input.bookingId ?? null,
+            creditPackAllocationId: input.creditPackAllocationId ?? null,
+            amountHellers: input.amountHellers,
+            currency: input.currency,
+            methodType: input.methodType,
+            status: 'pending',
+            description: input.description,
+          })
+          .returning();
+
+        // 3. Vytvor checkout pres providera
+        const provider = this.providers.get(input.methodType);
+        try {
+          const result = await provider.createCheckout(
+            {
+              amountHellers: input.amountHellers,
+              currency: input.currency,
+              description: input.description,
+              successUrl: input.successUrl,
+              cancelUrl: input.cancelUrl,
+              metadata: {
+                tenantId: input.tenantId,
+                paymentId: payment!.id,
+              },
+              customerEmail: input.customerEmail,
+            },
+            method.config as Record<string, unknown>,
+          );
+
+          await tx
+            .update(schema.payments)
+            .set({ externalId: result.externalId, updatedAt: new Date() })
+            .where(eq(schema.payments.id, payment!.id));
+
+          await tx.insert(schema.paymentEvents).values({
+            tenantId: input.tenantId,
+            paymentId: payment!.id,
+            eventType: 'created',
+            payload: { provider: input.methodType, checkoutUrl: result.checkoutUrl },
+            verified: true,
+          });
+
+          return { paymentId: payment!.id, checkoutUrl: result.checkoutUrl };
+        } catch (err) {
+          // Pokud checkout selze, oznac jako failed
+          await tx
+            .update(schema.payments)
+            .set({
+              status: 'failed',
+              failureReason: err instanceof Error ? err.message : 'Unknown error',
+              updatedAt: new Date(),
+            })
+            .where(eq(schema.payments.id, payment!.id));
+          throw err;
+        }
+      },
+    );
+  }
+
+  // ─── Webhook handling ──────────────────────────────────────────
+
+  /**
+   * Zpracuj webhook od online brany.
+   * @param tenantId — extrahovany z URL params nebo z payload metadata
+   * @param providerType — 'stripe' | 'gopay' | 'mock'
+   */
+  async handleWebhook(
+    tenantId: string,
+    providerType: 'stripe' | 'gopay' | 'mock',
+    rawBody: string | Buffer,
+    signatureHeader: string,
+  ): Promise<{ paymentId: string | null; status: string }> {
+    const provider = this.providers.get(providerType);
+
+    // 1. Najdi config (potrebne pro signature check)
+    const config = await this.dbService.withRlsContext(
+      { tenantId, role: 'service' },
+      async (tx) => {
+        const [method] = await tx
+          .select({ config: schema.paymentMethods.config })
+          .from(schema.paymentMethods)
+          .where(
+            and(
+              eq(schema.paymentMethods.tenantId, tenantId),
+              eq(schema.paymentMethods.methodType, providerType),
+            ),
+          )
+          .limit(1);
+        return (method?.config ?? {}) as Record<string, unknown>;
+      },
+    );
+
+    // 2. Verify + parse
+    let event: WebhookEvent;
+    try {
+      event = await provider.verifyWebhook(rawBody, signatureHeader, config);
+    } catch (err) {
+      throw new BadRequestException({
+        error: {
+          code: 'WEBHOOK_VERIFY_FAILED',
+          message: err instanceof Error ? err.message : 'Webhook verification failed.',
+        },
+      });
+    }
+
+    // 3. Najdi nasi payment podle externalId
+    return this.dbService.withRlsContext({ tenantId, role: 'service' }, async (tx) => {
+      const [payment] = await tx
+        .select()
+        .from(schema.payments)
+        .where(
+          and(
+            eq(schema.payments.tenantId, tenantId),
+            eq(schema.payments.externalId, event.externalId),
+          ),
+        )
+        .limit(1);
+
+      if (!payment) {
+        // Log + return — webhook prisel ale nemame zaznam
+        await tx.insert(schema.paymentEvents).values({
+          tenantId,
+          paymentId: null,
+          eventType: `${providerType}_webhook`,
+          payload: { event: event as unknown as Record<string, unknown>, orphan: true },
+          verified: true,
+        });
+        return { paymentId: null, status: event.status };
+      }
+
+      // 4. Update payment status (idempotentne)
+      if (payment.status !== event.status) {
+        await tx
+          .update(schema.payments)
+          .set({
+            status: event.status,
+            paidAt: event.status === 'succeeded' ? new Date() : payment.paidAt,
+            failureReason: event.failureReason ?? null,
+            updatedAt: new Date(),
+          })
+          .where(eq(schema.payments.id, payment.id));
+      }
+
+      await tx.insert(schema.paymentEvents).values({
+        tenantId,
+        paymentId: payment.id,
+        eventType: `${providerType}_webhook`,
+        payload: event as unknown as Record<string, unknown>,
+        verified: true,
+      });
+
+      return { paymentId: payment.id, status: event.status };
+    });
+  }
 
   // ─── Payment methods config ─────────────────────────────────────
 
