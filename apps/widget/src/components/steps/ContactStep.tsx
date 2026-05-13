@@ -105,6 +105,17 @@ export function ContactStep({
         <CountdownTimer expiresAt={hold.expiresAt} onExpire={() => setExpired(true)} />
       </div>
 
+      <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm flex items-start gap-2">
+        <span className="text-xl">🎫</span>
+        <div>
+          <div className="font-semibold text-amber-900">Máte u nás permanentku?</div>
+          <div className="text-amber-800 mt-0.5">
+            Pokud máte u <strong>{tenantName}</strong> aktivní permanentku ke stejnému e-mailu,
+            kredit se automaticky odečte při potvrzení rezervace.
+          </div>
+        </div>
+      </div>
+
       {error && (
         <div className="bg-red-50 border border-red-200 text-red-800 text-sm p-3 rounded">
           {error}

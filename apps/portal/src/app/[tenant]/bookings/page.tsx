@@ -12,6 +12,7 @@ import {
   PortalApiError,
   type PortalBooking,
 } from '@/lib/api';
+import { RescheduleModal } from './RescheduleModal';
 
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
   confirmed: { label: 'Potvrzeno', color: 'bg-emerald-100 text-emerald-700' },
@@ -28,6 +29,7 @@ export default function BookingsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
+  const [reschedulingBooking, setReschedulingBooking] = useState<PortalBooking | null>(null);
 
   useEffect(() => {
     if (!getAccessToken()) {
@@ -109,6 +111,7 @@ export default function BookingsPage() {
                     booking={b}
                     isCancelling={cancellingId === b.id}
                     onCancel={() => handleCancel(b)}
+                    onReschedule={() => setReschedulingBooking(b)}
                     canModify
                   />
                 ))
@@ -127,12 +130,24 @@ export default function BookingsPage() {
                       booking={b}
                       isCancelling={false}
                       onCancel={() => {}}
+                      onReschedule={() => {}}
                       canModify={false}
                     />
                   ))
               )}
             </Section>
           </>
+        )}
+
+        {reschedulingBooking && (
+          <RescheduleModal
+            booking={reschedulingBooking}
+            onClose={() => setReschedulingBooking(null)}
+            onSuccess={() => {
+              setReschedulingBooking(null);
+              reload();
+            }}
+          />
         )}
       </main>
     </div>
@@ -160,11 +175,13 @@ function BookingCard({
   booking,
   isCancelling,
   onCancel,
+  onReschedule,
   canModify,
 }: {
   booking: PortalBooking;
   isCancelling: boolean;
   onCancel: () => void;
+  onReschedule: () => void;
   canModify: boolean;
 }) {
   const status = STATUS_LABELS[booking.status] ?? { label: booking.status, color: 'bg-slate-100' };
@@ -192,6 +209,12 @@ function BookingCard({
       </div>
       {canModify && booking.status !== 'cancelled' && (
         <div className="flex gap-2 sm:flex-col">
+          <button
+            onClick={onReschedule}
+            className="text-sm px-3 py-1.5 border border-brand-300 text-brand-700 rounded hover:bg-brand-50"
+          >
+            Přesunout
+          </button>
           <button
             onClick={onCancel}
             disabled={isCancelling}

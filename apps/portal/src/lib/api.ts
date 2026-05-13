@@ -186,6 +186,8 @@ export async function updateProfile(input: {
 
 export interface PortalBooking {
   id: string;
+  serviceId: string;
+  employeeId: string | null;
   startsAt: string;
   endsAt: string;
   status: string;
@@ -246,6 +248,36 @@ export async function rescheduleMyBooking(
 }
 
 // ─── Format helpers ──────────────────────────────────────────────────
+
+// ─── Availability (pro reschedule UI) ────────────────────────────
+
+export interface AvailableSlot {
+  startsAt: string;
+  endsAt: string;
+}
+
+export interface AvailabilityForEmployee {
+  employeeId: string;
+  employeeName: string;
+  slots: AvailableSlot[];
+}
+
+export async function getAvailability(
+  serviceId: string,
+  date: string,
+  employeeId?: string,
+): Promise<AvailabilityForEmployee[]> {
+  const tenant = getTenantSlug();
+  if (!tenant) throw new PortalApiError(400, 'NO_TENANT', 'Chybí tenant slug.');
+  const params = new URLSearchParams({ serviceId, date });
+  if (employeeId) params.append('employeeId', employeeId);
+  const { data } = await fetchApi<{ data: AvailabilityForEmployee[] }>(
+    `/public/${tenant}/availability?${params.toString()}`,
+    { method: 'GET' },
+    { withAuth: false },
+  );
+  return data;
+}
 
 export function formatPrice(hellers: number, currency = 'CZK'): string {
   const value = hellers / 100;

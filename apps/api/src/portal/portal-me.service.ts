@@ -122,6 +122,8 @@ export class PortalMeService {
 
       return rows.map((r) => ({
         id: r.booking.id,
+        serviceId: r.booking.serviceId,
+        employeeId: r.booking.employeeId,
         startsAt: r.booking.startsAt,
         endsAt: r.booking.endsAt,
         status: r.booking.status,
