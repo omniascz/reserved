@@ -1,6 +1,19 @@
 'use client';
 
 import { useState } from 'react';
+import type { Action, ActionType, ComparisonNode, Operator } from '@reserved/rules-engine';
+
+// Pro UI builder je strom omezeny na: AlwaysNode | ComparisonNode | GroupNode
+// (group obsahuje jen ComparisonNode children, ne vnořené groupy). Plne
+// rekurzivni ConditionNode z @reserved/rules-engine je v API stale podporovany,
+// jen UI ho zatim nedovoluje.
+
+type AlwaysNode = { type: 'always' };
+type GroupNode = {
+  type: 'and' | 'or';
+  children: ComparisonNode[];
+};
+type ConditionTree = AlwaysNode | ComparisonNode | GroupNode;
 
 export interface RuleFormState {
   id: string | null;
@@ -8,23 +21,10 @@ export interface RuleFormState {
   description: string;
   triggerEvent: string;
   condition: ConditionTree;
-  actions: Array<{ type: string; config: Record<string, unknown> }>;
+  actions: Action[];
   isEnabled: boolean;
   priority: number;
 }
-
-type AlwaysNode = { type: 'always' };
-type ComparisonNode = {
-  type: 'comparison';
-  field: string;
-  op: string;
-  value: unknown;
-};
-type GroupNode = {
-  type: 'and' | 'or';
-  children: ComparisonNode[];
-};
-type ConditionTree = AlwaysNode | ComparisonNode | GroupNode;
 
 const TRIGGERS = [
   { value: 'booking_cancelled', label: 'Zákazník zrušil rezervaci' },
@@ -111,7 +111,9 @@ export function RuleEditor({
 
   function updateGroupChild(idx: number, patch: Partial<ComparisonNode>) {
     if (state.condition.type !== 'and' && state.condition.type !== 'or') return;
-    const children = state.condition.children.map((c, i) => (i === idx ? { ...c, ...patch } : c));
+    const children: ComparisonNode[] = (state.condition.children as ComparisonNode[]).map((c, i) =>
+      i === idx ? { ...c, ...patch } : c,
+    );
     update({ condition: { ...state.condition, children } });
   }
 
@@ -130,7 +132,9 @@ export function RuleEditor({
 
   function removeGroupChild(idx: number) {
     if (state.condition.type !== 'and' && state.condition.type !== 'or') return;
-    const filtered = state.condition.children.filter((_, i) => i !== idx);
+    const filtered: ComparisonNode[] = (state.condition.children as ComparisonNode[]).filter(
+      (_, i) => i !== idx,
+    );
     if (filtered.length === 1) {
       update({ condition: filtered[0]! });
     } else {
@@ -157,7 +161,7 @@ export function RuleEditor({
   function updateAction(idx: number, type: string) {
     const defaultConfig = getDefaultConfig(type);
     const newActions = [...state.actions];
-    newActions[idx] = { type, config: defaultConfig };
+    newActions[idx] = { type: type as ActionType, config: defaultConfig };
     update({ actions: newActions });
   }
 
@@ -270,9 +274,10 @@ export function RuleEditor({
         {(state.condition.type === 'and' || state.condition.type === 'or') &&
           (() => {
             const group = state.condition;
+            const groupChildren = group.children as ComparisonNode[];
             return (
               <div className="space-y-2">
-                {group.children.map((child, idx) => (
+                {groupChildren.map((child, idx) => (
                   <div key={idx} className="flex items-center gap-2">
                     <span className="text-xs font-semibold text-slate-500 w-20">
                       {idx === 0 ? '' : group.type === 'and' ? 'A ZÁROVEŇ' : 'NEBO'}
@@ -283,7 +288,7 @@ export function RuleEditor({
                         onChange={(patch) => updateGroupChild(idx, patch)}
                       />
                     </div>
-                    {group.children.length > 1 && (
+                    {groupChildren.length > 1 && (
                       <button
                         type="button"
                         onClick={() => removeGroupChild(idx)}
@@ -441,7 +446,7 @@ function ComparisonRow({
       </select>
       <select
         value={node.op}
-        onChange={(e) => onChange({ op: e.target.value })}
+        onChange={(e) => onChange({ op: e.target.value as Operator })}
         className="col-span-4 px-3 py-2 border border-slate-300 rounded-lg text-sm"
       >
         {OPERATORS.map((o) => (

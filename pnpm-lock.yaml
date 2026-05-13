@@ -181,6 +181,9 @@ importers:
       '@fullcalendar/timegrid':
         specifier: ^6.1.15
         version: 6.1.20(@fullcalendar/core@6.1.20)
+      '@reserved/rules-engine':
+        specifier: workspace:*
+        version: link:../../packages/rules-engine
       '@xyflow/react':
         specifier: ^12.3.0
         version: 12.10.2(@types/react@18.3.28)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)

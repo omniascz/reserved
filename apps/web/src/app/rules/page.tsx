@@ -84,7 +84,7 @@ export default function RulesPage() {
       description: r.description ?? '',
       triggerEvent: r.triggerEvent,
       condition: r.conditions as RuleFormState['condition'],
-      actions: r.actions,
+      actions: r.actions as RuleFormState['actions'],
       isEnabled: r.isEnabled,
       priority: r.priority,
     });
