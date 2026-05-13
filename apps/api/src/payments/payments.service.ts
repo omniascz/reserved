@@ -21,6 +21,7 @@ import { and, desc, eq, gte, lte, sql } from 'drizzle-orm';
 import { schema } from '@reserved/db';
 import { type AppRole, type TenantContext } from '@reserved/rls-multitenancy';
 import { DbService } from '../db/db.service.js';
+import { EmailService } from '../email/email.service.js';
 import { generateSpaydString } from './qr-generator.js';
 import { PaymentProviderRegistry } from './providers/provider.registry.js';
 import type { WebhookEvent } from './providers/payment-provider.interface.js';
@@ -73,12 +74,104 @@ function canViewMethod(role: AppRole, methodType: string): boolean {
   return false;
 }
 
+const METHOD_LABELS: Record<string, string> = {
+  cash: 'Hotovost',
+  card_terminal: 'Karta na terminálu',
+  qr_bank: 'QR platba',
+  stripe: 'Online platba (Stripe)',
+  gopay: 'Online platba (GoPay)',
+  mock: 'Test platba',
+};
+
 @Injectable()
 export class PaymentsService {
   constructor(
     @Inject(DbService) private readonly dbService: DbService,
     @Inject(PaymentProviderRegistry) private readonly providers: PaymentProviderRegistry,
+    @Inject(EmailService) private readonly email: EmailService,
   ) {}
+
+  // ─── Email receipt helper ───────────────────────────────────────
+
+  /**
+   * Posli paragon / refund email po uspesny status transition.
+   * Tise spadne pokud nemame customer e-mail nebo email service selze.
+   */
+  private async sendReceipt(
+    tenantId: string,
+    payment: typeof schema.payments.$inferSelect,
+    eventType: 'paid' | 'refunded',
+  ): Promise<void> {
+    try {
+      await this.dbService.withRlsContext({ tenantId, role: 'service' }, async (tx) => {
+        // Najdi recipient: customer.email nebo booking.customerEmail
+        let recipientEmail: string | null = null;
+        let customerName = 'Vážený kliente';
+
+        if (payment.customerId) {
+          const [c] = await tx
+            .select({
+              email: schema.customers.email,
+              firstName: schema.customers.firstName,
+              lastName: schema.customers.lastName,
+            })
+            .from(schema.customers)
+            .where(eq(schema.customers.id, payment.customerId))
+            .limit(1);
+          if (c) {
+            recipientEmail = c.email;
+            customerName = `${c.firstName} ${c.lastName}`.trim();
+          }
+        }
+        if (!recipientEmail && payment.bookingId) {
+          const [b] = await tx
+            .select({
+              email: schema.bookings.customerEmail,
+              name: schema.bookings.customerName,
+            })
+            .from(schema.bookings)
+            .where(eq(schema.bookings.id, payment.bookingId))
+            .limit(1);
+          if (b) {
+            recipientEmail = b.email;
+            customerName = b.name;
+          }
+        }
+        if (!recipientEmail) return; // Anonymni platba — nemame komu poslat
+
+        const [tenant] = await tx
+          .select({ name: schema.tenants.name })
+          .from(schema.tenants)
+          .where(eq(schema.tenants.id, tenantId))
+          .limit(1);
+
+        const amountAbs = Math.abs(payment.amountHellers) / 100;
+        const paidAt = (payment.paidAt ?? payment.createdAt).toLocaleString('cs-CZ', {
+          timeZone: 'Europe/Prague',
+        });
+        const methodLabel = METHOD_LABELS[payment.methodType] ?? payment.methodType;
+
+        await this.email.enqueue({
+          tenantId,
+          templateCode: eventType === 'paid' ? 'payment_receipt' : 'payment_refunded',
+          recipient: recipientEmail,
+          vars: {
+            customerName,
+            tenantName: tenant?.name ?? 'Reserved',
+            amount: amountAbs.toLocaleString('cs-CZ'),
+            currency: payment.currency,
+            methodLabel,
+            paidAt,
+            referenceCode: payment.referenceCode ?? payment.id.slice(0, 8),
+            descriptionLine: payment.description ? `Popis:           ${payment.description}` : '',
+            reasonLine: payment.description ? `Důvod:           ${payment.description}` : '',
+          },
+        });
+      });
+    } catch {
+      // Nezpusobi rollback transakce — receipt email je nice-to-have
+    }
+  }
 
   // ─── Online checkout (Stripe/GoPay/Mock) ────────────────────────
 
@@ -236,53 +329,83 @@ export class PaymentsService {
     }
 
     // 3. Najdi nasi payment podle externalId
-    return this.dbService.withRlsContext({ tenantId, role: 'service' }, async (tx) => {
-      const [payment] = await tx
-        .select()
-        .from(schema.payments)
-        .where(
-          and(
-            eq(schema.payments.tenantId, tenantId),
-            eq(schema.payments.externalId, event.externalId),
-          ),
-        )
-        .limit(1);
+    return this.dbService
+      .withRlsContext({ tenantId, role: 'service' }, async (tx) => {
+        const [payment] = await tx
+          .select()
+          .from(schema.payments)
+          .where(
+            and(
+              eq(schema.payments.tenantId, tenantId),
+              eq(schema.payments.externalId, event.externalId),
+            ),
+          )
+          .limit(1);
 
-      if (!payment) {
-        // Log + return — webhook prisel ale nemame zaznam
+        if (!payment) {
+          // Log + return — webhook prisel ale nemame zaznam
+          await tx.insert(schema.paymentEvents).values({
+            tenantId,
+            paymentId: null,
+            eventType: `${providerType}_webhook`,
+            payload: { event: event as unknown as Record<string, unknown>, orphan: true },
+            verified: true,
+          });
+          return { paymentId: null, status: event.status };
+        }
+
+        // 4. Update payment status (idempotentne)
+        const oldStatus = payment.status;
+        if (oldStatus !== event.status) {
+          await tx
+            .update(schema.payments)
+            .set({
+              status: event.status,
+              paidAt: event.status === 'succeeded' ? new Date() : payment.paidAt,
+              failureReason: event.failureReason ?? null,
+              updatedAt: new Date(),
+            })
+            .where(eq(schema.payments.id, payment.id));
+        }
+
         await tx.insert(schema.paymentEvents).values({
           tenantId,
-          paymentId: null,
+          paymentId: payment.id,
           eventType: `${providerType}_webhook`,
-          payload: { event: event as unknown as Record<string, unknown>, orphan: true },
+          payload: event as unknown as Record<string, unknown>,
           verified: true,
         });
-        return { paymentId: null, status: event.status };
-      }
 
-      // 4. Update payment status (idempotentne)
-      if (payment.status !== event.status) {
-        await tx
-          .update(schema.payments)
-          .set({
+        return {
+          paymentId: payment.id,
+          status: event.status,
+          statusChanged: oldStatus !== event.status,
+          payment: {
+            ...payment,
             status: event.status,
             paidAt: event.status === 'succeeded' ? new Date() : payment.paidAt,
-            failureReason: event.failureReason ?? null,
-            updatedAt: new Date(),
-          })
-          .where(eq(schema.payments.id, payment.id));
-      }
-
-      await tx.insert(schema.paymentEvents).values({
-        tenantId,
-        paymentId: payment.id,
-        eventType: `${providerType}_webhook`,
-        payload: event as unknown as Record<string, unknown>,
-        verified: true,
+          },
+        };
+      })
+      .then(async (result) => {
+        // Posli receipt jen pri prechode na succeeded nebo refunded
+        if (result.statusChanged) {
+          if (result.status === 'succeeded') {
+            await this.sendReceipt(
+              tenantId,
+              result.payment as typeof schema.payments.$inferSelect,
+              'paid',
+            );
+          } else if (result.status === 'refunded') {
+            await this.sendReceipt(
+              tenantId,
+              result.payment as typeof schema.payments.$inferSelect,
+              'refunded',
+            );
+          }
+        }
+        return { paymentId: result.paymentId, status: result.status };
       });
-
-      return { paymentId: payment.id, status: event.status };
-    });
   }
 
   // ─── Payment methods config ─────────────────────────────────────
@@ -422,78 +545,91 @@ export class PaymentsService {
       });
     }
 
-    return this.dbService.withRlsContext(ctxFor(tenantId, userId, role), async (tx) => {
-      const paidAt = dto.paidAtIso ? new Date(dto.paidAtIso) : new Date();
+    return this.dbService
+      .withRlsContext(ctxFor(tenantId, userId, role), async (tx) => {
+        const paidAt = dto.paidAtIso ? new Date(dto.paidAtIso) : new Date();
 
-      // Manual platby jsou rovnou succeeded (kdyz se vybralo / klient zaplatil terminalem)
-      // QR muze byt pending (cekame na bank transfer) — admin to oznaci az dorazi
-      const status = dto.methodType === 'qr_bank' ? 'pending' : 'succeeded';
+        // Manual platby jsou rovnou succeeded (kdyz se vybralo / klient zaplatil terminalem)
+        // QR muze byt pending (cekame na bank transfer) — admin to oznaci az dorazi
+        const status = dto.methodType === 'qr_bank' ? 'pending' : 'succeeded';
 
-      const [payment] = await tx
-        .insert(schema.payments)
-        .values({
+        const [payment] = await tx
+          .insert(schema.payments)
+          .values({
+            tenantId,
+            customerId: dto.customerId ?? null,
+            bookingId: dto.bookingId ?? null,
+            creditPackAllocationId: dto.creditPackAllocationId ?? null,
+            amountHellers: dto.amountHellers,
+            currency: dto.currency,
+            methodType: dto.methodType,
+            status,
+            description: dto.description ?? null,
+            referenceCode: dto.referenceCode ?? null,
+            recordedBy: userId,
+            paidAt: status === 'succeeded' ? paidAt : null,
+          })
+          .returning();
+
+        await tx.insert(schema.paymentEvents).values({
           tenantId,
-          customerId: dto.customerId ?? null,
-          bookingId: dto.bookingId ?? null,
-          creditPackAllocationId: dto.creditPackAllocationId ?? null,
-          amountHellers: dto.amountHellers,
-          currency: dto.currency,
-          methodType: dto.methodType,
-          status,
-          description: dto.description ?? null,
-          referenceCode: dto.referenceCode ?? null,
-          recordedBy: userId,
-          paidAt: status === 'succeeded' ? paidAt : null,
-        })
-        .returning();
+          paymentId: payment!.id,
+          eventType: 'manual_marked',
+          payload: { recordedBy: userId, role, method: dto.methodType },
+          verified: true,
+        });
 
-      await tx.insert(schema.paymentEvents).values({
-        tenantId,
-        paymentId: payment!.id,
-        eventType: 'manual_marked',
-        payload: { recordedBy: userId, role, method: dto.methodType },
-        verified: true,
+        return payment!;
+      })
+      .then(async (result) => {
+        // Po commitu posli receipt email (jen pokud status=succeeded)
+        if (result.status === 'succeeded') {
+          await this.sendReceipt(tenantId, result, 'paid');
+        }
+        return result;
       });
-
-      return payment!;
-    });
   }
 
   async markQrAsPaid(tenantId: string, userId: string, role: AppRole, paymentId: string) {
     assertCanRecord(role);
-    return this.dbService.withRlsContext(ctxFor(tenantId, userId, role), async (tx) => {
-      const [existing] = await tx
-        .select()
-        .from(schema.payments)
-        .where(and(eq(schema.payments.id, paymentId), eq(schema.payments.tenantId, tenantId)))
-        .limit(1);
-      if (!existing) {
-        throw new NotFoundException({
-          error: { code: 'PAYMENT_NOT_FOUND', message: 'Platba nenalezena.' },
-        });
-      }
-      if (existing.status !== 'pending') {
-        throw new BadRequestException({
-          error: { code: 'INVALID_STATUS', message: 'Platba není ve stavu pending.' },
-        });
-      }
+    return this.dbService
+      .withRlsContext(ctxFor(tenantId, userId, role), async (tx) => {
+        const [existing] = await tx
+          .select()
+          .from(schema.payments)
+          .where(and(eq(schema.payments.id, paymentId), eq(schema.payments.tenantId, tenantId)))
+          .limit(1);
+        if (!existing) {
+          throw new NotFoundException({
+            error: { code: 'PAYMENT_NOT_FOUND', message: 'Platba nenalezena.' },
+          });
+        }
+        if (existing.status !== 'pending') {
+          throw new BadRequestException({
+            error: { code: 'INVALID_STATUS', message: 'Platba není ve stavu pending.' },
+          });
+        }
 
-      const [updated] = await tx
-        .update(schema.payments)
-        .set({ status: 'succeeded', paidAt: new Date(), updatedAt: new Date() })
-        .where(eq(schema.payments.id, paymentId))
-        .returning();
+        const [updated] = await tx
+          .update(schema.payments)
+          .set({ status: 'succeeded', paidAt: new Date(), updatedAt: new Date() })
+          .where(eq(schema.payments.id, paymentId))
+          .returning();
 
-      await tx.insert(schema.paymentEvents).values({
-        tenantId,
-        paymentId,
-        eventType: 'manual_marked',
-        payload: { action: 'qr_marked_paid', by: userId },
-        verified: true,
+        await tx.insert(schema.paymentEvents).values({
+          tenantId,
+          paymentId,
+          eventType: 'manual_marked',
+          payload: { action: 'qr_marked_paid', by: userId },
+          verified: true,
+        });
+
+        return updated!;
+      })
+      .then(async (result) => {
+        await this.sendReceipt(tenantId, result, 'paid');
+        return result;
       });
-
-      return updated!;
-    });
   }
 
   async refundPayment(
@@ -504,70 +640,75 @@ export class PaymentsService {
     dto: RefundPaymentDto,
   ) {
     assertCanManage(role); // jen owner/manager
-    return this.dbService.withRlsContext(ctxFor(tenantId, userId, role), async (tx) => {
-      const [original] = await tx
-        .select()
-        .from(schema.payments)
-        .where(and(eq(schema.payments.id, paymentId), eq(schema.payments.tenantId, tenantId)))
-        .limit(1);
-      if (!original) {
-        throw new NotFoundException({
-          error: { code: 'PAYMENT_NOT_FOUND', message: 'Platba nenalezena.' },
-        });
-      }
-      if (original.status !== 'succeeded') {
-        throw new BadRequestException({
-          error: { code: 'INVALID_STATUS', message: 'Lze refundovat jen úspěšné platby.' },
-        });
-      }
+    return this.dbService
+      .withRlsContext(ctxFor(tenantId, userId, role), async (tx) => {
+        const [original] = await tx
+          .select()
+          .from(schema.payments)
+          .where(and(eq(schema.payments.id, paymentId), eq(schema.payments.tenantId, tenantId)))
+          .limit(1);
+        if (!original) {
+          throw new NotFoundException({
+            error: { code: 'PAYMENT_NOT_FOUND', message: 'Platba nenalezena.' },
+          });
+        }
+        if (original.status !== 'succeeded') {
+          throw new BadRequestException({
+            error: { code: 'INVALID_STATUS', message: 'Lze refundovat jen úspěšné platby.' },
+          });
+        }
 
-      const refundAmount = dto.amountHellers ?? original.amountHellers;
-      if (refundAmount > original.amountHellers) {
-        throw new BadRequestException({
-          error: {
-            code: 'AMOUNT_TOO_HIGH',
-            message: 'Refund nemůže být vyšší než původní částka.',
-          },
-        });
-      }
+        const refundAmount = dto.amountHellers ?? original.amountHellers;
+        if (refundAmount > original.amountHellers) {
+          throw new BadRequestException({
+            error: {
+              code: 'AMOUNT_TOO_HIGH',
+              message: 'Refund nemůže být vyšší než původní částka.',
+            },
+          });
+        }
 
-      // Vytvor refund zaznam (zaporna castka jako konvence)
-      const [refund] = await tx
-        .insert(schema.payments)
-        .values({
+        // Vytvor refund zaznam (zaporna castka jako konvence)
+        const [refund] = await tx
+          .insert(schema.payments)
+          .values({
+            tenantId,
+            customerId: original.customerId,
+            bookingId: original.bookingId,
+            creditPackAllocationId: original.creditPackAllocationId,
+            amountHellers: -refundAmount,
+            currency: original.currency,
+            methodType: original.methodType,
+            status: 'refunded',
+            description: dto.reason ? `Refund: ${dto.reason}` : 'Refund',
+            refundedFromPaymentId: original.id,
+            recordedBy: userId,
+            paidAt: new Date(),
+          })
+          .returning();
+
+        // Pokud full refund — oznac original jako refunded
+        if (refundAmount === original.amountHellers) {
+          await tx
+            .update(schema.payments)
+            .set({ status: 'refunded', updatedAt: new Date() })
+            .where(eq(schema.payments.id, original.id));
+        }
+
+        await tx.insert(schema.paymentEvents).values({
           tenantId,
-          customerId: original.customerId,
-          bookingId: original.bookingId,
-          creditPackAllocationId: original.creditPackAllocationId,
-          amountHellers: -refundAmount,
-          currency: original.currency,
-          methodType: original.methodType,
-          status: 'refunded',
-          description: dto.reason ? `Refund: ${dto.reason}` : 'Refund',
-          refundedFromPaymentId: original.id,
-          recordedBy: userId,
-          paidAt: new Date(),
-        })
-        .returning();
+          paymentId: refund!.id,
+          eventType: 'refund',
+          payload: { originalPaymentId: original.id, reason: dto.reason, by: userId },
+          verified: true,
+        });
 
-      // Pokud full refund — oznac original jako refunded
-      if (refundAmount === original.amountHellers) {
-        await tx
-          .update(schema.payments)
-          .set({ status: 'refunded', updatedAt: new Date() })
-          .where(eq(schema.payments.id, original.id));
-      }
-
-      await tx.insert(schema.paymentEvents).values({
-        tenantId,
-        paymentId: refund!.id,
-        eventType: 'refund',
-        payload: { originalPaymentId: original.id, reason: dto.reason, by: userId },
-        verified: true,
+        return refund!;
+      })
+      .then(async (result) => {
+        await this.sendReceipt(tenantId, result, 'refunded');
+        return result;
       });
-
-      return refund!;
-    });
   }
 
   // ─── Lists ────────────────────────────────────────────────────

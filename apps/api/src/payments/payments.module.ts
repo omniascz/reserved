@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { DbModule } from '../db/db.module.js';
+import { EmailModule } from '../email/email.module.js';
 import { PaymentsController } from './payments.controller.js';
 import { PaymentsService } from './payments.service.js';
 import { WebhookController } from './webhook.controller.js';
@@ -10,7 +11,7 @@ import { MockPaymentProvider } from './providers/mock.provider.js';
 import { PaymentProviderRegistry } from './providers/provider.registry.js';
 
 @Module({
-  imports: [DbModule],
+  imports: [DbModule, EmailModule],
   controllers: [PaymentsController, WebhookController, CheckoutController],
   providers: [
     PaymentsService,

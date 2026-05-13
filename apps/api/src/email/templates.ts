@@ -115,6 +115,39 @@ Pokud jste heslo neměnili, okamžitě kontaktujte salon.
 
 Tým {{tenantName}}`,
   },
+  payment_receipt: {
+    subject: 'Potvrzení platby — {{tenantName}}',
+    body: `Dobrý den {{customerName}},
+
+děkujeme za platbu v {{tenantName}}.
+
+Detaily platby:
+  Částka:         {{amount}} {{currency}}
+  Způsob:         {{methodLabel}}
+  Datum:          {{paidAt}}
+  Číslo transakce: {{referenceCode}}
+  {{descriptionLine}}
+
+Tento e-mail slouží jako potvrzení o úspěšné platbě.
+
+Tým {{tenantName}}`,
+  },
+  payment_refunded: {
+    subject: 'Vrácení platby — {{tenantName}}',
+    body: `Dobrý den {{customerName}},
+
+vrácení platby bylo zpracováno.
+
+Detaily:
+  Částka vrácená:  {{amount}} {{currency}}
+  Původní platba:  {{referenceCode}}
+  Datum vrácení:   {{paidAt}}
+  {{reasonLine}}
+
+V případě dotazů kontaktujte salon.
+
+Tým {{tenantName}}`,
+  },
 };
 
 export function renderEmail(templateCode: string, vars: EmailVars): EmailTemplate {
