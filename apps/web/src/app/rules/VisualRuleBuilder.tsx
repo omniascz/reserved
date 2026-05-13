@@ -183,7 +183,7 @@ function ruleToGraph(rule: RuleFormState): { nodes: Node[]; edges: Edge[] } {
         ? { mode: 'single', conditions: [{ field: cond.field, op: cond.op, value: cond.value }] }
         : {
             mode: cond.type,
-            conditions: cond.children.map((c) => ({
+            conditions: cond.children.map((c: ConditionRow) => ({
               field: c.field,
               op: c.op,
               value: c.value,
