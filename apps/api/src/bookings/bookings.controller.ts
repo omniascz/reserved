@@ -76,4 +76,22 @@ export class BookingsController {
     const data = await this.svc.reschedule(user.tenantId, user.sub, user.role, id, dto);
     return { data };
   }
+
+  @Post(':id/mark-no-show')
+  async markNoShow(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    const data = await this.svc.markNoShow(user.tenantId, user.sub, user.role, id);
+    return { data };
+  }
+
+  @Post(':id/mark-completed')
+  async markCompleted(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    const data = await this.svc.markCompleted(user.tenantId, user.sub, user.role, id);
+    return { data };
+  }
 }

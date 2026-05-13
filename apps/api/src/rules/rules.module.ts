@@ -1,4 +1,5 @@
 import { Module, Global } from '@nestjs/common';
+import { CreditPacksModule } from '../credit-packs/credit-packs.module.js';
 import { DbModule } from '../db/db.module.js';
 import { EmailModule } from '../email/email.module.js';
 import { RulesController } from './rules.controller.js';
@@ -7,7 +8,7 @@ import { EventBus } from './events.bus.js';
 
 @Global() // EventBus je globální — kdokoli může emit
 @Module({
-  imports: [DbModule, EmailModule],
+  imports: [DbModule, EmailModule, CreditPacksModule],
   controllers: [RulesController],
   providers: [RulesService, EventBus],
   exports: [EventBus, RulesService],

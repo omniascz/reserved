@@ -7,7 +7,7 @@ export interface RuleFormState {
   name: string;
   description: string;
   triggerEvent: string;
-  condition: ComparisonNode | AlwaysNode;
+  condition: ConditionTree;
   actions: Array<{ type: string; config: Record<string, unknown> }>;
   isEnabled: boolean;
   priority: number;
@@ -20,6 +20,11 @@ type ComparisonNode = {
   op: string;
   value: unknown;
 };
+type GroupNode = {
+  type: 'and' | 'or';
+  children: ComparisonNode[];
+};
+type ConditionTree = AlwaysNode | ComparisonNode | GroupNode;
 
 const TRIGGERS = [
   { value: 'booking_cancelled', label: 'Zákazník zrušil rezervaci' },
@@ -75,20 +80,68 @@ export function RuleEditor({
     setState((s) => ({ ...s, ...patch }));
   }
 
-  function updateCondition(patch: Partial<ComparisonNode>) {
+  function setConditionMode(mode: 'always' | 'single' | 'and' | 'or') {
+    const defaultComp: ComparisonNode = {
+      type: 'comparison',
+      field: 'hoursUntilStart',
+      op: 'lt',
+      value: '12',
+    };
+    if (mode === 'always') {
+      update({ condition: { type: 'always' } });
+    } else if (mode === 'single') {
+      update({ condition: defaultComp });
+    } else {
+      // and / or — pokud aktuálně comparison, zabal ji
+      if (state.condition.type === 'comparison') {
+        update({ condition: { type: mode, children: [state.condition] } });
+      } else if (state.condition.type === 'and' || state.condition.type === 'or') {
+        update({ condition: { type: mode, children: state.condition.children } });
+      } else {
+        update({ condition: { type: mode, children: [defaultComp] } });
+      }
+    }
+  }
+
+  function updateSingleCondition(patch: Partial<ComparisonNode>) {
     if (state.condition.type === 'comparison') {
       update({ condition: { ...state.condition, ...patch } });
     }
   }
 
-  function toggleCondition() {
-    if (state.condition.type === 'always') {
-      update({
-        condition: { type: 'comparison', field: 'hoursUntilStart', op: 'lt', value: '12' },
-      });
+  function updateGroupChild(idx: number, patch: Partial<ComparisonNode>) {
+    if (state.condition.type !== 'and' && state.condition.type !== 'or') return;
+    const children = state.condition.children.map((c, i) => (i === idx ? { ...c, ...patch } : c));
+    update({ condition: { ...state.condition, children } });
+  }
+
+  function addGroupChild() {
+    if (state.condition.type !== 'and' && state.condition.type !== 'or') return;
+    const newChild: ComparisonNode = {
+      type: 'comparison',
+      field: 'hoursUntilStart',
+      op: 'lt',
+      value: '24',
+    };
+    update({
+      condition: { ...state.condition, children: [...state.condition.children, newChild] },
+    });
+  }
+
+  function removeGroupChild(idx: number) {
+    if (state.condition.type !== 'and' && state.condition.type !== 'or') return;
+    const filtered = state.condition.children.filter((_, i) => i !== idx);
+    if (filtered.length === 1) {
+      update({ condition: filtered[0]! });
     } else {
-      update({ condition: { type: 'always' } });
+      update({ condition: { ...state.condition, children: filtered } });
     }
+  }
+
+  function currentMode(): 'always' | 'single' | 'and' | 'or' {
+    if (state.condition.type === 'always') return 'always';
+    if (state.condition.type === 'comparison') return 'single';
+    return state.condition.type;
   }
 
   function addAction() {
@@ -187,50 +240,71 @@ export function RuleEditor({
       {/* Krok 2: JESTLI */}
       <Section
         title="② JESTLI platí podmínka"
-        hint="Třeba: pokud klient zruší méně než 12h před termínem."
+        hint="Třeba: pokud klient zruší méně než 12h před termínem. AND = musí platit všechny, OR = stačí jedna."
       >
-        <label className="flex items-center gap-2 cursor-pointer mb-3">
-          <input
-            type="checkbox"
-            checked={state.condition.type === 'comparison'}
-            onChange={toggleCondition}
-          />
-          <span className="text-sm">Přidat podmínku (jinak vždy spustit)</span>
-        </label>
+        <div className="flex gap-2 mb-3 flex-wrap">
+          <ModeButton
+            active={currentMode() === 'always'}
+            onClick={() => setConditionMode('always')}
+          >
+            Vždy spustit
+          </ModeButton>
+          <ModeButton
+            active={currentMode() === 'single'}
+            onClick={() => setConditionMode('single')}
+          >
+            Jedna podmínka
+          </ModeButton>
+          <ModeButton active={currentMode() === 'and'} onClick={() => setConditionMode('and')}>
+            Všechny (AND)
+          </ModeButton>
+          <ModeButton active={currentMode() === 'or'} onClick={() => setConditionMode('or')}>
+            Aspoň jedna (OR)
+          </ModeButton>
+        </div>
 
         {state.condition.type === 'comparison' && (
-          <div className="grid grid-cols-12 gap-2 items-center">
-            <select
-              value={state.condition.field}
-              onChange={(e) => updateCondition({ field: e.target.value })}
-              className="col-span-4 px-3 py-2 border border-slate-300 rounded-lg text-sm"
-            >
-              {CONDITION_FIELDS.map((f) => (
-                <option key={f.value} value={f.value}>
-                  {f.label}
-                </option>
-              ))}
-            </select>
-            <select
-              value={state.condition.op}
-              onChange={(e) => updateCondition({ op: e.target.value })}
-              className="col-span-4 px-3 py-2 border border-slate-300 rounded-lg text-sm"
-            >
-              {OPERATORS.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-            <input
-              type="text"
-              value={String(state.condition.value ?? '')}
-              onChange={(e) => updateCondition({ value: e.target.value })}
-              className="col-span-4 px-3 py-2 border border-slate-300 rounded-lg text-sm"
-              placeholder="hodnota"
-            />
-          </div>
+          <ComparisonRow node={state.condition} onChange={updateSingleCondition} />
         )}
+
+        {(state.condition.type === 'and' || state.condition.type === 'or') &&
+          (() => {
+            const group = state.condition;
+            return (
+              <div className="space-y-2">
+                {group.children.map((child, idx) => (
+                  <div key={idx} className="flex items-center gap-2">
+                    <span className="text-xs font-semibold text-slate-500 w-20">
+                      {idx === 0 ? '' : group.type === 'and' ? 'A ZÁROVEŇ' : 'NEBO'}
+                    </span>
+                    <div className="flex-1">
+                      <ComparisonRow
+                        node={child}
+                        onChange={(patch) => updateGroupChild(idx, patch)}
+                      />
+                    </div>
+                    {group.children.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => removeGroupChild(idx)}
+                        className="text-red-600 hover:text-red-800"
+                        aria-label="Odstranit"
+                      >
+                        ×
+                      </button>
+                    )}
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  onClick={addGroupChild}
+                  className="text-sm text-brand-600 hover:text-brand-700 font-medium"
+                >
+                  + Přidat další podmínku
+                </button>
+              </div>
+            );
+          })()}
       </Section>
 
       {/* Krok 3: PAK */}
@@ -317,6 +391,72 @@ function Section({
       <h4 className="font-semibold text-sm mb-1">{title}</h4>
       {hint && <p className="text-xs text-slate-500 mb-2">{hint}</p>}
       {children}
+    </div>
+  );
+}
+
+function ModeButton({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition ${
+        active
+          ? 'bg-brand-600 text-white border-brand-600'
+          : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50'
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function ComparisonRow({
+  node,
+  onChange,
+}: {
+  node: ComparisonNode;
+  onChange: (patch: Partial<ComparisonNode>) => void;
+}) {
+  return (
+    <div className="grid grid-cols-12 gap-2 items-center">
+      <select
+        value={node.field}
+        onChange={(e) => onChange({ field: e.target.value })}
+        className="col-span-4 px-3 py-2 border border-slate-300 rounded-lg text-sm"
+      >
+        {CONDITION_FIELDS.map((f) => (
+          <option key={f.value} value={f.value}>
+            {f.label}
+          </option>
+        ))}
+      </select>
+      <select
+        value={node.op}
+        onChange={(e) => onChange({ op: e.target.value })}
+        className="col-span-4 px-3 py-2 border border-slate-300 rounded-lg text-sm"
+      >
+        {OPERATORS.map((o) => (
+          <option key={o.value} value={o.value}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+      <input
+        type="text"
+        value={String(node.value ?? '')}
+        onChange={(e) => onChange({ value: e.target.value })}
+        className="col-span-4 px-3 py-2 border border-slate-300 rounded-lg text-sm"
+        placeholder="hodnota"
+      />
     </div>
   );
 }

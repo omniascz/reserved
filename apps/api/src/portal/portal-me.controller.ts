@@ -63,6 +63,12 @@ export class PortalMeController {
     return { data: await this.me.listBookings(tenantId, customerId) };
   }
 
+  @Get('credit-packs')
+  async listCreditPacks(@Req() req: Request): Promise<{ data: unknown }> {
+    const { tenantId, customerId } = this.requireAuth(req);
+    return { data: await this.me.listMyCreditPacks(tenantId, customerId) };
+  }
+
   @Post('bookings/:id/cancel')
   @HttpCode(200)
   async cancelBooking(

@@ -70,6 +70,7 @@ export const ACTION_TYPES = [
   'remove_customer_tag',
   'log_message',
   'charge_storno_fee',
+  'deduct_credit_pack',
   'webhook',
 ] as const;
 

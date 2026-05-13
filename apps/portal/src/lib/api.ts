@@ -212,6 +212,27 @@ export async function cancelMyBooking(id: string, reason?: string): Promise<Port
   return data;
 }
 
+// ─── Credit packs (sprint 3.1) ───────────────────────────────────────
+
+export interface PortalCreditPack {
+  id: string;
+  creditPackId: string;
+  packName: string | null;
+  creditsRemaining: number;
+  creditsAtPurchase: number;
+  snapshotMode: 'per_visit' | 'per_credit';
+  validFrom: string;
+  validUntil: string | null;
+  status: 'active' | 'expired' | 'used_up' | 'refunded' | 'cancelled';
+  pricePaidHellers: number;
+  purchasedAt: string;
+}
+
+export async function listMyCreditPacks(): Promise<PortalCreditPack[]> {
+  const { data } = await fetchApi<{ data: PortalCreditPack[] }>(`/portal/me/credit-packs`);
+  return data;
+}
+
 export async function rescheduleMyBooking(
   id: string,
   newStartsAt: string,

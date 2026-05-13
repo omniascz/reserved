@@ -25,6 +25,7 @@ import {
   type RuleEvaluationContext,
   type RuleInput,
 } from '@reserved/rules-engine';
+import { CreditPacksService } from '../credit-packs/credit-packs.service.js';
 import { DbService } from '../db/db.service.js';
 import { EmailService } from '../email/email.service.js';
 import { EventBus, type DomainEvent } from './events.bus.js';
@@ -56,6 +57,7 @@ export class RulesService implements OnModuleInit {
     @Inject(DbService) private readonly dbService: DbService,
     @Inject(EventBus) private readonly bus: EventBus,
     @Inject(EmailService) private readonly email: EmailService,
+    @Inject(CreditPacksService) private readonly creditPacks: CreditPacksService,
   ) {}
 
   onModuleInit(): void {
@@ -68,21 +70,35 @@ export class RulesService implements OnModuleInit {
     });
 
     this.registry.register('send_email', async (ctx, config) => {
-      const to = (config.to as string) ?? ctx.payload.customerEmail;
-      const subject = (config.subject as string) ?? 'Notifikace z rezervace';
-      const body = String(config.body ?? '').replace(/\{\{(\w+)\}\}/g, (_, key) => {
-        const value = (ctx.payload as unknown as Record<string, unknown>)[key];
-        return value === undefined || value === null ? '' : String(value);
-      });
-      // Custom email — použijeme nodemailer přímo přes EmailService
-      // ale stávající templates systém má fixní šablony. V Phase 2 přidáme
-      // ad-hoc email. Zatím: log + queue insert přes 'log_message'.
-      this.logger.log(`[Rule action] would send email to ${to}: "${subject}"`);
-      return {
-        action: 'send_email',
-        status: 'ok',
-        data: { to, subject, bodyPreview: body.slice(0, 100) },
-      };
+      const to = (config.to as string)?.trim() || ctx.payload.customerEmail;
+      const subjectTpl = (config.subject as string) ?? 'Notifikace z rezervace';
+      const bodyTpl = String(config.body ?? '');
+
+      try {
+        await this.email.enqueue({
+          tenantId: ctx.tenantId,
+          templateCode: 'custom',
+          recipient: to,
+          relatedBookingId: ctx.payload.bookingId,
+          vars: {
+            __customSubject: subjectTpl,
+            __customBody: bodyTpl,
+            // Všechny payload klíče dostupné jako {{var}} v subject/body
+            ...(ctx.payload as unknown as Record<string, unknown>),
+          },
+        });
+        return {
+          action: 'send_email',
+          status: 'ok',
+          data: { to, subject: subjectTpl.slice(0, 80) },
+        };
+      } catch (err) {
+        return {
+          action: 'send_email',
+          status: 'failed',
+          message: err instanceof Error ? err.message : String(err),
+        };
+      }
     });
 
     this.registry.register('add_customer_tag', async (ctx, config) => {
@@ -151,6 +167,31 @@ export class RulesService implements OnModuleInit {
         status: 'ok',
         data: { percent, feeHellers },
       };
+    });
+
+    this.registry.register('deduct_credit_pack', async (ctx, config) => {
+      if (!ctx.payload.customerId) {
+        return { action: 'deduct_credit_pack', status: 'skipped', message: 'No customer.' };
+      }
+      const credits = Number(config.credits ?? 1);
+      const reason = String(
+        config.reason ?? `Penalty from rule (booking ${ctx.payload.bookingId})`,
+      );
+      const result = await this.creditPacks.deductPenalty({
+        tenantId: ctx.tenantId,
+        customerId: ctx.payload.customerId,
+        bookingId: ctx.payload.bookingId,
+        credits,
+        reason,
+      });
+      if (!result) {
+        return {
+          action: 'deduct_credit_pack',
+          status: 'skipped',
+          message: 'Zákazník nemá aktivní permanentku.',
+        };
+      }
+      return { action: 'deduct_credit_pack', status: 'ok', data: result };
     });
 
     // Listen on event bus
