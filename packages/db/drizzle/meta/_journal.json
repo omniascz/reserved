@@ -127,6 +127,20 @@
       "when": 1778700100000,
       "tag": "0017_rls_credit_packs",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1778700200000,
+      "tag": "0018_new_cassandra_nova",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1778700300000,
+      "tag": "0019_rls_payments",
+      "breakpoints": true
     }
   ]
 }

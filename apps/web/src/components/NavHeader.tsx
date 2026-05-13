@@ -10,6 +10,7 @@ const NAV = [
   { href: '/customers', label: 'Zákazníci' },
   { href: '/branches', label: 'Pobočky' },
   { href: '/credit-packs', label: 'Permanentky' },
+  { href: '/payments', label: 'Platby' },
   { href: '/rules', label: 'Pravidla' },
   { href: '/blocks', label: 'Blokace' },
   { href: '/holidays', label: 'Svátky' },

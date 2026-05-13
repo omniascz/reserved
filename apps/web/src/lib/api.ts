@@ -799,3 +799,117 @@ export async function getEmailStats(filters: ReportFilters): Promise<EmailStats>
   const { data } = await fetchApi<{ data: EmailStats }>(`/admin/reports/emails?${qs}`);
   return data;
 }
+
+// ─── Payments (sprint 3.2) ───────────────────────────────────────────
+
+export type PaymentMethodType = 'cash' | 'card_terminal' | 'qr_bank' | 'stripe' | 'gopay';
+export type PaymentStatus = 'pending' | 'succeeded' | 'failed' | 'refunded' | 'cancelled';
+
+export interface AdminPaymentMethod {
+  id: string;
+  methodType: PaymentMethodType;
+  displayName: string | null;
+  config: Record<string, unknown>;
+  isEnabled: boolean;
+  sortOrder: number;
+}
+
+export interface AdminPayment {
+  id: string;
+  customerId: string | null;
+  bookingId: string | null;
+  creditPackAllocationId: string | null;
+  amountHellers: number;
+  currency: string;
+  methodType: PaymentMethodType;
+  status: PaymentStatus;
+  description: string | null;
+  referenceCode: string | null;
+  paidAt: string | null;
+  createdAt: string;
+}
+
+export async function listPaymentMethods(): Promise<AdminPaymentMethod[]> {
+  const { data } = await fetchApi<{ data: AdminPaymentMethod[] }>(`/admin/payment-methods`);
+  return data;
+}
+
+export async function upsertPaymentMethod(input: {
+  methodType: PaymentMethodType;
+  displayName?: string;
+  config?: Record<string, unknown>;
+  isEnabled?: boolean;
+  sortOrder?: number;
+}): Promise<AdminPaymentMethod> {
+  const { data } = await fetchApi<{ data: AdminPaymentMethod }>(`/admin/payment-methods`, {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+  return data;
+}
+
+export async function deletePaymentMethod(methodType: string): Promise<void> {
+  await fetchApi(`/admin/payment-methods/${methodType}`, { method: 'DELETE' });
+}
+
+export async function listPayments(filters: {
+  from?: string;
+  to?: string;
+  status?: PaymentStatus;
+  methodType?: PaymentMethodType;
+  customerId?: string;
+}): Promise<AdminPayment[]> {
+  const params = new URLSearchParams();
+  if (filters.from) params.append('from', filters.from);
+  if (filters.to) params.append('to', filters.to);
+  if (filters.status) params.append('status', filters.status);
+  if (filters.methodType) params.append('methodType', filters.methodType);
+  if (filters.customerId) params.append('customerId', filters.customerId);
+  const { data } = await fetchApi<{ data: AdminPayment[] }>(`/admin/payments?${params.toString()}`);
+  return data;
+}
+
+export async function recordPayment(input: {
+  customerId?: string;
+  bookingId?: string;
+  creditPackAllocationId?: string;
+  amountHellers: number;
+  currency?: string;
+  methodType: PaymentMethodType;
+  description?: string;
+  referenceCode?: string;
+}): Promise<AdminPayment> {
+  const { data } = await fetchApi<{ data: AdminPayment }>(`/admin/payments`, {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+  return data;
+}
+
+export async function markPaymentPaid(id: string): Promise<AdminPayment> {
+  const { data } = await fetchApi<{ data: AdminPayment }>(`/admin/payments/${id}/mark-paid`, {
+    method: 'POST',
+  });
+  return data;
+}
+
+export async function refundPayment(
+  id: string,
+  amountHellers?: number,
+  reason?: string,
+): Promise<AdminPayment> {
+  const { data } = await fetchApi<{ data: AdminPayment }>(`/admin/payments/${id}/refund`, {
+    method: 'POST',
+    body: JSON.stringify({ amountHellers, reason }),
+  });
+  return data;
+}
+
+export async function generateQrForPayment(
+  id: string,
+): Promise<{ spayd: string; amount: number; iban: string }> {
+  const { data } = await fetchApi<{ data: { spayd: string; amount: number; iban: string } }>(
+    `/admin/payments/${id}/qr`,
+  );
+  return data;
+}
