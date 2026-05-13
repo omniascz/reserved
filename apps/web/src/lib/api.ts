@@ -913,3 +913,20 @@ export async function generateQrForPayment(
   );
   return data;
 }
+
+export async function createCheckout(input: {
+  methodType: 'stripe' | 'gopay' | 'mock';
+  amountHellers: number;
+  currency?: string;
+  description: string;
+  customerId?: string;
+  customerEmail?: string;
+  bookingId?: string;
+  creditPackAllocationId?: string;
+}): Promise<{ paymentId: string; checkoutUrl: string }> {
+  const { data } = await fetchApi<{ data: { paymentId: string; checkoutUrl: string } }>(
+    `/admin/payments/checkout`,
+    { method: 'POST', body: JSON.stringify(input) },
+  );
+  return data;
+}
