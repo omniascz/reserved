@@ -62,6 +62,10 @@ export class AppModule implements NestModule {
         { path: 'admin/(.*)', method: RequestMethod.ALL },
         { path: 'platform/(.*)', method: RequestMethod.ALL },
         { path: 'public/(.*)', method: RequestMethod.ALL },
+        // Portal pouziva X-Tenant-ID header v Bearer flow + tenant resolver
+        // ve vlastnim guardu. Webhooky maji tenantSlug v URL params.
+        { path: 'portal/(.*)', method: RequestMethod.ALL },
+        { path: 'payments/webhooks/(.*)', method: RequestMethod.ALL },
       )
       .forRoutes('*');
   }
