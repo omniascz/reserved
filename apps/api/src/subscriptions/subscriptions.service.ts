@@ -717,4 +717,84 @@ export class SubscriptionsService {
       return merged;
     });
   }
+
+  /**
+   * Pro konkretni booking spocti finální cenu po slevě + ověř pristup
+   * pro exkluzivni sluzby.
+   *
+   * Pouziva se v BookingsService.confirmFromHold + adminCreate.
+   */
+  async getBookingDiscountFor(input: {
+    tenantId: string;
+    /** NULL = guest booking (bez customer entity) — bez slevy. */
+    customerId: string | null;
+    serviceId: string;
+    basePriceHellers: number;
+  }): Promise<{
+    finalPriceHellers: number;
+    discountPercent: number;
+    /** Pokud true, vyhozeni 403: sluzba je exkluzivni a customer nema active sub. */
+    requiresExclusiveAccess: boolean;
+  }> {
+    if (!input.customerId) {
+      // Guest booking - check pouze, jestli service je exkluzivni napric vsemi plany
+      const isExclusive = await this.isServiceExclusiveAnywhere(input.tenantId, input.serviceId);
+      return {
+        finalPriceHellers: input.basePriceHellers,
+        discountPercent: 0,
+        requiresExclusiveAccess: isExclusive,
+      };
+    }
+
+    const benefits = await this.getActiveBenefitsForCustomer(input.tenantId, input.customerId);
+
+    // Pokud sluzba je exkluzivni v nekem planu, customer musi mit aktivni
+    // subscription co tu sluzbu pokrývá
+    const isExclusiveAnywhere = await this.isServiceExclusiveAnywhere(
+      input.tenantId,
+      input.serviceId,
+    );
+    if (isExclusiveAnywhere) {
+      const hasAccess = benefits?.exclusiveServiceIds?.includes(input.serviceId) ?? false;
+      if (!hasAccess) {
+        return {
+          finalPriceHellers: input.basePriceHellers,
+          discountPercent: 0,
+          requiresExclusiveAccess: true,
+        };
+      }
+    }
+
+    const discount = benefits?.discountPercent ?? 0;
+    const finalPrice = Math.round(input.basePriceHellers * (1 - discount / 100));
+    return {
+      finalPriceHellers: finalPrice,
+      discountPercent: discount,
+      requiresExclusiveAccess: false,
+    };
+  }
+
+  /**
+   * Vrati true pokud service je v exclusiveServiceIds nektereho ACTIVE planu
+   * (tj. customer-uri bez subscription tu sluzbu nesmi rezervovat).
+   */
+  private async isServiceExclusiveAnywhere(tenantId: string, serviceId: string): Promise<boolean> {
+    return this.dbService.withRlsContext(serviceContext(tenantId), async (tx) => {
+      const plans = await tx
+        .select({ benefits: schema.subscriptionPlans.benefits })
+        .from(schema.subscriptionPlans)
+        .where(
+          and(
+            eq(schema.subscriptionPlans.tenantId, tenantId),
+            eq(schema.subscriptionPlans.isActive, true),
+            isNull(schema.subscriptionPlans.deletedAt),
+          ),
+        );
+      for (const p of plans) {
+        const b = p.benefits as SubscriptionBenefitsDto;
+        if (b.exclusiveServiceIds?.includes(serviceId)) return true;
+      }
+      return false;
+    });
+  }
 }

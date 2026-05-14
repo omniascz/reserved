@@ -16,6 +16,7 @@ import { type AppRole, type TenantContext, serviceContext } from '@reserved/rls-
 import { randomBytes } from 'node:crypto';
 import { BundlePacksService } from '../bundle-packs/bundle-packs.service.js';
 import { CreditPacksService } from '../credit-packs/credit-packs.service.js';
+import { SubscriptionsService } from '../subscriptions/subscriptions.service.js';
 import { TimePacksService } from '../time-packs/time-packs.service.js';
 import { CustomersService } from '../customers/customers.service.js';
 import { DbService } from '../db/db.service.js';
@@ -66,6 +67,7 @@ export class BookingsService {
     @Inject(CreditPacksService) private readonly creditPacks: CreditPacksService,
     @Inject(BundlePacksService) private readonly bundlePacks: BundlePacksService,
     @Inject(TimePacksService) private readonly timePacks: TimePacksService,
+    @Inject(SubscriptionsService) private readonly subscriptions: SubscriptionsService,
   ) {}
 
   private async emitBookingEvent(
@@ -151,6 +153,22 @@ export class BookingsService {
           phone: dto.customerPhone ?? null,
         });
 
+        // 2c. Subscription benefity: discount % + exclusive access check.
+        const discount = await this.subscriptions.getBookingDiscountFor({
+          tenantId,
+          customerId,
+          serviceId: hold.serviceId,
+          basePriceHellers: service.priceHellers,
+        });
+        if (discount.requiresExclusiveAccess) {
+          throw new ForbiddenException({
+            error: {
+              code: 'EXCLUSIVE_SERVICE_REQUIRES_SUBSCRIPTION',
+              message: 'Tato služba je dostupná pouze pro držitele aktivního předplatného.',
+            },
+          });
+        }
+
         // 3. Vytvoř booking
         const refCode = generateReferenceCode();
         const [booking] = await tx
@@ -170,11 +188,17 @@ export class BookingsService {
             bufferStartsAt: hold.bufferStartsAt,
             bufferEndsAt: hold.bufferEndsAt,
             status: 'confirmed',
-            pricePaidHellers: service.priceHellers,
+            pricePaidHellers: discount.finalPriceHellers,
             currency: service.currency,
             customerNote: dto.customerNote ?? null,
             referenceCode: refCode,
-            metadata: { source: 'public_widget' },
+            metadata: {
+              source: 'public_widget',
+              ...(discount.discountPercent > 0 && {
+                subscriptionDiscountPercent: discount.discountPercent,
+                originalPriceHellers: service.priceHellers,
+              }),
+            },
           })
           .returning();
 
@@ -375,6 +399,35 @@ export class BookingsService {
         const bufferEndsAt = new Date(endsAt.getTime() + service.bufferAfterMinutes * 60_000);
         const refCode = generateReferenceCode();
 
+        // 3a. Subscription benefity: najdi customer podle emailu (mozna existuje)
+        // a aplikuj discount/exclusive check.
+        const existingCustomer = await tx
+          .select({ id: schema.customers.id })
+          .from(schema.customers)
+          .where(
+            and(
+              eq(schema.customers.tenantId, tenantId),
+              eq(schema.customers.email, dto.customerEmail),
+            ),
+          )
+          .limit(1);
+        const existingCustomerId = existingCustomer[0]?.id ?? null;
+
+        const discount = await this.subscriptions.getBookingDiscountFor({
+          tenantId,
+          customerId: existingCustomerId,
+          serviceId: dto.serviceId,
+          basePriceHellers: service.priceHellers,
+        });
+        if (discount.requiresExclusiveAccess) {
+          throw new ForbiddenException({
+            error: {
+              code: 'EXCLUSIVE_SERVICE_REQUIRES_SUBSCRIPTION',
+              message: 'Tato služba je dostupná pouze pro držitele aktivního předplatného.',
+            },
+          });
+        }
+
         try {
           const [booking] = await tx
             .insert(schema.bookings)
@@ -391,12 +444,19 @@ export class BookingsService {
               bufferStartsAt,
               bufferEndsAt,
               status: 'confirmed',
-              pricePaidHellers: service.priceHellers,
+              pricePaidHellers: discount.finalPriceHellers,
               currency: service.currency,
               customerNote: dto.customerNote ?? null,
               internalNote: dto.internalNote ?? null,
               referenceCode: refCode,
-              metadata: { source: 'admin', createdByUserId: userId },
+              metadata: {
+                source: 'admin',
+                createdByUserId: userId,
+                ...(discount.discountPercent > 0 && {
+                  subscriptionDiscountPercent: discount.discountPercent,
+                  originalPriceHellers: service.priceHellers,
+                }),
+              },
             })
             .returning();
 
