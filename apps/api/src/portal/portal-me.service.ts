@@ -12,6 +12,7 @@ import {
 import { and, asc, desc, eq } from 'drizzle-orm';
 import { schema } from '@reserved/db';
 import type { TenantContext } from '@reserved/rls-multitenancy';
+import { BundlePacksService } from '../bundle-packs/bundle-packs.service.js';
 import { CreditPacksService } from '../credit-packs/credit-packs.service.js';
 import { DbService } from '../db/db.service.js';
 import { EmailService } from '../email/email.service.js';
@@ -35,6 +36,7 @@ export class PortalMeService {
     @Inject(EmailService) private readonly email: EmailService,
     @Inject(EventBus) private readonly eventBus: EventBus,
     @Inject(CreditPacksService) private readonly creditPacks: CreditPacksService,
+    @Inject(BundlePacksService) private readonly bundlePacks: BundlePacksService,
   ) {}
 
   // ---------------------------------------------------------------------------
@@ -217,7 +219,16 @@ export class PortalMeService {
       reason: dto.reason,
     });
 
-    // Refund credit pokud byl drive odpocteny
+    // Refund pokud byl drive odpocteny — zkusi oba typy (bundle + credit-pack).
+    try {
+      await this.bundlePacks.refundForBooking({
+        tenantId,
+        bookingId: result.booking.id,
+        performedBy: customerId,
+      });
+    } catch {
+      // ignoruj
+    }
     try {
       await this.creditPacks.refundForBooking({
         tenantId,

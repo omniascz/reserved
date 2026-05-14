@@ -14,6 +14,7 @@ import { and, asc, desc, eq, gte, inArray, lte } from 'drizzle-orm';
 import { schema } from '@reserved/db';
 import { type AppRole, type TenantContext, serviceContext } from '@reserved/rls-multitenancy';
 import { randomBytes } from 'node:crypto';
+import { BundlePacksService } from '../bundle-packs/bundle-packs.service.js';
 import { CreditPacksService } from '../credit-packs/credit-packs.service.js';
 import { CustomersService } from '../customers/customers.service.js';
 import { DbService } from '../db/db.service.js';
@@ -62,6 +63,7 @@ export class BookingsService {
     @Inject(CustomersService) private readonly customers: CustomersService,
     @Inject(EventBus) private readonly eventBus: EventBus,
     @Inject(CreditPacksService) private readonly creditPacks: CreditPacksService,
+    @Inject(BundlePacksService) private readonly bundlePacks: BundlePacksService,
   ) {}
 
   private async emitBookingEvent(
@@ -232,9 +234,11 @@ export class BookingsService {
           },
         });
 
-        // Auto-odpocet kreditu z permanentky (pokud zakaznik nejakou ma)
+        // Auto-odpocet z balicku (priorita: bundle > credit-pack).
+        // Bundle = konkretni svazek sluzeb (specificky zavazek).
+        // Credit-pack = generic kredity (flexibilnejsi). Bundle ma prednost.
         try {
-          await this.creditPacks.deductForBooking({
+          const bundleHit = await this.bundlePacks.deductForBooking({
             tenantId,
             customerId: result.booking.customerId!,
             bookingId: result.booking.id,
@@ -242,6 +246,16 @@ export class BookingsService {
             branchId: result.booking.branchId,
             performedBy: null,
           });
+          if (!bundleHit) {
+            await this.creditPacks.deductForBooking({
+              tenantId,
+              customerId: result.booking.customerId!,
+              bookingId: result.booking.id,
+              serviceId: result.booking.serviceId,
+              branchId: result.booking.branchId,
+              performedBy: null,
+            });
+          }
         } catch {
           // Selhani odpoctu neblokuje rezervaci — zakaznik plati normalne.
         }
@@ -496,7 +510,18 @@ export class BookingsService {
       await this.sendBookingEmail(tenantId, result, 'booking_cancelled', { reason: dto.reason });
     }
 
-    // Refund credit pokud byl drive odpocteny
+    // Refund pokud byl drive odpocteny (bundle nebo credit-pack — co matchne).
+    // Oba volani jsou idempotentni, jeden z nich vrati null pokud booking
+    // nepoužil daný typ balíčku.
+    try {
+      await this.bundlePacks.refundForBooking({
+        tenantId,
+        bookingId: result.id,
+        performedBy: userId,
+      });
+    } catch {
+      // ignoruj — neblokuje cancel
+    }
     try {
       await this.creditPacks.refundForBooking({
         tenantId,

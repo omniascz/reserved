@@ -5,6 +5,7 @@ import { AvailabilityModule } from './availability/availability.module.js';
 import { BlocksModule } from './blocks/blocks.module.js';
 import { BookingsModule } from './bookings/bookings.module.js';
 import { BranchesModule } from './branches/branches.module.js';
+import { BundlePacksModule } from './bundle-packs/bundle-packs.module.js';
 import { CreditPacksModule } from './credit-packs/credit-packs.module.js';
 import { CustomersModule } from './customers/customers.module.js';
 import { DbModule } from './db/db.module.js';
@@ -40,6 +41,7 @@ import { TenantMiddleware } from './tenant/tenant.middleware.js';
     CustomersModule,
     BookingsModule,
     CreditPacksModule,
+    BundlePacksModule,
     PaymentsModule,
     BlocksModule,
     HolidaysModule,
