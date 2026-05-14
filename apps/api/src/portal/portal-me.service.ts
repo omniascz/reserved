@@ -14,6 +14,7 @@ import { schema } from '@reserved/db';
 import type { TenantContext } from '@reserved/rls-multitenancy';
 import { BundlePacksService } from '../bundle-packs/bundle-packs.service.js';
 import { CreditPacksService } from '../credit-packs/credit-packs.service.js';
+import { TimePacksService } from '../time-packs/time-packs.service.js';
 import { DbService } from '../db/db.service.js';
 import { EmailService } from '../email/email.service.js';
 import { EventBus } from '../rules/events.bus.js';
@@ -37,6 +38,7 @@ export class PortalMeService {
     @Inject(EventBus) private readonly eventBus: EventBus,
     @Inject(CreditPacksService) private readonly creditPacks: CreditPacksService,
     @Inject(BundlePacksService) private readonly bundlePacks: BundlePacksService,
+    @Inject(TimePacksService) private readonly timePacks: TimePacksService,
   ) {}
 
   // ---------------------------------------------------------------------------
@@ -219,7 +221,16 @@ export class PortalMeService {
       reason: dto.reason,
     });
 
-    // Refund pokud byl drive odpocteny — zkusi oba typy (bundle + credit-pack).
+    // Refund pokud byl drive odpocteny — zkusi vsechny tri typy (time/bundle/credit).
+    try {
+      await this.timePacks.refundForBooking({
+        tenantId,
+        bookingId: result.booking.id,
+        performedBy: customerId,
+      });
+    } catch {
+      // ignoruj
+    }
     try {
       await this.bundlePacks.refundForBooking({
         tenantId,

@@ -21,4 +21,5 @@ export * from './customer-auth.js';
 export * from './rules.js';
 export * from './credit-packs.js';
 export * from './bundle-packs.js';
+export * from './time-packs.js';
 export * from './payments.js';

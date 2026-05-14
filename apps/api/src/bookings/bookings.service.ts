@@ -16,6 +16,7 @@ import { type AppRole, type TenantContext, serviceContext } from '@reserved/rls-
 import { randomBytes } from 'node:crypto';
 import { BundlePacksService } from '../bundle-packs/bundle-packs.service.js';
 import { CreditPacksService } from '../credit-packs/credit-packs.service.js';
+import { TimePacksService } from '../time-packs/time-packs.service.js';
 import { CustomersService } from '../customers/customers.service.js';
 import { DbService } from '../db/db.service.js';
 import { EmailService } from '../email/email.service.js';
@@ -64,6 +65,7 @@ export class BookingsService {
     @Inject(EventBus) private readonly eventBus: EventBus,
     @Inject(CreditPacksService) private readonly creditPacks: CreditPacksService,
     @Inject(BundlePacksService) private readonly bundlePacks: BundlePacksService,
+    @Inject(TimePacksService) private readonly timePacks: TimePacksService,
   ) {}
 
   private async emitBookingEvent(
@@ -234,20 +236,23 @@ export class BookingsService {
           },
         });
 
-        // Auto-odpocet z balicku (priorita: bundle > credit-pack).
+        // Auto-odpocet z balicku (priorita: time-pack > bundle > credit-pack).
+        // Time-pack = subscription "neomezeno po dobu X" — ma prednost,
+        //   protoze zakaznik plati prave za nelimitovany pristup.
         // Bundle = konkretni svazek sluzeb (specificky zavazek).
-        // Credit-pack = generic kredity (flexibilnejsi). Bundle ma prednost.
+        // Credit-pack = generic kredity (flexibilnejsi).
         try {
-          const bundleHit = await this.bundlePacks.deductForBooking({
+          const timeHit = await this.timePacks.deductForBooking({
             tenantId,
             customerId: result.booking.customerId!,
             bookingId: result.booking.id,
             serviceId: result.booking.serviceId,
             branchId: result.booking.branchId,
+            bookingStartsAt: result.booking.startsAt,
             performedBy: null,
           });
-          if (!bundleHit) {
-            await this.creditPacks.deductForBooking({
+          if (!timeHit) {
+            const bundleHit = await this.bundlePacks.deductForBooking({
               tenantId,
               customerId: result.booking.customerId!,
               bookingId: result.booking.id,
@@ -255,6 +260,16 @@ export class BookingsService {
               branchId: result.booking.branchId,
               performedBy: null,
             });
+            if (!bundleHit) {
+              await this.creditPacks.deductForBooking({
+                tenantId,
+                customerId: result.booking.customerId!,
+                bookingId: result.booking.id,
+                serviceId: result.booking.serviceId,
+                branchId: result.booking.branchId,
+                performedBy: null,
+              });
+            }
           }
         } catch {
           // Selhani odpoctu neblokuje rezervaci — zakaznik plati normalne.
@@ -510,9 +525,17 @@ export class BookingsService {
       await this.sendBookingEmail(tenantId, result, 'booking_cancelled', { reason: dto.reason });
     }
 
-    // Refund pokud byl drive odpocteny (bundle nebo credit-pack — co matchne).
-    // Oba volani jsou idempotentni, jeden z nich vrati null pokud booking
-    // nepoužil daný typ balíčku.
+    // Refund pokud byl drive odpocteny (time/bundle/credit-pack — co matchne).
+    // Vsechna volani jsou idempotentni; jen ten typ co matchne vrati neco.
+    try {
+      await this.timePacks.refundForBooking({
+        tenantId,
+        bookingId: result.id,
+        performedBy: userId,
+      });
+    } catch {
+      // ignoruj — neblokuje cancel
+    }
     try {
       await this.bundlePacks.refundForBooking({
         tenantId,
