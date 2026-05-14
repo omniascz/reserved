@@ -9,6 +9,7 @@ import { BundlePacksModule } from './bundle-packs/bundle-packs.module.js';
 import { CorporateAccountsModule } from './corporate-accounts/corporate-accounts.module.js';
 import { CreditPacksModule } from './credit-packs/credit-packs.module.js';
 import { FeatureFlagsModule } from './feature-flags/feature-flags.module.js';
+import { GoogleCalendarModule } from './google-calendar/google-calendar.module.js';
 import { SubscriptionsModule } from './subscriptions/subscriptions.module.js';
 import { TimePacksModule } from './time-packs/time-packs.module.js';
 import { CustomersModule } from './customers/customers.module.js';
@@ -50,6 +51,7 @@ import { TenantMiddleware } from './tenant/tenant.middleware.js';
     TimePacksModule,
     CorporateAccountsModule,
     SubscriptionsModule,
+    GoogleCalendarModule,
     PaymentsModule,
     BlocksModule,
     HolidaysModule,
