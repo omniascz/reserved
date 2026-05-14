@@ -37,6 +37,10 @@ export interface WebhookEvent {
   failureReason?: string;
   /** Raw payload pro audit log. */
   rawPayload: Record<string, unknown>;
+  /** Stripe-only: nativni event type pro routing (napr. 'customer.subscription.created'). */
+  stripeEventType?: string;
+  /** Stripe-only: event ID pro idempotenci subscription webhooku. */
+  stripeEventId?: string;
 }
 
 export interface RefundInput {

@@ -990,6 +990,51 @@ export async function deleteBundlePack(id: string): Promise<void> {
   await fetchApi(`/admin/bundle-packs/${id}`, { method: 'DELETE' });
 }
 
+export interface AdminCustomerBundlePack {
+  id: string;
+  bundlePackId: string;
+  packName: string | null;
+  itemsRemaining: BundleItem[];
+  snapshotItems: BundleItem[];
+  validFrom: string;
+  validUntil: string | null;
+  status: 'active' | 'expired' | 'used_up' | 'refunded' | 'cancelled';
+  pricePaidHellers: number;
+  note: string | null;
+  purchasedAt: string;
+}
+
+export async function listCustomerBundlePacks(
+  customerId: string,
+): Promise<AdminCustomerBundlePack[]> {
+  const { data } = await fetchApi<{ data: AdminCustomerBundlePack[] }>(
+    `/admin/customers/${customerId}/bundle-packs`,
+  );
+  return data;
+}
+
+export async function allocateBundlePack(
+  customerId: string,
+  input: { bundlePackId: string; pricePaidHellers?: number; note?: string },
+): Promise<AdminCustomerBundlePack> {
+  const { data } = await fetchApi<{ data: AdminCustomerBundlePack }>(
+    `/admin/customers/${customerId}/bundle-packs`,
+    { method: 'POST', body: JSON.stringify(input) },
+  );
+  return data;
+}
+
+export async function allocateBundlePackToCorporate(
+  corporateAccountId: string,
+  input: { bundlePackId: string; pricePaidHellers?: number; note?: string },
+): Promise<AdminCustomerBundlePack> {
+  const { data } = await fetchApi<{ data: AdminCustomerBundlePack }>(
+    `/admin/corporate-accounts/${corporateAccountId}/bundle-packs`,
+    { method: 'POST', body: JSON.stringify(input) },
+  );
+  return data;
+}
+
 // ─── Time packs (sprint 3.3 phase A2) ─────────────────────────────────
 
 export interface AdminTimePack {
@@ -1044,6 +1089,176 @@ export async function updateTimePack(
 
 export async function deleteTimePack(id: string): Promise<void> {
   await fetchApi(`/admin/time-packs/${id}`, { method: 'DELETE' });
+}
+
+export interface AdminCustomerTimePack {
+  id: string;
+  timePackId: string;
+  packName: string | null;
+  bookingsUsed: number;
+  snapshotMaxBookingsPerPeriod: number | null;
+  snapshotMaxBookingsPerDay: number | null;
+  validFrom: string;
+  validUntil: string;
+  status: 'active' | 'expired' | 'used_up' | 'refunded' | 'cancelled';
+  pricePaidHellers: number;
+  note: string | null;
+  purchasedAt: string;
+}
+
+export async function listCustomerTimePacks(customerId: string): Promise<AdminCustomerTimePack[]> {
+  const { data } = await fetchApi<{ data: AdminCustomerTimePack[] }>(
+    `/admin/customers/${customerId}/time-packs`,
+  );
+  return data;
+}
+
+export async function allocateTimePack(
+  customerId: string,
+  input: { timePackId: string; pricePaidHellers?: number; note?: string },
+): Promise<AdminCustomerTimePack> {
+  const { data } = await fetchApi<{ data: AdminCustomerTimePack }>(
+    `/admin/customers/${customerId}/time-packs`,
+    { method: 'POST', body: JSON.stringify(input) },
+  );
+  return data;
+}
+
+export async function allocateTimePackToCorporate(
+  corporateAccountId: string,
+  input: { timePackId: string; pricePaidHellers?: number; note?: string },
+): Promise<AdminCustomerTimePack> {
+  const { data } = await fetchApi<{ data: AdminCustomerTimePack }>(
+    `/admin/corporate-accounts/${corporateAccountId}/time-packs`,
+    { method: 'POST', body: JSON.stringify(input) },
+  );
+  return data;
+}
+
+// ─── Subscriptions (sprint 3.3 phase A3) ──────────────────────────────
+
+export interface SubscriptionBenefits {
+  discountPercent?: number;
+  priorityAccess?: boolean;
+  freeCreditsPerPeriod?: number;
+  exclusiveServiceIds?: string[];
+}
+
+export interface AdminSubscriptionPlan {
+  id: string;
+  name: string;
+  description: string | null;
+  billingInterval: 'monthly' | 'quarterly' | 'yearly';
+  priceHellers: number;
+  currency: string;
+  trialDays: number;
+  benefits: SubscriptionBenefits;
+  stripeProductId: string | null;
+  stripePriceId: string | null;
+  isActive: boolean;
+  createdAt: string;
+}
+
+export interface AdminCustomerSubscription {
+  id: string;
+  planId: string;
+  planName: string | null;
+  stripeCustomerId: string | null;
+  stripeSubscriptionId: string | null;
+  status: string;
+  currentPeriodStart: string | null;
+  currentPeriodEnd: string | null;
+  trialEnd: string | null;
+  canceledAt: string | null;
+  cancelAtPeriodEnd: boolean;
+  snapshotBenefits: SubscriptionBenefits;
+  snapshotBillingInterval: string;
+  snapshotPriceHellers: number;
+  note: string | null;
+  createdAt: string;
+}
+
+export async function listSubscriptionPlans(): Promise<AdminSubscriptionPlan[]> {
+  const { data } = await fetchApi<{ data: AdminSubscriptionPlan[] }>(`/admin/subscription-plans`);
+  return data;
+}
+
+export async function createSubscriptionPlan(input: {
+  name: string;
+  description?: string | null;
+  billingInterval: 'monthly' | 'quarterly' | 'yearly';
+  priceHellers: number;
+  currency?: string;
+  trialDays?: number;
+  benefits?: SubscriptionBenefits;
+  isActive?: boolean;
+}): Promise<AdminSubscriptionPlan> {
+  const { data } = await fetchApi<{ data: AdminSubscriptionPlan }>(`/admin/subscription-plans`, {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+  return data;
+}
+
+export async function updateSubscriptionPlan(
+  id: string,
+  input: Partial<Parameters<typeof createSubscriptionPlan>[0]>,
+): Promise<AdminSubscriptionPlan> {
+  const { data } = await fetchApi<{ data: AdminSubscriptionPlan }>(
+    `/admin/subscription-plans/${id}`,
+    { method: 'PATCH', body: JSON.stringify(input) },
+  );
+  return data;
+}
+
+export async function deleteSubscriptionPlan(id: string): Promise<void> {
+  await fetchApi(`/admin/subscription-plans/${id}`, { method: 'DELETE' });
+}
+
+export async function listCustomerSubscriptions(
+  customerId: string,
+): Promise<AdminCustomerSubscription[]> {
+  const { data } = await fetchApi<{ data: AdminCustomerSubscription[] }>(
+    `/admin/customers/${customerId}/subscriptions`,
+  );
+  return data;
+}
+
+export async function subscribeCustomer(
+  customerId: string,
+  input: { planId: string; successUrl: string; cancelUrl: string; note?: string },
+): Promise<{ subscriptionId: string; checkoutUrl: string }> {
+  const { data } = await fetchApi<{
+    data: { subscriptionId: string; checkoutUrl: string };
+  }>(`/admin/customers/${customerId}/subscriptions`, {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+  return data;
+}
+
+export async function cancelSubscription(
+  subscriptionId: string,
+  input: { atPeriodEnd?: boolean; reason?: string },
+): Promise<{ subscriptionId: string; status: string; cancelAtPeriodEnd: boolean }> {
+  const { data } = await fetchApi<{
+    data: { subscriptionId: string; status: string; cancelAtPeriodEnd: boolean };
+  }>(`/admin/subscriptions/${subscriptionId}/cancel`, {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+  return data;
+}
+
+export async function allocateCreditPackToCorporate(
+  corporateAccountId: string,
+  input: { creditPackId: string; pricePaidHellers?: number; note?: string },
+): Promise<AdminCustomerCreditPack> {
+  const { data } = await fetchApi<{ data: AdminCustomerCreditPack }>(
+    `/admin/corporate-accounts/${corporateAccountId}/credit-packs`,
+    { method: 'POST', body: JSON.stringify(input) },
+  );
+  return data;
 }
 
 // ─── Corporate accounts (sprint 3.3 B1-B3) ────────────────────────────

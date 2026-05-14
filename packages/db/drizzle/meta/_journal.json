@@ -215,15 +215,29 @@
     {
       "idx": 30,
       "version": "7",
-      "when": 1778749347357,
-      "tag": "0030_young_nico_minoru",
+      "when": 1778756126561,
+      "tag": "0030_dark_captain_marvel",
       "breakpoints": true
     },
     {
       "idx": 31,
       "version": "7",
-      "when": 1778749400000,
-      "tag": "0031_rls_feature_flags",
+      "when": 1778756200000,
+      "tag": "0031_rls_subscriptions",
+      "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1778756883699,
+      "tag": "0032_minor_nebula",
+      "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1778756900000,
+      "tag": "0033_rls_feature_flags",
       "breakpoints": true
     }
   ]
