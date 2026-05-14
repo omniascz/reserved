@@ -211,6 +211,20 @@
       "when": 1778744500000,
       "tag": "0029_corporate_bundle_time_check",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1778756126561,
+      "tag": "0030_dark_captain_marvel",
+      "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1778756200000,
+      "tag": "0031_rls_subscriptions",
+      "breakpoints": true
     }
   ]
 }
