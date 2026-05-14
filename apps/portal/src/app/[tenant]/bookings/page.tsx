@@ -189,6 +189,17 @@ function BookingCard({
         <p className="text-xs text-slate-400 mt-1">
           Ref: {booking.referenceCode} · {formatPrice(booking.pricePaidHellers, booking.currency)}
         </p>
+        {booking.onlineMeetingUrl && booking.status !== 'cancelled' && (
+          <a
+            href={booking.onlineMeetingUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-sm text-brand-600 hover:text-brand-700 hover:underline mt-2"
+          >
+            <span>📹</span>
+            <span>Připojit se k videohovoru</span>
+          </a>
+        )}
       </div>
       {canModify && booking.status !== 'cancelled' && (
         <div className="flex gap-2 sm:flex-col">
