@@ -277,6 +277,35 @@ export async function listMyTimePacks(): Promise<PortalTimePack[]> {
   return data;
 }
 
+export interface PortalSubscriptionBenefits {
+  discountPercent?: number;
+  priorityAccess?: boolean;
+  freeCreditsPerPeriod?: number;
+  exclusiveServiceIds?: string[];
+}
+
+export interface PortalSubscription {
+  id: string;
+  planId: string;
+  planName: string | null;
+  status: string;
+  currentPeriodStart: string | null;
+  currentPeriodEnd: string | null;
+  trialEnd: string | null;
+  canceledAt: string | null;
+  cancelAtPeriodEnd: boolean;
+  snapshotBenefits: PortalSubscriptionBenefits;
+  snapshotBillingInterval: string;
+  snapshotPriceHellers: number;
+  note: string | null;
+  createdAt: string;
+}
+
+export async function listMySubscriptions(): Promise<PortalSubscription[]> {
+  const { data } = await fetchApi<{ data: PortalSubscription[] }>(`/portal/me/subscriptions`);
+  return data;
+}
+
 export async function rescheduleMyBooking(
   id: string,
   newStartsAt: string,
