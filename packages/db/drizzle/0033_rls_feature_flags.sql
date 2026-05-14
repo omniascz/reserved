@@ -1,5 +1,5 @@
 -- ============================================================================
--- RLS na feature_flags (sprint 3.3 fáze D).
+-- RLS na feature_flags (sprint 3.3 fáze D — regenerated po mergi s main).
 -- ============================================================================
 
 ALTER TABLE feature_flags ENABLE ROW LEVEL SECURITY;

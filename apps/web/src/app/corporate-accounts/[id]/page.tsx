@@ -7,19 +7,28 @@ import { NavHeader } from '@/components/NavHeader';
 import {
   AdminApiError,
   addCorporateMember,
+  allocateBundlePackToCorporate,
+  allocateCreditPackToCorporate,
+  allocateTimePackToCorporate,
   clearAuth,
   getAccessToken,
   getCorporateAccount,
   getCorporateSummary,
   getCorporateUsageReport,
+  listBundlePacks,
   listCorporateMembers,
+  listCreditPacks,
   listCustomers,
+  listTimePacks,
   removeCorporateMember,
+  type AdminBundlePack,
   type AdminCorporateAccount,
   type AdminCorporateMember,
   type AdminCorporateSummary,
   type AdminCorporateUsageReport,
+  type AdminCreditPack,
   type AdminCustomer,
+  type AdminTimePack,
 } from '@/lib/api';
 
 function formatPrice(hellers: number, currency = 'CZK'): string {
@@ -53,6 +62,16 @@ export default function CorporateAccountDetailPage({
   const [showAddMember, setShowAddMember] = useState(false);
   const [customerSearch, setCustomerSearch] = useState('');
   const [customerOptions, setCustomerOptions] = useState<AdminCustomer[]>([]);
+
+  const [allocateType, setAllocateType] = useState<'credit' | 'bundle' | 'time' | null>(null);
+  const [creditTemplates, setCreditTemplates] = useState<AdminCreditPack[]>([]);
+  const [bundleTemplates, setBundleTemplates] = useState<AdminBundlePack[]>([]);
+  const [timeTemplates, setTimeTemplates] = useState<AdminTimePack[]>([]);
+  const [allocateForm, setAllocateForm] = useState<{
+    templateId: string;
+    pricePaidHellers: string;
+    note: string;
+  }>({ templateId: '', pricePaidHellers: '', note: '' });
 
   useEffect(() => {
     if (!getAccessToken()) router.replace('/login');
@@ -109,6 +128,56 @@ export default function CorporateAccountDetailPage({
       setShowAddMember(false);
       setCustomerSearch('');
       setCustomerOptions([]);
+      await reload();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Chyba');
+    }
+  }
+
+  async function openAllocate(type: 'credit' | 'bundle' | 'time') {
+    setAllocateType(type);
+    setAllocateForm({ templateId: '', pricePaidHellers: '', note: '' });
+    try {
+      if (type === 'credit' && creditTemplates.length === 0) {
+        setCreditTemplates((await listCreditPacks()).filter((t) => t.isActive));
+      } else if (type === 'bundle' && bundleTemplates.length === 0) {
+        setBundleTemplates((await listBundlePacks()).filter((t) => t.isActive));
+      } else if (type === 'time' && timeTemplates.length === 0) {
+        setTimeTemplates((await listTimePacks()).filter((t) => t.isActive));
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Chyba');
+    }
+  }
+
+  async function handleAllocateSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!allocateType || !allocateForm.templateId) return;
+    const note = allocateForm.note.trim() || undefined;
+    const pricePaidHellers = allocateForm.pricePaidHellers
+      ? Math.round(Number(allocateForm.pricePaidHellers) * 100)
+      : undefined;
+    try {
+      if (allocateType === 'credit') {
+        await allocateCreditPackToCorporate(id, {
+          creditPackId: allocateForm.templateId,
+          pricePaidHellers,
+          note,
+        });
+      } else if (allocateType === 'bundle') {
+        await allocateBundlePackToCorporate(id, {
+          bundlePackId: allocateForm.templateId,
+          pricePaidHellers,
+          note,
+        });
+      } else if (allocateType === 'time') {
+        await allocateTimePackToCorporate(id, {
+          timePackId: allocateForm.templateId,
+          pricePaidHellers,
+          note,
+        });
+      }
+      setAllocateType(null);
       await reload();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Chyba');
@@ -201,6 +270,37 @@ export default function CorporateAccountDetailPage({
             />
           </div>
         )}
+
+        {/* Allocate balíček */}
+        <section className="bg-white border border-slate-200 rounded p-4">
+          <div className="flex items-center justify-between">
+            <h3 className="font-semibold">Prodat firmě balíček</h3>
+            <div className="flex gap-2">
+              <button
+                onClick={() => openAllocate('credit')}
+                className="text-sm bg-blue-100 hover:bg-blue-200 text-blue-800 px-3 py-1.5 rounded font-medium"
+              >
+                + Permanentka
+              </button>
+              <button
+                onClick={() => openAllocate('bundle')}
+                className="text-sm bg-purple-100 hover:bg-purple-200 text-purple-800 px-3 py-1.5 rounded font-medium"
+              >
+                + Bundle
+              </button>
+              <button
+                onClick={() => openAllocate('time')}
+                className="text-sm bg-green-100 hover:bg-green-200 text-green-800 px-3 py-1.5 rounded font-medium"
+              >
+                + Časový
+              </button>
+            </div>
+          </div>
+          <p className="text-xs text-slate-500 mt-2">
+            Balíček bude sdílený mezi všemi aktivními členy firmy. Členové z něj čerpají při svých
+            rezervacích.
+          </p>
+        </section>
 
         {/* Members */}
         <section className="bg-white border border-slate-200 rounded">
@@ -306,6 +406,89 @@ export default function CorporateAccountDetailPage({
               </p>
             )}
           </section>
+        )}
+
+        {/* Allocate modal */}
+        {allocateType && (
+          <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4">
+            <form
+              onSubmit={handleAllocateSubmit}
+              className="bg-white rounded-lg shadow-xl max-w-md w-full p-6"
+            >
+              <h3 className="text-lg font-bold mb-4">
+                Prodat{' '}
+                {allocateType === 'credit'
+                  ? 'permanentku'
+                  : allocateType === 'bundle'
+                    ? 'bundle balíček'
+                    : 'časový balíček'}{' '}
+                firmě
+              </h3>
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-sm font-medium mb-1">Šablona</label>
+                  <select
+                    required
+                    value={allocateForm.templateId}
+                    onChange={(e) =>
+                      setAllocateForm({ ...allocateForm, templateId: e.target.value })
+                    }
+                    className="w-full border border-slate-300 rounded px-3 py-2 text-sm"
+                  >
+                    <option value="">— vyber —</option>
+                    {(allocateType === 'credit'
+                      ? creditTemplates
+                      : allocateType === 'bundle'
+                        ? bundleTemplates
+                        : timeTemplates
+                    ).map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.name} ({formatPrice(t.priceHellers)})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">
+                    Cena (Kč) — prázdné = default
+                  </label>
+                  <input
+                    type="number"
+                    value={allocateForm.pricePaidHellers}
+                    onChange={(e) =>
+                      setAllocateForm({ ...allocateForm, pricePaidHellers: e.target.value })
+                    }
+                    className="w-full border border-slate-300 rounded px-3 py-2 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Poznámka</label>
+                  <input
+                    type="text"
+                    value={allocateForm.note}
+                    onChange={(e) => setAllocateForm({ ...allocateForm, note: e.target.value })}
+                    className="w-full border border-slate-300 rounded px-3 py-2 text-sm"
+                  />
+                </div>
+              </div>
+              <div className="flex justify-end gap-2 mt-6">
+                <button
+                  type="button"
+                  onClick={() => setAllocateType(null)}
+                  className="px-4 py-2 border border-slate-300 rounded font-medium hover:bg-slate-50"
+                >
+                  Zrušit
+                </button>
+                <button
+                  type="submit"
+                  disabled={!allocateForm.templateId}
+                  className="px-4 py-2 bg-brand-600 hover:bg-brand-700 disabled:bg-slate-300 text-white rounded font-medium"
+                >
+                  Prodat
+                </button>
+              </div>
+            </form>
+          </div>
         )}
 
         {/* Add member modal */}

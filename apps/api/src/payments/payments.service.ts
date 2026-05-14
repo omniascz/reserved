@@ -13,6 +13,7 @@
 import {
   BadRequestException,
   ForbiddenException,
+  forwardRef,
   Inject,
   Injectable,
   NotFoundException,
@@ -21,6 +22,7 @@ import { and, desc, eq, gte, lte, sql } from 'drizzle-orm';
 import { schema } from '@reserved/db';
 import { type AppRole, type TenantContext } from '@reserved/rls-multitenancy';
 import { DbService } from '../db/db.service.js';
+import { SubscriptionsService } from '../subscriptions/subscriptions.service.js';
 import { generateSpaydString } from './qr-generator.js';
 import { PaymentProviderRegistry } from './providers/provider.registry.js';
 import type { WebhookEvent } from './providers/payment-provider.interface.js';
@@ -78,7 +80,27 @@ export class PaymentsService {
   constructor(
     @Inject(DbService) private readonly dbService: DbService,
     @Inject(PaymentProviderRegistry) private readonly providers: PaymentProviderRegistry,
+    @Inject(forwardRef(() => SubscriptionsService))
+    private readonly subscriptions: SubscriptionsService,
   ) {}
+
+  private isSubscriptionEventType(type: string, rawPayload: Record<string, unknown>): boolean {
+    if (
+      type === 'customer.subscription.created' ||
+      type === 'customer.subscription.updated' ||
+      type === 'customer.subscription.deleted' ||
+      type === 'invoice.payment_succeeded' ||
+      type === 'invoice.payment_failed'
+    ) {
+      return true;
+    }
+    // checkout.session.completed s mode='subscription'
+    if (type === 'checkout.session.completed') {
+      const session = (rawPayload as { data?: { object?: { mode?: string } } }).data?.object;
+      return session?.mode === 'subscription';
+    }
+    return false;
+  }
 
   // ─── Online checkout (Stripe/GoPay/Mock) ────────────────────────
 
@@ -233,6 +255,25 @@ export class PaymentsService {
           message: err instanceof Error ? err.message : 'Webhook verification failed.',
         },
       });
+    }
+
+    // 2b. Subscription eventy delegujeme do SubscriptionsService (sprint 3.3 fáze A3).
+    // Stripe pro subscription posila:
+    //   - customer.subscription.{created,updated,deleted}
+    //   - invoice.payment_{succeeded,failed}
+    //   - checkout.session.completed s mode='subscription'
+    if (
+      providerType === 'stripe' &&
+      this.subscriptions &&
+      event.stripeEventType &&
+      this.isSubscriptionEventType(event.stripeEventType, event.rawPayload)
+    ) {
+      const stripeEvent = event.rawPayload as unknown as import('stripe').default.Event;
+      const result = await this.subscriptions.handleStripeWebhook({
+        tenantId,
+        event: stripeEvent,
+      });
+      return { paymentId: null, status: result.handled ? 'subscription_handled' : 'ignored' };
     }
 
     // 3. Najdi nasi payment podle externalId

@@ -69,6 +69,18 @@ export class PortalMeController {
     return { data: await this.me.listMyCreditPacks(tenantId, customerId) };
   }
 
+  @Get('bundle-packs')
+  async listBundlePacks(@Req() req: Request): Promise<{ data: unknown }> {
+    const { tenantId, customerId } = this.requireAuth(req);
+    return { data: await this.me.listMyBundlePacks(tenantId, customerId) };
+  }
+
+  @Get('time-packs')
+  async listTimePacks(@Req() req: Request): Promise<{ data: unknown }> {
+    const { tenantId, customerId } = this.requireAuth(req);
+    return { data: await this.me.listMyTimePacks(tenantId, customerId) };
+  }
+
   @Post('bookings/:id/cancel')
   @HttpCode(200)
   async cancelBooking(

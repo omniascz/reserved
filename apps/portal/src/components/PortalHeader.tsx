@@ -12,6 +12,8 @@ export function PortalHeader() {
   const nav = [
     { href: `/${tenant}/bookings`, label: 'Moje rezervace' },
     { href: `/${tenant}/credit-packs`, label: 'Permanentky' },
+    { href: `/${tenant}/bundle-packs`, label: 'Bundle' },
+    { href: `/${tenant}/time-packs`, label: 'Časové' },
     { href: `/${tenant}/profile`, label: 'Profil' },
   ];
 
