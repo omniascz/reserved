@@ -38,3 +38,12 @@ export const AdjustTimePackSchema = z.object({
   note: z.string().max(500),
 });
 export type AdjustTimePackDto = z.infer<typeof AdjustTimePackSchema>;
+
+// Alokace firme (sprint 3.3 fáze B2-extended)
+export const AllocateTimePackToCorporateSchema = z.object({
+  timePackId: z.string().uuid(),
+  pricePaidHellers: z.number().int().nonnegative().optional(),
+  validFromIso: z.string().datetime().optional(),
+  note: z.string().max(500).optional().nullable(),
+});
+export type AllocateTimePackToCorporateDto = z.infer<typeof AllocateTimePackToCorporateSchema>;

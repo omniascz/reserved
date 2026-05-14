@@ -16,10 +16,12 @@ import { ZodValidationPipe } from '../auth/zod-validation.pipe.js';
 import {
   AdjustTimePackSchema,
   AllocateTimePackSchema,
+  AllocateTimePackToCorporateSchema,
   CreateTimePackSchema,
   UpdateTimePackSchema,
   type AdjustTimePackDto,
   type AllocateTimePackDto,
+  type AllocateTimePackToCorporateDto,
   type CreateTimePackDto,
   type UpdateTimePackDto,
 } from './dto/time-pack.dto.js';
@@ -102,6 +104,27 @@ export class TimePacksController {
   async uses(@CurrentUser() user: AccessTokenPayload, @Param('id', ParseUUIDPipe) id: string) {
     return {
       data: await this.svc.listUsesForAllocation(user.tenantId, user.sub, user.role, id),
+    };
+  }
+
+  // ─── Corporate allocation (sprint 3.3 fáze B2-extended) ──────────
+
+  @Post('corporate-accounts/:corporateAccountId/time-packs')
+  @HttpCode(201)
+  async allocateToCorporate(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('corporateAccountId', ParseUUIDPipe) corporateAccountId: string,
+    @Body(new ZodValidationPipe(AllocateTimePackToCorporateSchema))
+    dto: AllocateTimePackToCorporateDto,
+  ) {
+    return {
+      data: await this.svc.allocateToCorporate(
+        user.tenantId,
+        user.sub,
+        user.role,
+        corporateAccountId,
+        dto,
+      ),
     };
   }
 }

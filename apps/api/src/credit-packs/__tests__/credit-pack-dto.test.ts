@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   AdjustCreditsSchema,
   AllocateCreditPackSchema,
+  AllocateCreditPackToCorporateSchema,
   CreateCreditPackSchema,
 } from '../dto/credit-pack.dto.js';
 
@@ -165,6 +166,39 @@ describe('AdjustCreditsSchema', () => {
     const result = AdjustCreditsSchema.safeParse({
       creditsDelta: 1.5,
       note: 'pul kreditu',
+    });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe('AllocateCreditPackToCorporateSchema (sprint 3.3 fáze B2)', () => {
+  it('accepts minimal input', () => {
+    const result = AllocateCreditPackToCorporateSchema.safeParse({
+      creditPackId: '123e4567-e89b-12d3-a456-426614174000',
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('accepts price override + note', () => {
+    const result = AllocateCreditPackToCorporateSchema.safeParse({
+      creditPackId: '123e4567-e89b-12d3-a456-426614174000',
+      pricePaidHellers: 500000,
+      note: 'Firma X — Q1 2026 budget',
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects non-UUID creditPackId', () => {
+    const result = AllocateCreditPackToCorporateSchema.safeParse({
+      creditPackId: 'not-uuid',
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects negative price override', () => {
+    const result = AllocateCreditPackToCorporateSchema.safeParse({
+      creditPackId: '123e4567-e89b-12d3-a456-426614174000',
+      pricePaidHellers: -100,
     });
     expect(result.success).toBe(false);
   });

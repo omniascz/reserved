@@ -18,7 +18,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { and, asc, desc, eq, isNull, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull, or, sql } from 'drizzle-orm';
 import { schema } from '@reserved/db';
 import { type AppRole, serviceContext, type TenantContext } from '@reserved/rls-multitenancy';
 
@@ -27,6 +27,7 @@ import { DbService } from '../db/db.service.js';
 import type {
   AdjustBundleItemDto,
   AllocateBundlePackDto,
+  AllocateBundlePackToCorporateDto,
   CreateBundlePackDto,
   UpdateBundlePackDto,
 } from './dto/bundle-pack.dto.js';
@@ -226,6 +227,82 @@ export class BundlePacksService {
     });
   }
 
+  /** Alokace firme (sprint 3.3 fáze B2-extended). */
+  async allocateToCorporate(
+    tenantId: string,
+    userId: string,
+    role: AppRole,
+    corporateAccountId: string,
+    dto: AllocateBundlePackToCorporateDto,
+  ) {
+    assertCanAllocate(role);
+    return this.dbService.withRlsContext(ctxFor(tenantId, userId, role), async (tx) => {
+      const [account] = await tx
+        .select({ id: schema.corporateAccounts.id })
+        .from(schema.corporateAccounts)
+        .where(
+          and(
+            eq(schema.corporateAccounts.id, corporateAccountId),
+            eq(schema.corporateAccounts.tenantId, tenantId),
+            eq(schema.corporateAccounts.isActive, true),
+          ),
+        )
+        .limit(1);
+      if (!account) {
+        throw new NotFoundException({
+          error: { code: 'CORPORATE_ACCOUNT_NOT_FOUND', message: 'Aktivní firma nenalezena.' },
+        });
+      }
+
+      const [pack] = await tx
+        .select()
+        .from(schema.bundlePacks)
+        .where(
+          and(
+            eq(schema.bundlePacks.id, dto.bundlePackId),
+            eq(schema.bundlePacks.tenantId, tenantId),
+            eq(schema.bundlePacks.isActive, true),
+          ),
+        )
+        .limit(1);
+      if (!pack) {
+        throw new NotFoundException({
+          error: { code: 'BUNDLE_PACK_NOT_FOUND', message: 'Aktivní bundle balíček nenalezen.' },
+        });
+      }
+
+      const validFrom = dto.validFromIso ? new Date(dto.validFromIso) : new Date();
+      const validUntil = pack.validityDays
+        ? new Date(validFrom.getTime() + pack.validityDays * 24 * 60 * 60 * 1000)
+        : null;
+
+      const snapshotItems = pack.items as BundleItem[];
+      const itemsRemaining: BundleItem[] = snapshotItems.map((i) => ({ ...i }));
+
+      const [allocated] = await tx
+        .insert(schema.customerBundlePacks)
+        .values({
+          tenantId,
+          customerId: null,
+          corporateAccountId,
+          bundlePackId: pack.id,
+          itemsRemaining,
+          snapshotItems,
+          snapshotAllowedBranchIds: pack.allowedBranchIds,
+          snapshotSameVisitRequired: pack.sameVisitRequired,
+          validFrom,
+          validUntil,
+          status: 'active',
+          pricePaidHellers: dto.pricePaidHellers ?? pack.priceHellers,
+          soldBy: userId,
+          note: dto.note ?? null,
+        })
+        .returning();
+
+      return allocated!;
+    });
+  }
+
   async listForCustomer(tenantId: string, userId: string, role: AppRole, customerId: string) {
     return this.dbService.withRlsContext(ctxFor(tenantId, userId, role), async (tx) => {
       const rows = await tx
@@ -341,13 +418,34 @@ export class BundlePacksService {
     performedBy: string | null;
   }): Promise<{ allocationId: string; serviceId: string; quantityDeducted: number } | null> {
     return this.dbService.withRlsContext(serviceContext(input.tenantId), async (tx) => {
+      // Najdi firmy, kde je customer aktivni clen (B2-extended)
+      const corporateRows = await tx
+        .select({ corporateAccountId: schema.corporateAccountMembers.corporateAccountId })
+        .from(schema.corporateAccountMembers)
+        .where(
+          and(
+            eq(schema.corporateAccountMembers.tenantId, input.tenantId),
+            eq(schema.corporateAccountMembers.customerId, input.customerId),
+            isNull(schema.corporateAccountMembers.removedAt),
+          ),
+        );
+      const corporateIds = corporateRows.map((r) => r.corporateAccountId);
+
+      const ownerFilter =
+        corporateIds.length > 0
+          ? or(
+              eq(schema.customerBundlePacks.customerId, input.customerId),
+              inArray(schema.customerBundlePacks.corporateAccountId, corporateIds),
+            )
+          : eq(schema.customerBundlePacks.customerId, input.customerId);
+
       const candidates = await tx
         .select()
         .from(schema.customerBundlePacks)
         .where(
           and(
             eq(schema.customerBundlePacks.tenantId, input.tenantId),
-            eq(schema.customerBundlePacks.customerId, input.customerId),
+            ownerFilter,
             eq(schema.customerBundlePacks.status, 'active'),
             or(
               isNull(schema.customerBundlePacks.validUntil),
@@ -355,7 +453,11 @@ export class BundlePacksService {
             ),
           ),
         )
-        .orderBy(asc(schema.customerBundlePacks.validUntil));
+        .orderBy(
+          // Priorita: vlastni pred firemnimi.
+          sql`${schema.customerBundlePacks.corporateAccountId} ASC NULLS FIRST`,
+          asc(schema.customerBundlePacks.validUntil),
+        );
 
       for (const alloc of candidates) {
         const items = alloc.itemsRemaining as BundleItem[];

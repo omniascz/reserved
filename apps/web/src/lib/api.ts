@@ -930,3 +930,289 @@ export async function createCheckout(input: {
   );
   return data;
 }
+
+// ─── Bundle packs (sprint 3.3 phase A1) ───────────────────────────────
+
+export interface BundleItem {
+  serviceId: string;
+  quantity: number;
+}
+
+export interface AdminBundlePack {
+  id: string;
+  name: string;
+  description: string | null;
+  items: BundleItem[];
+  validityDays: number | null;
+  priceHellers: number;
+  currency: string;
+  allowedBranchIds: string[];
+  sameVisitRequired: boolean;
+  isActive: boolean;
+  createdAt: string;
+}
+
+export async function listBundlePacks(): Promise<AdminBundlePack[]> {
+  const { data } = await fetchApi<{ data: AdminBundlePack[] }>(`/admin/bundle-packs`);
+  return data;
+}
+
+export async function createBundlePack(input: {
+  name: string;
+  description?: string | null;
+  items: BundleItem[];
+  validityDays?: number | null;
+  priceHellers: number;
+  currency?: string;
+  allowedBranchIds?: string[];
+  sameVisitRequired?: boolean;
+  isActive?: boolean;
+}): Promise<AdminBundlePack> {
+  const { data } = await fetchApi<{ data: AdminBundlePack }>(`/admin/bundle-packs`, {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+  return data;
+}
+
+export async function updateBundlePack(
+  id: string,
+  input: Partial<Parameters<typeof createBundlePack>[0]>,
+): Promise<AdminBundlePack> {
+  const { data } = await fetchApi<{ data: AdminBundlePack }>(`/admin/bundle-packs/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(input),
+  });
+  return data;
+}
+
+export async function deleteBundlePack(id: string): Promise<void> {
+  await fetchApi(`/admin/bundle-packs/${id}`, { method: 'DELETE' });
+}
+
+// ─── Time packs (sprint 3.3 phase A2) ─────────────────────────────────
+
+export interface AdminTimePack {
+  id: string;
+  name: string;
+  description: string | null;
+  durationDays: number;
+  maxBookingsPerPeriod: number | null;
+  maxBookingsPerDay: number | null;
+  allowedServiceIds: string[];
+  allowedBranchIds: string[];
+  priceHellers: number;
+  currency: string;
+  isActive: boolean;
+  createdAt: string;
+}
+
+export async function listTimePacks(): Promise<AdminTimePack[]> {
+  const { data } = await fetchApi<{ data: AdminTimePack[] }>(`/admin/time-packs`);
+  return data;
+}
+
+export async function createTimePack(input: {
+  name: string;
+  description?: string | null;
+  durationDays: number;
+  maxBookingsPerPeriod?: number | null;
+  maxBookingsPerDay?: number | null;
+  allowedServiceIds?: string[];
+  allowedBranchIds?: string[];
+  priceHellers: number;
+  currency?: string;
+  isActive?: boolean;
+}): Promise<AdminTimePack> {
+  const { data } = await fetchApi<{ data: AdminTimePack }>(`/admin/time-packs`, {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+  return data;
+}
+
+export async function updateTimePack(
+  id: string,
+  input: Partial<Parameters<typeof createTimePack>[0]>,
+): Promise<AdminTimePack> {
+  const { data } = await fetchApi<{ data: AdminTimePack }>(`/admin/time-packs/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(input),
+  });
+  return data;
+}
+
+export async function deleteTimePack(id: string): Promise<void> {
+  await fetchApi(`/admin/time-packs/${id}`, { method: 'DELETE' });
+}
+
+// ─── Corporate accounts (sprint 3.3 B1-B3) ────────────────────────────
+
+export interface AdminCorporateAccount {
+  id: string;
+  companyName: string;
+  vatId: string | null;
+  companyRegId: string | null;
+  billingAddressLine1: string | null;
+  billingAddressLine2: string | null;
+  billingCity: string | null;
+  billingZip: string | null;
+  billingCountry: string;
+  contactEmail: string | null;
+  contactPhone: string | null;
+  contactPersonName: string | null;
+  note: string | null;
+  isActive: boolean;
+  createdAt: string;
+}
+
+export interface AdminCorporateMember {
+  id: string;
+  corporateAccountId: string;
+  customerId: string;
+  role: 'member' | 'admin';
+  joinedAt: string;
+  removedAt: string | null;
+  customer: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+    phone: string | null;
+  };
+}
+
+export interface AdminCorporateSummary {
+  activeMembers: number;
+  creditPacks: {
+    total: number;
+    active: number;
+    remainingCredits: number;
+    totalSpentHellers: number;
+  };
+  bundlePacks: { total: number; active: number; remainingItems: number; totalSpentHellers: number };
+  timePacks: { total: number; active: number; totalSpentHellers: number };
+  totalSpentHellers: number;
+}
+
+export interface AdminCorporateUsage {
+  type: 'credit' | 'bundle' | 'time';
+  useId: string;
+  createdAt: string;
+  quantity: number;
+  action: string;
+  bookingId: string | null;
+  customerId: string | null;
+  customerName: string | null;
+  serviceId: string | null;
+}
+
+export interface AdminCorporateUsageReport {
+  fromDate: string | null;
+  toDate: string | null;
+  totalUsages: number;
+  usages: AdminCorporateUsage[];
+}
+
+export async function listCorporateAccounts(): Promise<AdminCorporateAccount[]> {
+  const { data } = await fetchApi<{ data: AdminCorporateAccount[] }>(`/admin/corporate-accounts`);
+  return data;
+}
+
+export async function getCorporateAccount(id: string): Promise<AdminCorporateAccount> {
+  const { data } = await fetchApi<{ data: AdminCorporateAccount }>(
+    `/admin/corporate-accounts/${id}`,
+  );
+  return data;
+}
+
+export async function createCorporateAccount(input: {
+  companyName: string;
+  vatId?: string | null;
+  companyRegId?: string | null;
+  billingAddressLine1?: string | null;
+  billingAddressLine2?: string | null;
+  billingCity?: string | null;
+  billingZip?: string | null;
+  billingCountry?: string;
+  contactEmail?: string | null;
+  contactPhone?: string | null;
+  contactPersonName?: string | null;
+  note?: string | null;
+  isActive?: boolean;
+}): Promise<AdminCorporateAccount> {
+  const { data } = await fetchApi<{ data: AdminCorporateAccount }>(`/admin/corporate-accounts`, {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+  return data;
+}
+
+export async function updateCorporateAccount(
+  id: string,
+  input: Partial<Parameters<typeof createCorporateAccount>[0]>,
+): Promise<AdminCorporateAccount> {
+  const { data } = await fetchApi<{ data: AdminCorporateAccount }>(
+    `/admin/corporate-accounts/${id}`,
+    { method: 'PATCH', body: JSON.stringify(input) },
+  );
+  return data;
+}
+
+export async function deleteCorporateAccount(id: string): Promise<void> {
+  await fetchApi(`/admin/corporate-accounts/${id}`, { method: 'DELETE' });
+}
+
+export async function listCorporateMembers(id: string): Promise<AdminCorporateMember[]> {
+  const { data } = await fetchApi<{ data: AdminCorporateMember[] }>(
+    `/admin/corporate-accounts/${id}/members`,
+  );
+  return data;
+}
+
+export async function addCorporateMember(
+  id: string,
+  input: { customerId: string; role?: 'member' | 'admin' },
+): Promise<AdminCorporateMember> {
+  const { data } = await fetchApi<{ data: AdminCorporateMember }>(
+    `/admin/corporate-accounts/${id}/members`,
+    { method: 'POST', body: JSON.stringify(input) },
+  );
+  return data;
+}
+
+export async function updateCorporateMember(
+  memberId: string,
+  input: { role: 'member' | 'admin' },
+): Promise<AdminCorporateMember> {
+  const { data } = await fetchApi<{ data: AdminCorporateMember }>(
+    `/admin/corporate-accounts/members/${memberId}`,
+    { method: 'PATCH', body: JSON.stringify(input) },
+  );
+  return data;
+}
+
+export async function removeCorporateMember(memberId: string): Promise<void> {
+  await fetchApi(`/admin/corporate-accounts/members/${memberId}`, { method: 'DELETE' });
+}
+
+export async function getCorporateSummary(id: string): Promise<AdminCorporateSummary> {
+  const { data } = await fetchApi<{ data: AdminCorporateSummary }>(
+    `/admin/corporate-accounts/${id}/summary`,
+  );
+  return data;
+}
+
+export async function getCorporateUsageReport(
+  id: string,
+  params?: { from?: string; to?: string },
+): Promise<AdminCorporateUsageReport> {
+  const query = new URLSearchParams();
+  if (params?.from) query.set('from', params.from);
+  if (params?.to) query.set('to', params.to);
+  const qs = query.toString();
+  const { data } = await fetchApi<{ data: AdminCorporateUsageReport }>(
+    `/admin/corporate-accounts/${id}/usage-report${qs ? `?${qs}` : ''}`,
+  );
+  return data;
+}

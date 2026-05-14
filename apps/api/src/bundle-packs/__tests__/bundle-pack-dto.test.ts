@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   AdjustBundleItemSchema,
   AllocateBundlePackSchema,
+  AllocateBundlePackToCorporateSchema,
   CreateBundlePackSchema,
 } from '../dto/bundle-pack.dto.js';
 
@@ -183,6 +184,26 @@ describe('AdjustBundleItemSchema', () => {
       serviceId: 'not-uuid',
       quantityDelta: 1,
       note: 'x',
+    });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe('AllocateBundlePackToCorporateSchema (B2-extended)', () => {
+  it('accepts minimal input', () => {
+    const result = AllocateBundlePackToCorporateSchema.safeParse({ bundlePackId: UUID_A });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects non-UUID bundlePackId', () => {
+    const result = AllocateBundlePackToCorporateSchema.safeParse({ bundlePackId: 'not-uuid' });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects negative pricePaidHellers', () => {
+    const result = AllocateBundlePackToCorporateSchema.safeParse({
+      bundlePackId: UUID_A,
+      pricePaidHellers: -1,
     });
     expect(result.success).toBe(false);
   });
