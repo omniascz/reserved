@@ -17,6 +17,7 @@ const NAV = [
   { href: '/rules', label: 'Pravidla' },
   { href: '/blocks', label: 'Blokace' },
   { href: '/holidays', label: 'Svátky' },
+  { href: '/integrations', label: 'Integrace' },
   { href: '/settings', label: 'Nastavení' },
 ];
 
