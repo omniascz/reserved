@@ -26,6 +26,7 @@ import { RulesModule } from './rules/rules.module.js';
 import { ServicesModule } from './services/services.module.js';
 import { SettingsModule } from './settings/settings.module.js';
 import { TenantModule } from './tenant/tenant.module.js';
+import { WebhooksModule } from './webhooks/webhooks.module.js';
 import { TenantMiddleware } from './tenant/tenant.middleware.js';
 
 @Module({
@@ -38,6 +39,7 @@ import { TenantMiddleware } from './tenant/tenant.middleware.js';
     TenantModule,
     AuthModule,
     FeatureFlagsModule,
+    WebhooksModule,
     SettingsModule,
     BranchesModule,
     ServicesModule,

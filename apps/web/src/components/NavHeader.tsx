@@ -21,6 +21,7 @@ const NAV = [
   { href: '/blocks', label: 'Blokace' },
   { href: '/holidays', label: 'Svátky' },
   { href: '/integrations', label: 'Integrace' },
+  { href: '/webhooks', label: 'Webhooky' },
   { href: '/feature-flags', label: 'Flags' },
   { href: '/settings', label: 'Nastavení' },
 ];
