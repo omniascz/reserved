@@ -20,6 +20,7 @@ const NAV = [
   { href: '/rules', label: 'Pravidla' },
   { href: '/blocks', label: 'Blokace' },
   { href: '/holidays', label: 'Svátky' },
+  { href: '/feature-flags', label: 'Flags' },
   { href: '/settings', label: 'Nastavení' },
 ];
 

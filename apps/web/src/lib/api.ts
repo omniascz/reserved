@@ -1576,3 +1576,49 @@ export async function getCorporateUsageReport(
   );
   return data;
 }
+
+// ─── Feature flags (sprint 3.3 fáze D) ────────────────────────────────
+
+export interface AdminFeatureFlag {
+  id: string;
+  key: string;
+  description: string | null;
+  isEnabled: boolean;
+  config: Record<string, unknown>;
+  updatedBy: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export async function listFeatureFlags(): Promise<AdminFeatureFlag[]> {
+  const { data } = await fetchApi<{ data: AdminFeatureFlag[] }>(`/admin/feature-flags`);
+  return data;
+}
+
+export async function upsertFeatureFlag(input: {
+  key: string;
+  description?: string | null;
+  isEnabled: boolean;
+  config?: Record<string, unknown>;
+}): Promise<AdminFeatureFlag> {
+  const { data } = await fetchApi<{ data: AdminFeatureFlag }>(`/admin/feature-flags`, {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+  return data;
+}
+
+export async function toggleFeatureFlag(
+  key: string,
+  isEnabled: boolean,
+): Promise<AdminFeatureFlag> {
+  const { data } = await fetchApi<{ data: AdminFeatureFlag }>(
+    `/admin/feature-flags/${encodeURIComponent(key)}`,
+    { method: 'PATCH', body: JSON.stringify({ isEnabled }) },
+  );
+  return data;
+}
+
+export async function deleteFeatureFlag(key: string): Promise<void> {
+  await fetchApi(`/admin/feature-flags/${encodeURIComponent(key)}`, { method: 'DELETE' });
+}
