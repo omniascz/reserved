@@ -40,3 +40,10 @@ export const UpdateMemberSchema = z.object({
   role: z.enum(['member', 'admin']),
 });
 export type UpdateMemberDto = z.infer<typeof UpdateMemberSchema>;
+
+// Reporting (sprint 3.3 fáze B3)
+export const UsageReportQuerySchema = z.object({
+  from: z.string().datetime().optional(),
+  to: z.string().datetime().optional(),
+});
+export type UsageReportQueryDto = z.infer<typeof UsageReportQuerySchema>;

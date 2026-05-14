@@ -9,6 +9,7 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Query,
 } from '@nestjs/common';
 import { CurrentUser } from '../auth/decorators/current-user.decorator.js';
 import type { AccessTokenPayload } from '../auth/auth.types.js';
@@ -18,6 +19,7 @@ import {
   CreateCorporateAccountSchema,
   UpdateCorporateAccountSchema,
   UpdateMemberSchema,
+  UsageReportQuerySchema,
   type AddMemberDto,
   type CreateCorporateAccountDto,
   type UpdateCorporateAccountDto,
@@ -101,6 +103,31 @@ export class CorporateAccountsController {
     @Param('memberId', ParseUUIDPipe) memberId: string,
   ) {
     await this.svc.removeMember(user.tenantId, user.sub, user.role, memberId);
+  }
+
+  // ─── Reporting (sprint 3.3 fáze B3) ──────────────────────────────
+
+  @Get('corporate-accounts/:id/summary')
+  async getSummary(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return { data: await this.svc.getSummary(user.tenantId, user.sub, user.role, id) };
+  }
+
+  @Get('corporate-accounts/:id/usage-report')
+  async getUsageReport(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query() rawQuery: Record<string, string>,
+  ) {
+    const parsed = UsageReportQuerySchema.parse(rawQuery);
+    return {
+      data: await this.svc.getUsageReport(user.tenantId, user.sub, user.role, id, {
+        fromDate: parsed.from ? new Date(parsed.from) : undefined,
+        toDate: parsed.to ? new Date(parsed.to) : undefined,
+      }),
+    };
   }
 
   // ─── Reverse: do kterych firem patri customer ────────────────────

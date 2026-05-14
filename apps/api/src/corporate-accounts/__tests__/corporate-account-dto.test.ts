@@ -3,6 +3,7 @@ import {
   AddMemberSchema,
   CreateCorporateAccountSchema,
   UpdateMemberSchema,
+  UsageReportQuerySchema,
 } from '../dto/corporate-account.dto.js';
 
 const UUID_A = '123e4567-e89b-12d3-a456-426614174000';
@@ -116,5 +117,30 @@ describe('UpdateMemberSchema', () => {
   it('accepts role change', () => {
     const result = UpdateMemberSchema.safeParse({ role: 'admin' });
     expect(result.success).toBe(true);
+  });
+});
+
+describe('UsageReportQuerySchema (B3)', () => {
+  it('accepts prazdne dotaz', () => {
+    const result = UsageReportQuerySchema.safeParse({});
+    expect(result.success).toBe(true);
+  });
+
+  it('accepts jen from', () => {
+    const result = UsageReportQuerySchema.safeParse({ from: '2026-01-01T00:00:00.000Z' });
+    expect(result.success).toBe(true);
+  });
+
+  it('accepts from + to', () => {
+    const result = UsageReportQuerySchema.safeParse({
+      from: '2026-01-01T00:00:00.000Z',
+      to: '2026-03-31T23:59:59.000Z',
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects neplatne ISO datum', () => {
+    const result = UsageReportQuerySchema.safeParse({ from: '2026-01-01' });
+    expect(result.success).toBe(false);
   });
 });
