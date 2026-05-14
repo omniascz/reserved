@@ -990,6 +990,62 @@ export async function deleteBundlePack(id: string): Promise<void> {
   await fetchApi(`/admin/bundle-packs/${id}`, { method: 'DELETE' });
 }
 
+// ─── Time packs (sprint 3.3 phase A2) ─────────────────────────────────
+
+export interface AdminTimePack {
+  id: string;
+  name: string;
+  description: string | null;
+  durationDays: number;
+  maxBookingsPerPeriod: number | null;
+  maxBookingsPerDay: number | null;
+  allowedServiceIds: string[];
+  allowedBranchIds: string[];
+  priceHellers: number;
+  currency: string;
+  isActive: boolean;
+  createdAt: string;
+}
+
+export async function listTimePacks(): Promise<AdminTimePack[]> {
+  const { data } = await fetchApi<{ data: AdminTimePack[] }>(`/admin/time-packs`);
+  return data;
+}
+
+export async function createTimePack(input: {
+  name: string;
+  description?: string | null;
+  durationDays: number;
+  maxBookingsPerPeriod?: number | null;
+  maxBookingsPerDay?: number | null;
+  allowedServiceIds?: string[];
+  allowedBranchIds?: string[];
+  priceHellers: number;
+  currency?: string;
+  isActive?: boolean;
+}): Promise<AdminTimePack> {
+  const { data } = await fetchApi<{ data: AdminTimePack }>(`/admin/time-packs`, {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+  return data;
+}
+
+export async function updateTimePack(
+  id: string,
+  input: Partial<Parameters<typeof createTimePack>[0]>,
+): Promise<AdminTimePack> {
+  const { data } = await fetchApi<{ data: AdminTimePack }>(`/admin/time-packs/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(input),
+  });
+  return data;
+}
+
+export async function deleteTimePack(id: string): Promise<void> {
+  await fetchApi(`/admin/time-packs/${id}`, { method: 'DELETE' });
+}
+
 // ─── Corporate accounts (sprint 3.3 B1-B3) ────────────────────────────
 
 export interface AdminCorporateAccount {
