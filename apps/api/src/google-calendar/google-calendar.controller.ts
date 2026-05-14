@@ -1,9 +1,11 @@
 import {
+  Body,
   Controller,
   Get,
   Inject,
   Param,
   ParseUUIDPipe,
+  Patch,
   Query,
   Post,
   Delete,
@@ -80,5 +82,32 @@ export class GoogleCalendarController {
     @Param('employeeId', ParseUUIDPipe) employeeId: string,
   ) {
     await this.svc.revoke(user.tenantId, user.sub, user.role, employeeId);
+  }
+
+  /**
+   * Prepnout inbound sync (G -> R) pro daneho employee.
+   */
+  @Patch('connections/:employeeId/inbound')
+  async setInbound(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('employeeId', ParseUUIDPipe) employeeId: string,
+    @Body() body: { enabled: boolean },
+  ) {
+    await this.svc.setInboundEnabled(user.tenantId, user.sub, user.role, employeeId, body.enabled);
+    return { data: { ok: true } };
+  }
+
+  /**
+   * Spusti manualne inbound sync pro daneho employee.
+   * Stahne eventy z Google a vytvori/aktualizuje availability_blocks.
+   */
+  @Post('connections/:employeeId/sync-inbound')
+  async syncInbound(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('employeeId', ParseUUIDPipe) employeeId: string,
+  ) {
+    return {
+      data: await this.svc.syncInbound(user.tenantId, user.sub, user.role, employeeId),
+    };
   }
 }

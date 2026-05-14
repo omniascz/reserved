@@ -10,7 +10,9 @@ import {
   listEmployees,
   listGoogleConnections,
   revokeGoogleConnection,
+  setGoogleInboundEnabled,
   startGoogleConnect,
+  syncGoogleInbound,
   type AdminEmployee,
   type AdminGoogleConnection,
 } from '@/lib/api';
@@ -97,6 +99,31 @@ export default function IntegrationsPage() {
     }
   }
 
+  async function handleToggleInbound(employeeId: string, current: boolean) {
+    setError(null);
+    try {
+      await setGoogleInboundEnabled(employeeId, !current);
+      reload();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Chyba');
+    }
+  }
+
+  async function handleSyncInbound(employeeId: string, displayName: string) {
+    setError(null);
+    setSuccess(null);
+    try {
+      const result = await syncGoogleInbound(employeeId);
+      setSuccess(
+        `Sync OK (${displayName}): vytvořeno ${result.created}, aktualizováno ${result.updated}, smazáno ${result.deleted}, přeskočeno ${result.skipped}.`,
+      );
+      setTimeout(() => setSuccess(null), 6000);
+      reload();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Chyba');
+    }
+  }
+
   // Map employee -> nejnovejsi aktivni connection (nebo posledni revokovana)
   const byEmployee = new Map<string, AdminGoogleConnection>();
   for (const conn of connections) {
@@ -141,8 +168,9 @@ export default function IntegrationsPage() {
             <h3 className="font-semibold">Google Calendar</h3>
             <p className="text-xs text-slate-500 mt-1">
               Po propojení se rezervace zaměstnance automaticky synchronizují do jeho Google
-              Kalendáře (outbound). Inbound sync (blokace dovolených/událostí z Google) bude přidán
-              v další iteraci.
+              Kalendáře (outbound). Volitelně lze zapnout i inbound sync — události z Google
+              (dovolené, schůzky) se pak v Reserved zobrazí jako blokované časy, takže je nelze
+              nabookovat.
             </p>
           </div>
 
@@ -163,7 +191,8 @@ export default function IntegrationsPage() {
                   <th className="px-4 py-2">Zaměstnanec</th>
                   <th className="px-4 py-2">Google účet</th>
                   <th className="px-4 py-2">Stav</th>
-                  <th className="px-4 py-2">Poslední sync</th>
+                  <th className="px-4 py-2">Outbound sync</th>
+                  <th className="px-4 py-2">Inbound (G→R)</th>
                   <th className="px-4 py-2 text-right">Akce</th>
                 </tr>
               </thead>
@@ -207,6 +236,37 @@ export default function IntegrationsPage() {
                       </td>
                       <td className="px-4 py-3 text-xs text-slate-500">
                         {formatDate(conn?.lastSyncedAt ?? null)}
+                      </td>
+                      <td className="px-4 py-3">
+                        {isConnected ? (
+                          <div className="flex flex-col gap-1">
+                            <label className="inline-flex items-center gap-2 text-xs">
+                              <input
+                                type="checkbox"
+                                checked={conn?.inboundSyncEnabled ?? false}
+                                onChange={() =>
+                                  handleToggleInbound(emp.id, conn?.inboundSyncEnabled ?? false)
+                                }
+                              />
+                              Zapnuto
+                            </label>
+                            {conn?.inboundSyncEnabled && (
+                              <>
+                                <span className="text-xs text-slate-500">
+                                  {formatDate(conn?.lastInboundSyncAt ?? null)}
+                                </span>
+                                <button
+                                  onClick={() => handleSyncInbound(emp.id, displayName)}
+                                  className="text-xs text-brand-600 hover:underline self-start"
+                                >
+                                  Sync teď
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-xs text-slate-400">—</span>
+                        )}
                       </td>
                       <td className="px-4 py-3 text-right">
                         {isConnected ? (

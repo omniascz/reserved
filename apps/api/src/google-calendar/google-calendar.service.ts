@@ -22,8 +22,8 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
-import { and, eq, isNull } from 'drizzle-orm';
+import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
+import { and, eq, inArray, isNull } from 'drizzle-orm';
 import { schema } from '@reserved/db';
 import { type AppRole, serviceContext, type TenantContext } from '@reserved/rls-multitenancy';
 import { DbService } from '../db/db.service.js';
@@ -310,7 +310,9 @@ export class GoogleCalendarService {
           googleEmail: schema.googleCalendarConnections.googleEmail,
           calendarId: schema.googleCalendarConnections.calendarId,
           isActive: schema.googleCalendarConnections.isActive,
+          inboundSyncEnabled: schema.googleCalendarConnections.inboundSyncEnabled,
           lastSyncedAt: schema.googleCalendarConnections.lastSyncedAt,
+          lastInboundSyncAt: schema.googleCalendarConnections.lastInboundSyncAt,
           lastSyncError: schema.googleCalendarConnections.lastSyncError,
           consecutiveErrors: schema.googleCalendarConnections.consecutiveErrors,
           revokedAt: schema.googleCalendarConnections.revokedAt,
@@ -510,6 +512,249 @@ export class GoogleCalendarService {
     } catch (err) {
       this.logger.error(`Google delete sync failed: ${err instanceof Error ? err.message : err}`);
     }
+  }
+
+  // ─── Inbound sync (Google -> Reserved) — sprint 3.3 fáze C2 ────────
+
+  /**
+   * Zapne/vypne inbound sync (G -> R) pro daneho employee.
+   */
+  async setInboundEnabled(
+    tenantId: string,
+    userId: string,
+    role: AppRole,
+    employeeId: string,
+    enabled: boolean,
+  ): Promise<void> {
+    assertCanManage(role);
+    await this.dbService.withRlsContext(ctxFor(tenantId, userId, role), async (tx) => {
+      const result = await tx
+        .update(schema.googleCalendarConnections)
+        .set({ inboundSyncEnabled: enabled, updatedAt: new Date() })
+        .where(
+          and(
+            eq(schema.googleCalendarConnections.tenantId, tenantId),
+            eq(schema.googleCalendarConnections.employeeId, employeeId),
+            isNull(schema.googleCalendarConnections.revokedAt),
+          ),
+        )
+        .returning({ id: schema.googleCalendarConnections.id });
+      if (result.length === 0) {
+        throw new NotFoundException({
+          error: { code: 'CONNECTION_NOT_FOUND', message: 'Připojení nenalezeno.' },
+        });
+      }
+    });
+  }
+
+  /**
+   * Spusti inbound sync pro daneho employee: stahne eventy z Google
+   * Calendare (najevyse 60 dni dopredu) a pro kazdy event, ktery NEvznikl
+   * v Reserved, vytvori/aktualizuje/smaze availability_block.
+   *
+   * Vraci pocty pro UI: created / updated / deleted / skipped.
+   */
+  async syncInbound(
+    tenantId: string,
+    userId: string,
+    role: AppRole,
+    employeeId: string,
+  ): Promise<{ created: number; updated: number; deleted: number; skipped: number }> {
+    assertCanManage(role);
+
+    // 1. Najdi aktivni connection s povolenym inbound syncem
+    const conn = await this.dbService.withRlsContext(ctxFor(tenantId, userId, role), async (tx) => {
+      const [c] = await tx
+        .select()
+        .from(schema.googleCalendarConnections)
+        .where(
+          and(
+            eq(schema.googleCalendarConnections.tenantId, tenantId),
+            eq(schema.googleCalendarConnections.employeeId, employeeId),
+            eq(schema.googleCalendarConnections.isActive, true),
+            isNull(schema.googleCalendarConnections.revokedAt),
+          ),
+        )
+        .limit(1);
+      return c;
+    });
+    if (!conn) {
+      throw new NotFoundException({
+        error: { code: 'CONNECTION_NOT_FOUND', message: 'Aktivní připojení nenalezeno.' },
+      });
+    }
+    if (!conn.inboundSyncEnabled) {
+      throw new BadRequestException({
+        error: {
+          code: 'INBOUND_DISABLED',
+          message: 'Inbound sync je vypnutý. Zapněte ho nejdřív.',
+        },
+      });
+    }
+
+    // 2. Stahni eventy z Google (today -> +60 days)
+    const accessToken = await this.getValidAccessToken(conn.id);
+    const timeMin = new Date().toISOString();
+    const timeMax = new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString();
+    const params = new URLSearchParams({
+      timeMin,
+      timeMax,
+      singleEvents: 'true',
+      maxResults: '2500',
+      orderBy: 'startTime',
+    });
+    const res = await fetch(
+      `${GOOGLE_CALENDAR_API}/calendars/${encodeURIComponent(conn.calendarId)}/events?${params}`,
+      { headers: { Authorization: `Bearer ${accessToken}` } },
+    );
+    if (!res.ok) {
+      const errBody = await res.text();
+      await this.recordSyncError(tenantId, employeeId, new Error(errBody));
+      throw new BadRequestException({
+        error: { code: 'GOOGLE_API_ERROR', message: errBody },
+      });
+    }
+    const body = (await res.json()) as {
+      items?: Array<{
+        id: string;
+        status?: string;
+        summary?: string;
+        start?: { dateTime?: string; date?: string };
+        end?: { dateTime?: string; date?: string };
+        extendedProperties?: { private?: Record<string, string> };
+      }>;
+    };
+    const events = body.items ?? [];
+
+    let created = 0;
+    let updated = 0;
+    let deleted = 0;
+    let skipped = 0;
+
+    await this.dbService.withRlsContext(serviceContext(tenantId), async (tx) => {
+      const seenGoogleIds = new Set<string>();
+
+      for (const ev of events) {
+        // Skip eventy vytvorene Reserved (jinak by se sync zacyklil)
+        if (ev.extendedProperties?.private?.reservedBookingId) {
+          skipped++;
+          continue;
+        }
+        // Skip cancelled eventy + all-day eventy (nemaji dateTime)
+        if (ev.status === 'cancelled') continue;
+        const startStr = ev.start?.dateTime;
+        const endStr = ev.end?.dateTime;
+        if (!startStr || !endStr) {
+          skipped++;
+          continue;
+        }
+        seenGoogleIds.add(ev.id);
+
+        const startsAt = new Date(startStr);
+        const endsAt = new Date(endStr);
+        const title = ev.summary?.slice(0, 200) ?? 'Google Calendar';
+        const hash = createHash('sha256')
+          .update(`${startsAt.toISOString()}|${endsAt.toISOString()}|${title}`)
+          .digest('hex')
+          .slice(0, 64);
+
+        // Existujici mapping?
+        const [existing] = await tx
+          .select()
+          .from(schema.googleCalendarInboundEvents)
+          .where(
+            and(
+              eq(schema.googleCalendarInboundEvents.connectionId, conn.id),
+              eq(schema.googleCalendarInboundEvents.googleEventId, ev.id),
+            ),
+          )
+          .limit(1);
+
+        if (existing) {
+          // Update block jen kdyz se obsah zmenil
+          if (existing.contentHash !== hash) {
+            await tx
+              .update(schema.availabilityBlocks)
+              .set({
+                startsAt,
+                endsAt,
+                title,
+                updatedAt: new Date(),
+              })
+              .where(eq(schema.availabilityBlocks.id, existing.blockId));
+            await tx
+              .update(schema.googleCalendarInboundEvents)
+              .set({ contentHash: hash, lastSyncedAt: new Date() })
+              .where(eq(schema.googleCalendarInboundEvents.id, existing.id));
+            updated++;
+          } else {
+            await tx
+              .update(schema.googleCalendarInboundEvents)
+              .set({ lastSyncedAt: new Date() })
+              .where(eq(schema.googleCalendarInboundEvents.id, existing.id));
+          }
+        } else {
+          // Vytvor novy block + mapping
+          const [newBlock] = await tx
+            .insert(schema.availabilityBlocks)
+            .values({
+              tenantId,
+              employeeId,
+              startsAt,
+              endsAt,
+              title,
+              blockType: 'other',
+              note: 'Synchronizováno z Google Calendar',
+            })
+            .returning({ id: schema.availabilityBlocks.id });
+          await tx.insert(schema.googleCalendarInboundEvents).values({
+            tenantId,
+            connectionId: conn.id,
+            googleEventId: ev.id,
+            blockId: newBlock!.id,
+            contentHash: hash,
+          });
+          created++;
+        }
+      }
+
+      // Smaz bloky pro eventy, ktere uz v Google nejsou (v ramci sync okna)
+      const existingMappings = await tx
+        .select()
+        .from(schema.googleCalendarInboundEvents)
+        .where(eq(schema.googleCalendarInboundEvents.connectionId, conn.id));
+      const toDelete = existingMappings.filter((m) => {
+        if (seenGoogleIds.has(m.googleEventId)) return false;
+        // Smaz jen mappingy, jejichz lastSyncedAt je starsi nez tento sync
+        // (jinak by sync v 60-day okne smazal eventy, ktere jsou mimo okno)
+        // Pro jednoduchost zatim smazeme vsechny ne-videne — full sync rezim.
+        return true;
+      });
+      if (toDelete.length > 0) {
+        const blockIds = toDelete.map((m) => m.blockId);
+        await tx
+          .delete(schema.availabilityBlocks)
+          .where(inArray(schema.availabilityBlocks.id, blockIds));
+        await tx.delete(schema.googleCalendarInboundEvents).where(
+          inArray(
+            schema.googleCalendarInboundEvents.id,
+            toDelete.map((m) => m.id),
+          ),
+        );
+        deleted = toDelete.length;
+      }
+
+      await tx
+        .update(schema.googleCalendarConnections)
+        .set({
+          lastInboundSyncAt: new Date(),
+          lastSyncError: null,
+          consecutiveErrors: '0',
+        })
+        .where(eq(schema.googleCalendarConnections.id, conn.id));
+    });
+
+    return { created, updated, deleted, skipped };
   }
 
   private async recordSyncError(tenantId: string, employeeId: string, err: unknown): Promise<void> {

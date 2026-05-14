@@ -1586,11 +1586,35 @@ export interface AdminGoogleConnection {
   googleEmail: string | null;
   calendarId: string;
   isActive: boolean;
+  inboundSyncEnabled: boolean;
   lastSyncedAt: string | null;
+  lastInboundSyncAt: string | null;
   lastSyncError: string | null;
   consecutiveErrors: string;
   revokedAt: string | null;
   createdAt: string;
+}
+
+export interface InboundSyncResult {
+  created: number;
+  updated: number;
+  deleted: number;
+  skipped: number;
+}
+
+export async function setGoogleInboundEnabled(employeeId: string, enabled: boolean): Promise<void> {
+  await fetchApi(`/admin/integrations/google/connections/${employeeId}/inbound`, {
+    method: 'PATCH',
+    body: JSON.stringify({ enabled }),
+  });
+}
+
+export async function syncGoogleInbound(employeeId: string): Promise<InboundSyncResult> {
+  const { data } = await fetchApi<{ data: InboundSyncResult }>(
+    `/admin/integrations/google/connections/${employeeId}/sync-inbound`,
+    { method: 'POST' },
+  );
+  return data;
 }
 
 export async function listGoogleConnections(): Promise<AdminGoogleConnection[]> {
