@@ -1,6 +1,6 @@
 {
-  "id": "d0743053-58e7-4040-9712-ba2731b41191",
-  "prevId": "03f5f477-99b5-4ce5-9068-aee43fd7626b",
+  "id": "d0aa43a7-b203-4906-ba6e-a4bd96777c26",
+  "prevId": "c7462d0b-8147-4b6b-8222-7dda2bfca0f8",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -5295,7 +5295,13 @@
           "name": "customer_id",
           "type": "uuid",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
+        },
+        "corporate_account_id": {
+          "name": "corporate_account_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
         },
         "credit_pack_id": {
           "name": "credit_pack_id",
@@ -5433,6 +5439,27 @@
           "method": "btree",
           "with": {}
         },
+        "customer_credit_packs_corporate_idx": {
+          "name": "customer_credit_packs_corporate_idx",
+          "columns": [
+            {
+              "expression": "corporate_account_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
         "customer_credit_packs_validity_idx": {
           "name": "customer_credit_packs_validity_idx",
           "columns": [
@@ -5475,6 +5502,19 @@
           "tableTo": "customers",
           "columnsFrom": [
             "customer_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "customer_credit_packs_corporate_account_id_corporate_accounts_id_fk": {
+          "name": "customer_credit_packs_corporate_account_id_corporate_accounts_id_fk",
+          "tableFrom": "customer_credit_packs",
+          "tableTo": "corporate_accounts",
+          "columnsFrom": [
+            "corporate_account_id"
           ],
           "columnsTo": [
             "id"
@@ -5877,7 +5917,13 @@
           "name": "customer_id",
           "type": "uuid",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
+        },
+        "corporate_account_id": {
+          "name": "corporate_account_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
         },
         "bundle_pack_id": {
           "name": "bundle_pack_id",
@@ -6004,6 +6050,27 @@
           "method": "btree",
           "with": {}
         },
+        "customer_bundle_packs_corporate_idx": {
+          "name": "customer_bundle_packs_corporate_idx",
+          "columns": [
+            {
+              "expression": "corporate_account_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
         "customer_bundle_packs_validity_idx": {
           "name": "customer_bundle_packs_validity_idx",
           "columns": [
@@ -6046,6 +6113,19 @@
           "tableTo": "customers",
           "columnsFrom": [
             "customer_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "customer_bundle_packs_corporate_account_id_corporate_accounts_id_fk": {
+          "name": "customer_bundle_packs_corporate_account_id_corporate_accounts_id_fk",
+          "tableFrom": "customer_bundle_packs",
+          "tableTo": "corporate_accounts",
+          "columnsFrom": [
+            "corporate_account_id"
           ],
           "columnsTo": [
             "id"
@@ -6107,7 +6187,13 @@
           "name": "customer_id",
           "type": "uuid",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
+        },
+        "corporate_account_id": {
+          "name": "corporate_account_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
         },
         "time_pack_id": {
           "name": "time_pack_id",
@@ -6239,6 +6325,27 @@
           "method": "btree",
           "with": {}
         },
+        "customer_time_packs_corporate_idx": {
+          "name": "customer_time_packs_corporate_idx",
+          "columns": [
+            {
+              "expression": "corporate_account_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
         "customer_time_packs_validity_idx": {
           "name": "customer_time_packs_validity_idx",
           "columns": [
@@ -6281,6 +6388,19 @@
           "tableTo": "customers",
           "columnsFrom": [
             "customer_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "customer_time_packs_corporate_account_id_corporate_accounts_id_fk": {
+          "name": "customer_time_packs_corporate_account_id_corporate_accounts_id_fk",
+          "tableFrom": "customer_time_packs",
+          "tableTo": "corporate_accounts",
+          "columnsFrom": [
+            "corporate_account_id"
           ],
           "columnsTo": [
             "id"
@@ -6689,8 +6809,8 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.customer_subscriptions": {
-      "name": "customer_subscriptions",
+    "public.corporate_account_members": {
+      "name": "corporate_account_members",
       "schema": "",
       "columns": {
         "id": {
@@ -6702,6 +6822,12 @@
         },
         "tenant_id": {
           "name": "tenant_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "corporate_account_id": {
+          "name": "corporate_account_id",
           "type": "uuid",
           "primaryKey": false,
           "notNull": true
@@ -6712,111 +6838,36 @@
           "primaryKey": false,
           "notNull": true
         },
-        "plan_id": {
-          "name": "plan_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "stripe_customer_id": {
-          "name": "stripe_customer_id",
-          "type": "varchar(255)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "stripe_subscription_id": {
-          "name": "stripe_subscription_id",
-          "type": "varchar(255)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "status": {
-          "name": "status",
-          "type": "varchar(30)",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'incomplete'"
-        },
-        "current_period_start": {
-          "name": "current_period_start",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "current_period_end": {
-          "name": "current_period_end",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "trial_end": {
-          "name": "trial_end",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "canceled_at": {
-          "name": "canceled_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "cancel_at_period_end": {
-          "name": "cancel_at_period_end",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": false
-        },
-        "snapshot_benefits": {
-          "name": "snapshot_benefits",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'{}'::jsonb"
-        },
-        "snapshot_billing_interval": {
-          "name": "snapshot_billing_interval",
+        "role": {
+          "name": "role",
           "type": "varchar(20)",
           "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "default": "'member'"
         },
-        "snapshot_price_hellers": {
-          "name": "snapshot_price_hellers",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "sold_by": {
-          "name": "sold_by",
+        "added_by": {
+          "name": "added_by",
           "type": "uuid",
           "primaryKey": false,
           "notNull": false
         },
-        "note": {
-          "name": "note",
-          "type": "text",
+        "joined_at": {
+          "name": "joined_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "removed_at": {
+          "name": "removed_at",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
         }
       },
       "indexes": {
-        "customer_subscriptions_tenant_idx": {
-          "name": "customer_subscriptions_tenant_idx",
+        "corporate_account_members_tenant_idx": {
+          "name": "corporate_account_members_tenant_idx",
           "columns": [
             {
               "expression": "tenant_id",
@@ -6830,8 +6881,29 @@
           "method": "btree",
           "with": {}
         },
-        "customer_subscriptions_customer_idx": {
-          "name": "customer_subscriptions_customer_idx",
+        "corporate_account_members_corporate_idx": {
+          "name": "corporate_account_members_corporate_idx",
+          "columns": [
+            {
+              "expression": "corporate_account_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "removed_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "corporate_account_members_customer_idx": {
+          "name": "corporate_account_members_customer_idx",
           "columns": [
             {
               "expression": "customer_id",
@@ -6840,43 +6912,7 @@
               "nulls": "last"
             },
             {
-              "expression": "status",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "customer_subscriptions_stripe_idx": {
-          "name": "customer_subscriptions_stripe_idx",
-          "columns": [
-            {
-              "expression": "stripe_subscription_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "customer_subscriptions_period_end_idx": {
-          "name": "customer_subscriptions_period_end_idx",
-          "columns": [
-            {
-              "expression": "current_period_end",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "status",
+              "expression": "removed_at",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -6889,9 +6925,9 @@
         }
       },
       "foreignKeys": {
-        "customer_subscriptions_tenant_id_tenants_id_fk": {
-          "name": "customer_subscriptions_tenant_id_tenants_id_fk",
-          "tableFrom": "customer_subscriptions",
+        "corporate_account_members_tenant_id_tenants_id_fk": {
+          "name": "corporate_account_members_tenant_id_tenants_id_fk",
+          "tableFrom": "corporate_account_members",
           "tableTo": "tenants",
           "columnsFrom": [
             "tenant_id"
@@ -6902,9 +6938,22 @@
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "customer_subscriptions_customer_id_customers_id_fk": {
-          "name": "customer_subscriptions_customer_id_customers_id_fk",
-          "tableFrom": "customer_subscriptions",
+        "corporate_account_members_corporate_account_id_corporate_accounts_id_fk": {
+          "name": "corporate_account_members_corporate_account_id_corporate_accounts_id_fk",
+          "tableFrom": "corporate_account_members",
+          "tableTo": "corporate_accounts",
+          "columnsFrom": [
+            "corporate_account_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "corporate_account_members_customer_id_customers_id_fk": {
+          "name": "corporate_account_members_customer_id_customers_id_fk",
+          "tableFrom": "corporate_account_members",
           "tableTo": "customers",
           "columnsFrom": [
             "customer_id"
@@ -6915,25 +6964,12 @@
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "customer_subscriptions_plan_id_subscription_plans_id_fk": {
-          "name": "customer_subscriptions_plan_id_subscription_plans_id_fk",
-          "tableFrom": "customer_subscriptions",
-          "tableTo": "subscription_plans",
-          "columnsFrom": [
-            "plan_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "restrict",
-          "onUpdate": "no action"
-        },
-        "customer_subscriptions_sold_by_users_id_fk": {
-          "name": "customer_subscriptions_sold_by_users_id_fk",
-          "tableFrom": "customer_subscriptions",
+        "corporate_account_members_added_by_users_id_fk": {
+          "name": "corporate_account_members_added_by_users_id_fk",
+          "tableFrom": "corporate_account_members",
           "tableTo": "users",
           "columnsFrom": [
-            "sold_by"
+            "added_by"
           ],
           "columnsTo": [
             "id"
@@ -6943,141 +6979,14 @@
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.subscription_events": {
-      "name": "subscription_events",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "tenant_id": {
-          "name": "tenant_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "customer_subscription_id": {
-          "name": "customer_subscription_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "stripe_event_id": {
-          "name": "stripe_event_id",
-          "type": "varchar(255)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "event_type": {
-          "name": "event_type",
-          "type": "varchar(100)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "payload": {
-          "name": "payload",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'{}'::jsonb"
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "subscription_events_tenant_idx": {
-          "name": "subscription_events_tenant_idx",
-          "columns": [
-            {
-              "expression": "tenant_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "created_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "subscription_events_sub_idx": {
-          "name": "subscription_events_sub_idx",
-          "columns": [
-            {
-              "expression": "customer_subscription_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "created_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "subscription_events_tenant_id_tenants_id_fk": {
-          "name": "subscription_events_tenant_id_tenants_id_fk",
-          "tableFrom": "subscription_events",
-          "tableTo": "tenants",
-          "columnsFrom": [
-            "tenant_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "subscription_events_customer_subscription_id_customer_subscriptions_id_fk": {
-          "name": "subscription_events_customer_subscription_id_customer_subscriptions_id_fk",
-          "tableFrom": "subscription_events",
-          "tableTo": "customer_subscriptions",
-          "columnsFrom": [
-            "customer_subscription_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
       "uniqueConstraints": {
-        "subscription_events_unique_stripe_event": {
-          "name": "subscription_events_unique_stripe_event",
+        "corporate_account_members_unique_active": {
+          "name": "corporate_account_members_unique_active",
           "nullsNotDistinct": false,
           "columns": [
-            "tenant_id",
-            "stripe_event_id"
+            "corporate_account_id",
+            "customer_id",
+            "removed_at"
           ]
         }
       },
@@ -7085,8 +6994,8 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.subscription_plans": {
-      "name": "subscription_plans",
+    "public.corporate_accounts": {
+      "name": "corporate_accounts",
       "schema": "",
       "columns": {
         "id": {
@@ -7102,60 +7011,76 @@
           "primaryKey": false,
           "notNull": true
         },
-        "name": {
-          "name": "name",
+        "company_name": {
+          "name": "company_name",
           "type": "varchar(200)",
           "primaryKey": false,
           "notNull": true
         },
-        "description": {
-          "name": "description",
-          "type": "text",
+        "vat_id": {
+          "name": "vat_id",
+          "type": "varchar(32)",
           "primaryKey": false,
           "notNull": false
         },
-        "billing_interval": {
-          "name": "billing_interval",
+        "company_reg_id": {
+          "name": "company_reg_id",
+          "type": "varchar(32)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "billing_address_line1": {
+          "name": "billing_address_line1",
+          "type": "varchar(200)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "billing_address_line2": {
+          "name": "billing_address_line2",
+          "type": "varchar(200)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "billing_city": {
+          "name": "billing_city",
+          "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "billing_zip": {
+          "name": "billing_zip",
           "type": "varchar(20)",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
-        "price_hellers": {
-          "name": "price_hellers",
-          "type": "integer",
+        "billing_country": {
+          "name": "billing_country",
+          "type": "varchar(2)",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false,
+          "default": "'CZ'"
         },
-        "currency": {
-          "name": "currency",
-          "type": "varchar(3)",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'CZK'"
-        },
-        "trial_days": {
-          "name": "trial_days",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "benefits": {
-          "name": "benefits",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'{}'::jsonb"
-        },
-        "stripe_product_id": {
-          "name": "stripe_product_id",
+        "contact_email": {
+          "name": "contact_email",
           "type": "varchar(255)",
           "primaryKey": false,
           "notNull": false
         },
-        "stripe_price_id": {
-          "name": "stripe_price_id",
-          "type": "varchar(255)",
+        "contact_phone": {
+          "name": "contact_phone",
+          "type": "varchar(40)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "contact_person_name": {
+          "name": "contact_person_name",
+          "type": "varchar(200)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "note": {
+          "name": "note",
+          "type": "text",
           "primaryKey": false,
           "notNull": false
         },
@@ -7188,8 +7113,8 @@
         }
       },
       "indexes": {
-        "subscription_plans_tenant_idx": {
-          "name": "subscription_plans_tenant_idx",
+        "corporate_accounts_tenant_idx": {
+          "name": "corporate_accounts_tenant_idx",
           "columns": [
             {
               "expression": "tenant_id",
@@ -7208,12 +7133,33 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "corporate_accounts_name_idx": {
+          "name": "corporate_accounts_name_idx",
+          "columns": [
+            {
+              "expression": "tenant_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "company_name",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
-        "subscription_plans_tenant_id_tenants_id_fk": {
-          "name": "subscription_plans_tenant_id_tenants_id_fk",
-          "tableFrom": "subscription_plans",
+        "corporate_accounts_tenant_id_tenants_id_fk": {
+          "name": "corporate_accounts_tenant_id_tenants_id_fk",
+          "tableFrom": "corporate_accounts",
           "tableTo": "tenants",
           "columnsFrom": [
             "tenant_id"

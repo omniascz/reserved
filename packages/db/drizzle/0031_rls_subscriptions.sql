@@ -1,6 +1,6 @@
 -- ============================================================================
 -- RLS na subscription_plans + customer_subscriptions + subscription_events
--- (sprint 3.3 fáze A3).
+-- (sprint 3.3 fáze A3 — regenerated after merge with corporate stack).
 -- ============================================================================
 
 ALTER TABLE subscription_plans ENABLE ROW LEVEL SECURITY;

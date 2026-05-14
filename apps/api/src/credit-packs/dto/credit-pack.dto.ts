@@ -38,3 +38,12 @@ export const AdjustCreditsSchema = z.object({
   note: z.string().max(500),
 });
 export type AdjustCreditsDto = z.infer<typeof AdjustCreditsSchema>;
+
+// Alokace firme (sprint 3.3 fáze B2) — firma kupi pack, members ho cerpaji
+export const AllocateCreditPackToCorporateSchema = z.object({
+  creditPackId: z.string().uuid(),
+  pricePaidHellers: z.number().int().nonnegative().optional(),
+  validFromIso: z.string().datetime().optional(),
+  note: z.string().max(500).optional().nullable(),
+});
+export type AllocateCreditPackToCorporateDto = z.infer<typeof AllocateCreditPackToCorporateSchema>;

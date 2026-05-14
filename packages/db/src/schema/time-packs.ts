@@ -14,6 +14,7 @@ import { customers } from './customers.js';
 import { users } from './users.js';
 import { bookings } from './bookings.js';
 import { services } from './services.js';
+import { corporateAccounts } from './corporate-accounts.js';
 
 // Časové balíčky (sprint 3.3 fáze A2).
 //
@@ -72,9 +73,14 @@ export const customerTimePacks = pgTable(
     tenantId: uuid('tenant_id')
       .notNull()
       .references(() => tenants.id, { onDelete: 'cascade' }),
-    customerId: uuid('customer_id')
-      .notNull()
-      .references(() => customers.id, { onDelete: 'cascade' }),
+    /**
+     * Vlastnik balicku — bud customer NEBO corporate account, ne oba.
+     * CHECK constraint v migration zarucuje XOR (sprint 3.3 fáze B2-extended).
+     */
+    customerId: uuid('customer_id').references(() => customers.id, { onDelete: 'cascade' }),
+    corporateAccountId: uuid('corporate_account_id').references(() => corporateAccounts.id, {
+      onDelete: 'cascade',
+    }),
     timePackId: uuid('time_pack_id')
       .notNull()
       .references(() => timePacks.id, { onDelete: 'restrict' }),
@@ -106,6 +112,10 @@ export const customerTimePacks = pgTable(
   (table) => ({
     tenantIdx: index('customer_time_packs_tenant_idx').on(table.tenantId),
     customerIdx: index('customer_time_packs_customer_idx').on(table.customerId, table.status),
+    corporateIdx: index('customer_time_packs_corporate_idx').on(
+      table.corporateAccountId,
+      table.status,
+    ),
     validityIdx: index('customer_time_packs_validity_idx').on(table.validUntil, table.status),
   }),
 );
