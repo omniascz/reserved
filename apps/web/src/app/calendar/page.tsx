@@ -1,42 +1,40 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import interactionPlugin from '@fullcalendar/interaction';
-import type { EventClickArg, EventDropArg, DatesSetArg } from '@fullcalendar/core';
+import type {
+  EventClickArg,
+  EventDropArg,
+  DatesSetArg,
+  DateSelectArg,
+  EventInput,
+} from '@fullcalendar/core';
 import {
   AdminApiError,
   cancelBooking,
   clearAuth,
+  createBlock,
+  deleteBlock,
   getAccessToken,
+  listBlocks,
   listBookings,
   listEmployees,
+  listHolidays,
   listServices,
   markBookingCompleted,
   markBookingNoShow,
   rescheduleBooking,
+  type AdminBlock,
   type AdminBooking,
   type AdminEmployee,
+  type AdminHoliday,
   type AdminService,
 } from '@/lib/api';
 import { NavHeader } from '@/components/NavHeader';
-
-interface CalendarEvent {
-  id: string;
-  title: string;
-  start: string;
-  end: string;
-  backgroundColor: string;
-  borderColor: string;
-  extendedProps: {
-    booking: AdminBooking;
-    service?: AdminService;
-    employee?: AdminEmployee;
-  };
-}
 
 const STATUS_COLORS: Record<string, string> = {
   pending: '#fbbf24',
@@ -46,25 +44,42 @@ const STATUS_COLORS: Record<string, string> = {
   no_show: '#ef4444',
 };
 
+const BLOCK_COLOR = '#475569';
+const HOLIDAY_COLOR = '#1e293b';
+
+type EventKind = 'booking' | 'block' | 'holiday';
+
+type ExtendedProps = {
+  kind: EventKind;
+  booking?: AdminBooking;
+  block?: AdminBlock;
+  holiday?: AdminHoliday;
+  service?: AdminService;
+  employee?: AdminEmployee;
+};
+
 export default function CalendarPage() {
   const router = useRouter();
   const calendarRef = useRef<FullCalendar | null>(null);
   const [services, setServices] = useState<AdminService[]>([]);
   const [employees, setEmployees] = useState<AdminEmployee[]>([]);
-  const [events, setEvents] = useState<CalendarEvent[]>([]);
+  const [bookings, setBookings] = useState<AdminBooking[]>([]);
+  const [blocks, setBlocks] = useState<AdminBlock[]>([]);
+  const [holidays, setHolidays] = useState<AdminHoliday[]>([]);
   const [selectedBooking, setSelectedBooking] = useState<AdminBooking | null>(null);
+  const [selectedBlock, setSelectedBlock] = useState<AdminBlock | null>(null);
+  const [newBlockRange, setNewBlockRange] = useState<{ startsAt: string; endsAt: string } | null>(
+    null,
+  );
+  const [employeeFilter, setEmployeeFilter] = useState<string>('all');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [range, setRange] = useState<{ from: string; to: string } | null>(null);
 
-  // ─── Auth check on mount ────────────────────────────────────────────
   useEffect(() => {
-    if (!getAccessToken()) {
-      router.replace('/login');
-    }
+    if (!getAccessToken()) router.replace('/login');
   }, [router]);
 
-  // ─── Load services & employees once ─────────────────────────────────
   useEffect(() => {
     Promise.all([listServices(), listEmployees()])
       .then(([svc, emp]) => {
@@ -81,28 +96,19 @@ export default function CalendarPage() {
       });
   }, [router]);
 
-  // ─── Reload bookings when range changes ─────────────────────────────
   const reload = useCallback(
     async (from: string, to: string) => {
       setLoading(true);
       setError(null);
       try {
-        const bookings = await listBookings({ from, to });
-        const evts: CalendarEvent[] = bookings.map((b) => {
-          const service = services.find((s) => s.id === b.serviceId);
-          const employee = employees.find((e) => e.id === b.employeeId);
-          const color = STATUS_COLORS[b.status] ?? '#64748b';
-          return {
-            id: b.id,
-            title: `${service?.name ?? 'Služba'} — ${b.customerName}`,
-            start: b.startsAt,
-            end: b.endsAt,
-            backgroundColor: color,
-            borderColor: color,
-            extendedProps: { booking: b, service, employee },
-          };
-        });
-        setEvents(evts);
+        const [b, bl, h] = await Promise.all([
+          listBookings({ from, to }),
+          listBlocks(from, to),
+          listHolidays(from, to),
+        ]);
+        setBookings(b);
+        setBlocks(bl);
+        setHolidays(h);
       } catch (e) {
         if (e instanceof AdminApiError && e.status === 401) {
           clearAuth();
@@ -114,39 +120,140 @@ export default function CalendarPage() {
         setLoading(false);
       }
     },
-    [services, employees, router],
+    [router],
   );
 
   useEffect(() => {
-    if (range && services.length > 0) {
-      reload(range.from, range.to);
-    }
+    if (range && services.length > 0) reload(range.from, range.to);
   }, [range, services.length, employees.length, reload]);
 
+  // Eventy do FullCalendar — booking + block + holiday, s filtrem
+  const events: EventInput[] = useMemo(() => {
+    const evts: EventInput[] = [];
+
+    for (const b of bookings) {
+      if (employeeFilter !== 'all' && b.employeeId !== employeeFilter) continue;
+      const service = services.find((s) => s.id === b.serviceId);
+      const employee = employees.find((e) => e.id === b.employeeId);
+      const color = STATUS_COLORS[b.status] ?? '#64748b';
+      evts.push({
+        id: `booking:${b.id}`,
+        title: `${service?.name ?? 'Služba'} — ${b.customerName}`,
+        start: b.startsAt,
+        end: b.endsAt,
+        backgroundColor: color,
+        borderColor: color,
+        extendedProps: { kind: 'booking', booking: b, service, employee } as ExtendedProps,
+      });
+    }
+
+    for (const bl of blocks) {
+      // Filter: pokud je filter aktivni, ukaz block jen pokud patri ke konkretnimu
+      // zamestnanci, nebo je to global block (employeeId=null)
+      if (employeeFilter !== 'all' && bl.employeeId !== null && bl.employeeId !== employeeFilter) {
+        continue;
+      }
+      evts.push({
+        id: `block:${bl.id}`,
+        title: bl.title ? `🚫 ${bl.title}` : `🚫 Blokace (${bl.blockType})`,
+        start: bl.startsAt,
+        end: bl.endsAt,
+        backgroundColor: BLOCK_COLOR,
+        borderColor: BLOCK_COLOR,
+        textColor: '#fff',
+        extendedProps: { kind: 'block', block: bl } as ExtendedProps,
+      });
+    }
+
+    for (const h of holidays) {
+      if (h.isOpen) continue; // open holidays nemaji blokovat kalendar vizualne
+      evts.push({
+        id: `holiday:${h.id}`,
+        title: `🎉 ${h.name}`,
+        start: h.date,
+        allDay: true,
+        backgroundColor: HOLIDAY_COLOR,
+        borderColor: HOLIDAY_COLOR,
+        textColor: '#fff',
+        display: 'block',
+        extendedProps: { kind: 'holiday', holiday: h } as ExtendedProps,
+      });
+    }
+    return evts;
+  }, [bookings, blocks, holidays, services, employees, employeeFilter]);
+
   function handleDatesSet(arg: DatesSetArg) {
-    setRange({
-      from: arg.startStr,
-      to: arg.endStr,
-    });
+    setRange({ from: arg.startStr, to: arg.endStr });
   }
 
   function handleEventClick(arg: EventClickArg) {
-    setSelectedBooking(arg.event.extendedProps.booking as AdminBooking);
+    const props = arg.event.extendedProps as ExtendedProps;
+    if (props.kind === 'booking' && props.booking) {
+      setSelectedBooking(props.booking);
+    } else if (props.kind === 'block' && props.block) {
+      setSelectedBlock(props.block);
+    }
   }
 
   async function handleEventDrop(arg: EventDropArg) {
+    const props = arg.event.extendedProps as ExtendedProps;
+    // Pres drag-drop premistujeme zatim jen bookings, ne bloky
+    if (props.kind !== 'booking') {
+      arg.revert();
+      return;
+    }
     const newStart = arg.event.start;
-    if (!newStart) {
+    if (!newStart || !props.booking) {
       arg.revert();
       return;
     }
     try {
-      await rescheduleBooking(arg.event.id, newStart.toISOString());
-      // Optimistic update — refresh from server
+      await rescheduleBooking(props.booking.id, newStart.toISOString());
       if (range) await reload(range.from, range.to);
     } catch (e) {
       arg.revert();
       setError(e instanceof Error ? e.message : 'Přesun selhal');
+    }
+  }
+
+  function handleSelect(arg: DateSelectArg) {
+    // Kliknuti / dragnuti pres prazdny cas -> rovnou nabidnout vytvoreni blokace
+    setNewBlockRange({ startsAt: arg.startStr, endsAt: arg.endStr });
+    arg.view.calendar.unselect();
+  }
+
+  async function handleCreateBlock(input: {
+    title: string;
+    blockType: string;
+    employeeId: string | null;
+  }) {
+    if (!newBlockRange) return;
+    try {
+      await createBlock({
+        startsAt: newBlockRange.startsAt,
+        endsAt: newBlockRange.endsAt,
+        blockType: input.blockType,
+        title: input.title || undefined,
+        employeeId: input.employeeId ?? undefined,
+      });
+      setNewBlockRange(null);
+      if (range) await reload(range.from, range.to);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Blokace selhala');
+    }
+  }
+
+  async function handleDeleteBlock() {
+    if (!selectedBlock) return;
+    if (!window.confirm(`Smazat blokaci "${selectedBlock.title ?? selectedBlock.blockType}"?`)) {
+      return;
+    }
+    try {
+      await deleteBlock(selectedBlock.id);
+      setSelectedBlock(null);
+      if (range) await reload(range.from, range.to);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Smazání selhalo');
     }
   }
 
@@ -189,12 +296,31 @@ export default function CalendarPage() {
     <div className="min-h-screen flex flex-col">
       <NavHeader />
 
-      <div className="bg-white border-b border-slate-100 px-6 py-2 flex items-center gap-3 text-xs">
-        <LegendDot color={STATUS_COLORS.pending!} label="Čeká" />
-        <LegendDot color={STATUS_COLORS.confirmed!} label="Potvrzeno" />
-        <LegendDot color={STATUS_COLORS.completed!} label="Dokončeno" />
-        <LegendDot color={STATUS_COLORS.cancelled!} label="Zrušeno" />
-        <LegendDot color={STATUS_COLORS.no_show!} label="Nepřišel" />
+      <div className="bg-white border-b border-slate-100 px-6 py-2 flex items-center gap-4 text-xs flex-wrap">
+        <div className="flex items-center gap-3">
+          <LegendDot color={STATUS_COLORS.pending!} label="Čeká" />
+          <LegendDot color={STATUS_COLORS.confirmed!} label="Potvrzeno" />
+          <LegendDot color={STATUS_COLORS.completed!} label="Dokončeno" />
+          <LegendDot color={STATUS_COLORS.cancelled!} label="Zrušeno" />
+          <LegendDot color={STATUS_COLORS.no_show!} label="Nepřišel" />
+          <LegendDot color={BLOCK_COLOR} label="Blokace" />
+          <LegendDot color={HOLIDAY_COLOR} label="Svátek" />
+        </div>
+        <div className="flex items-center gap-2 ml-auto">
+          <label className="text-slate-600">Zaměstnanec:</label>
+          <select
+            value={employeeFilter}
+            onChange={(e) => setEmployeeFilter(e.target.value)}
+            className="border border-slate-300 rounded px-2 py-1 text-xs"
+          >
+            <option value="all">Všichni</option>
+            {employees.map((emp) => (
+              <option key={emp.id} value={emp.id}>
+                {emp.displayName ?? `${emp.firstName} ${emp.lastName}`}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
       <main className="flex-1 p-6">
@@ -206,6 +332,9 @@ export default function CalendarPage() {
 
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 relative">
           {loading && <div className="absolute top-2 right-4 text-xs text-slate-400">načítám…</div>}
+          <p className="text-xs text-slate-500 mb-2">
+            Tip: tažením prázdné oblasti vytvoříš blokaci. Klikni na blok pro detail / smazání.
+          </p>
           <FullCalendar
             ref={calendarRef}
             plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
@@ -215,24 +344,22 @@ export default function CalendarPage() {
               center: 'title',
               right: 'dayGridMonth,timeGridWeek,timeGridDay',
             }}
-            buttonText={{
-              today: 'Dnes',
-              month: 'Měsíc',
-              week: 'Týden',
-              day: 'Den',
-            }}
+            buttonText={{ today: 'Dnes', month: 'Měsíc', week: 'Týden', day: 'Den' }}
             locale="cs"
             firstDay={1}
-            allDaySlot={false}
+            allDaySlot={true}
             slotMinTime="07:00:00"
             slotMaxTime="22:00:00"
             slotDuration="00:30:00"
             height="auto"
             events={events}
             editable
+            selectable
+            selectMirror
             datesSet={handleDatesSet}
             eventClick={handleEventClick}
             eventDrop={handleEventDrop}
+            select={handleSelect}
           />
         </div>
       </main>
@@ -246,6 +373,25 @@ export default function CalendarPage() {
           onMarkCompleted={handleMarkCompleted}
           services={services}
           employees={employees}
+        />
+      )}
+
+      {selectedBlock && (
+        <BlockDetailModal
+          block={selectedBlock}
+          employees={employees}
+          onClose={() => setSelectedBlock(null)}
+          onDelete={handleDeleteBlock}
+        />
+      )}
+
+      {newBlockRange && (
+        <NewBlockModal
+          range={newBlockRange}
+          employees={employees}
+          defaultEmployeeId={employeeFilter !== 'all' ? employeeFilter : null}
+          onClose={() => setNewBlockRange(null)}
+          onCreate={handleCreateBlock}
         />
       )}
     </div>
@@ -363,6 +509,166 @@ function BookingModal({
             className="px-4 py-2 bg-slate-200 hover:bg-slate-300 rounded font-medium"
           >
             Zavřít
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function BlockDetailModal({
+  block,
+  employees,
+  onClose,
+  onDelete,
+}: {
+  block: AdminBlock;
+  employees: AdminEmployee[];
+  onClose: () => void;
+  onDelete: () => void;
+}) {
+  const employee = block.employeeId ? employees.find((e) => e.id === block.employeeId) : null;
+
+  return (
+    <div
+      className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white rounded-xl shadow-xl max-w-md w-full p-6"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex justify-between items-start mb-4">
+          <h2 className="text-xl font-bold">{block.title ?? 'Blokace'}</h2>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-700 text-2xl">
+            ×
+          </button>
+        </div>
+        <dl className="space-y-2 text-sm">
+          <Row label="Typ" value={block.blockType} />
+          <Row
+            label="Začátek"
+            value={new Date(block.startsAt).toLocaleString('cs-CZ', {
+              timeZone: 'Europe/Prague',
+            })}
+          />
+          <Row
+            label="Konec"
+            value={new Date(block.endsAt).toLocaleString('cs-CZ', { timeZone: 'Europe/Prague' })}
+          />
+          <Row
+            label="Zaměstnanec"
+            value={
+              employee
+                ? (employee.displayName ?? `${employee.firstName} ${employee.lastName}`)
+                : 'Všichni'
+            }
+          />
+          {block.note && <Row label="Poznámka" value={block.note} />}
+        </dl>
+        <div className="flex justify-end gap-2 mt-6">
+          <button
+            onClick={onDelete}
+            className="px-4 py-2 text-red-600 hover:bg-red-50 rounded font-medium"
+          >
+            Smazat
+          </button>
+          <button
+            onClick={onClose}
+            className="px-4 py-2 bg-slate-200 hover:bg-slate-300 rounded font-medium"
+          >
+            Zavřít
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function NewBlockModal({
+  range,
+  employees,
+  defaultEmployeeId,
+  onClose,
+  onCreate,
+}: {
+  range: { startsAt: string; endsAt: string };
+  employees: AdminEmployee[];
+  defaultEmployeeId: string | null;
+  onClose: () => void;
+  onCreate: (input: { title: string; blockType: string; employeeId: string | null }) => void;
+}) {
+  const [title, setTitle] = useState('');
+  const [blockType, setBlockType] = useState('other');
+  const [employeeId, setEmployeeId] = useState<string>(defaultEmployeeId ?? '');
+
+  return (
+    <div
+      className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white rounded-xl shadow-xl max-w-md w-full p-6"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h2 className="text-xl font-bold mb-2">Nová blokace</h2>
+        <p className="text-xs text-slate-500 mb-4">
+          {new Date(range.startsAt).toLocaleString('cs-CZ', { timeZone: 'Europe/Prague' })} →{' '}
+          {new Date(range.endsAt).toLocaleString('cs-CZ', { timeZone: 'Europe/Prague' })}
+        </p>
+        <div className="space-y-3">
+          <div>
+            <label className="block text-sm font-medium mb-1">Název</label>
+            <input
+              type="text"
+              placeholder="např. Úklid, Školení..."
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              className="w-full border border-slate-300 rounded px-3 py-2"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">Typ</label>
+            <select
+              value={blockType}
+              onChange={(e) => setBlockType(e.target.value)}
+              className="w-full border border-slate-300 rounded px-3 py-2"
+            >
+              <option value="cleaning">Úklid</option>
+              <option value="training">Školení</option>
+              <option value="meeting">Schůzka</option>
+              <option value="maintenance">Údržba</option>
+              <option value="other">Jiné</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">Zaměstnanec</label>
+            <select
+              value={employeeId}
+              onChange={(e) => setEmployeeId(e.target.value)}
+              className="w-full border border-slate-300 rounded px-3 py-2"
+            >
+              <option value="">Všichni (celý salon)</option>
+              {employees.map((emp) => (
+                <option key={emp.id} value={emp.id}>
+                  {emp.displayName ?? `${emp.firstName} ${emp.lastName}`}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+        <div className="flex justify-end gap-2 mt-6">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 border border-slate-300 rounded font-medium hover:bg-slate-50"
+          >
+            Zrušit
+          </button>
+          <button
+            onClick={() => onCreate({ title, blockType, employeeId: employeeId || null })}
+            className="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded font-medium"
+          >
+            Vytvořit blokaci
           </button>
         </div>
       </div>
