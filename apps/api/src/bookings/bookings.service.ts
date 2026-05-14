@@ -258,6 +258,7 @@ export class BookingsService {
             startsAt: result.booking.startsAt.toISOString(),
             endsAt: result.booking.endsAt.toISOString(),
             referenceCode: result.booking.referenceCode,
+            onlineMeetingUrl: result.booking.onlineMeetingUrl,
           },
         });
 
@@ -524,6 +525,7 @@ export class BookingsService {
             startsAt: result.booking.startsAt.toISOString(),
             endsAt: result.booking.endsAt.toISOString(),
             referenceCode: result.booking.referenceCode,
+            onlineMeetingUrl: result.booking.onlineMeetingUrl,
           },
         });
 

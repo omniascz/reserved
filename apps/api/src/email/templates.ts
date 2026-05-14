@@ -13,6 +13,10 @@ export interface BookingEmailVars {
   reason?: string;
   /** Volitelný starý čas (pro reschedule). */
   oldStartsAt?: string;
+  /** Online meeting URL (Zoom/Meet/Teams) pro online služby. */
+  onlineMeetingUrl?: string | null;
+  /** Predrenderovaná online meeting sekce — vlozi se do email body. */
+  onlineMeetingSection?: string;
 }
 
 /** Vars pro portal/auth e-maily (sprint 2.3). */
@@ -60,7 +64,7 @@ Detaily:
   Začátek:      {{startsAt}}
   Konec:        {{endsAt}}
   Číslo rezervace: {{referenceCode}}
-
+{{onlineMeetingSection}}
 Pokud potřebujete cokoliv změnit, kontaktujte nás.
 
 Tým {{tenantName}}`,
@@ -85,7 +89,7 @@ Nový termín:
   Začátek:  {{startsAt}}
   Konec:    {{endsAt}}
   Služba:   {{serviceName}}
-
+{{onlineMeetingSection}}
 Předchozí termín ({{oldStartsAt}}) byl zrušen.
 
 Tým {{tenantName}}`,
@@ -117,6 +121,19 @@ Tým {{tenantName}}`,
   },
 };
 
+/**
+ * Pro booking emaily: pokud vars obsahuji onlineMeetingUrl, vyrenderuj
+ * sekci s linkem. Jinak prazdny string (placeholder se ztrati).
+ */
+function buildOnlineMeetingSection(vars: EmailVars): string {
+  const bookingVars = vars as BookingEmailVars;
+  if (!bookingVars.onlineMeetingUrl) return '';
+  return `
+🎥 Online schůzka:
+  ${bookingVars.onlineMeetingUrl}
+`;
+}
+
 export function renderEmail(templateCode: string, vars: EmailVars): EmailTemplate {
   // 'custom' template: subject + body přicházejí v __customSubject / __customBody.
   // Rules engine action 'send_email' to využívá pro ad-hoc emaily.
@@ -134,8 +151,13 @@ export function renderEmail(templateCode: string, vars: EmailVars): EmailTemplat
   if (!tpl) {
     throw new Error(`Unknown email template: ${templateCode}`);
   }
+  // Pre-render online meeting section pro booking template-y
+  const enrichedVars = {
+    ...(vars as unknown as Record<string, unknown>),
+    onlineMeetingSection: buildOnlineMeetingSection(vars),
+  };
   return {
-    subject: render(tpl.subject, vars as unknown as Record<string, unknown>),
-    body: render(tpl.body, vars as unknown as Record<string, unknown>),
+    subject: render(tpl.subject, enrichedVars),
+    body: render(tpl.body, enrichedVars),
   };
 }
