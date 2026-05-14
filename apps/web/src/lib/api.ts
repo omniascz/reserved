@@ -107,6 +107,7 @@ export interface AdminBooking {
   customerNote: string | null;
   internalNote: string | null;
   referenceCode: string;
+  onlineMeetingUrl: string | null;
   createdAt: string;
   updatedAt: string;
 }

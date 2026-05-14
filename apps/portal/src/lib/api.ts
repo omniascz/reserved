@@ -193,6 +193,7 @@ export interface PortalBooking {
   pricePaidHellers: number;
   currency: string;
   customerNote: string | null;
+  onlineMeetingUrl: string | null;
   serviceName: string | null;
   serviceDuration: number | null;
   serviceColor: string | null;
