@@ -16,10 +16,12 @@ import { ZodValidationPipe } from '../auth/zod-validation.pipe.js';
 import {
   AdjustCreditsSchema,
   AllocateCreditPackSchema,
+  AllocateCreditPackToCorporateSchema,
   CreateCreditPackSchema,
   UpdateCreditPackSchema,
   type AdjustCreditsDto,
   type AllocateCreditPackDto,
+  type AllocateCreditPackToCorporateDto,
   type CreateCreditPackDto,
   type UpdateCreditPackDto,
 } from './dto/credit-pack.dto.js';
@@ -102,6 +104,27 @@ export class CreditPacksController {
   async uses(@CurrentUser() user: AccessTokenPayload, @Param('id', ParseUUIDPipe) id: string) {
     return {
       data: await this.svc.listUsesForAllocation(user.tenantId, user.sub, user.role, id),
+    };
+  }
+
+  // ─── Corporate allocation (sprint 3.3 fáze B2) ───────────────────
+
+  @Post('corporate-accounts/:corporateAccountId/credit-packs')
+  @HttpCode(201)
+  async allocateToCorporate(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('corporateAccountId', ParseUUIDPipe) corporateAccountId: string,
+    @Body(new ZodValidationPipe(AllocateCreditPackToCorporateSchema))
+    dto: AllocateCreditPackToCorporateDto,
+  ) {
+    return {
+      data: await this.svc.allocateToCorporate(
+        user.tenantId,
+        user.sub,
+        user.role,
+        corporateAccountId,
+        dto,
+      ),
     };
   }
 }

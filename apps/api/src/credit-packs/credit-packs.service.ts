@@ -21,13 +21,14 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { and, asc, desc, eq, gt, isNull, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, inArray, isNull, or, sql } from 'drizzle-orm';
 import { schema } from '@reserved/db';
 import { type AppRole, serviceContext, type TenantContext } from '@reserved/rls-multitenancy';
 import { DbService } from '../db/db.service.js';
 import type {
   AdjustCreditsDto,
   AllocateCreditPackDto,
+  AllocateCreditPackToCorporateDto,
   CreateCreditPackDto,
   UpdateCreditPackDto,
 } from './dto/credit-pack.dto.js';
@@ -225,6 +226,85 @@ export class CreditPacksService {
     });
   }
 
+  /**
+   * Alokace firme (sprint 3.3 fáze B2). Vytvori instance s
+   * corporateAccountId nastavenym a customerId=NULL. Pak ho mohou cerpat
+   * vsichni aktivni clenove firmy.
+   */
+  async allocateToCorporate(
+    tenantId: string,
+    userId: string,
+    role: AppRole,
+    corporateAccountId: string,
+    dto: AllocateCreditPackToCorporateDto,
+  ) {
+    assertCanAllocate(role);
+    return this.dbService.withRlsContext(ctxFor(tenantId, userId, role), async (tx) => {
+      const [account] = await tx
+        .select({ id: schema.corporateAccounts.id })
+        .from(schema.corporateAccounts)
+        .where(
+          and(
+            eq(schema.corporateAccounts.id, corporateAccountId),
+            eq(schema.corporateAccounts.tenantId, tenantId),
+            eq(schema.corporateAccounts.isActive, true),
+          ),
+        )
+        .limit(1);
+      if (!account) {
+        throw new NotFoundException({
+          error: { code: 'CORPORATE_ACCOUNT_NOT_FOUND', message: 'Aktivní firma nenalezena.' },
+        });
+      }
+
+      const [pack] = await tx
+        .select()
+        .from(schema.creditPacks)
+        .where(
+          and(
+            eq(schema.creditPacks.id, dto.creditPackId),
+            eq(schema.creditPacks.tenantId, tenantId),
+            eq(schema.creditPacks.isActive, true),
+          ),
+        )
+        .limit(1);
+      if (!pack) {
+        throw new NotFoundException({
+          error: { code: 'CREDIT_PACK_NOT_FOUND', message: 'Aktivní permanentka nenalezena.' },
+        });
+      }
+
+      const validFrom = dto.validFromIso ? new Date(dto.validFromIso) : new Date();
+      const validUntil = pack.validityDays
+        ? new Date(validFrom.getTime() + pack.validityDays * 24 * 60 * 60 * 1000)
+        : null;
+
+      const [allocated] = await tx
+        .insert(schema.customerCreditPacks)
+        .values({
+          tenantId,
+          customerId: null,
+          corporateAccountId,
+          creditPackId: pack.id,
+          creditsRemaining: pack.totalCredits,
+          creditsAtPurchase: pack.totalCredits,
+          snapshotMode: pack.mode,
+          snapshotAllowedServiceIds: pack.allowedServiceIds,
+          snapshotAllowedBranchIds: pack.allowedBranchIds,
+          snapshotCreditCosts: pack.creditCostsByService,
+          validFrom,
+          validUntil,
+          status: 'active',
+          pricePaidHellers: dto.pricePaidHellers ?? pack.priceHellers,
+          soldBy: userId,
+          note: dto.note ?? null,
+        })
+        .returning();
+
+      return allocated!;
+    });
+  }
+
   async listForCustomer(tenantId: string, userId: string, role: AppRole, customerId: string) {
     return this.dbService.withRlsContext(ctxFor(tenantId, userId, role), async (tx) => {
       const rows = await tx
@@ -323,14 +403,35 @@ export class CreditPacksService {
     performedBy: string | null;
   }): Promise<{ allocationId: string; creditsDeducted: number } | null> {
     return this.dbService.withRlsContext(serviceContext(input.tenantId), async (tx) => {
-      // 1. Najdi vsechny aktivni balicky zakaznika
+      // 1a. Najdi firmy, ke ktery customer aktivne patri (B2 phase)
+      const corporateRows = await tx
+        .select({ corporateAccountId: schema.corporateAccountMembers.corporateAccountId })
+        .from(schema.corporateAccountMembers)
+        .where(
+          and(
+            eq(schema.corporateAccountMembers.tenantId, input.tenantId),
+            eq(schema.corporateAccountMembers.customerId, input.customerId),
+            isNull(schema.corporateAccountMembers.removedAt),
+          ),
+        );
+      const corporateIds = corporateRows.map((r) => r.corporateAccountId);
+
+      // 1b. Najdi vsechny aktivni balicky: vlastni + firemni (kde je member)
+      const ownerFilter =
+        corporateIds.length > 0
+          ? or(
+              eq(schema.customerCreditPacks.customerId, input.customerId),
+              inArray(schema.customerCreditPacks.corporateAccountId, corporateIds),
+            )
+          : eq(schema.customerCreditPacks.customerId, input.customerId);
+
       const candidates = await tx
         .select()
         .from(schema.customerCreditPacks)
         .where(
           and(
             eq(schema.customerCreditPacks.tenantId, input.tenantId),
-            eq(schema.customerCreditPacks.customerId, input.customerId),
+            ownerFilter,
             eq(schema.customerCreditPacks.status, 'active'),
             gt(schema.customerCreditPacks.creditsRemaining, 0),
             or(
@@ -339,7 +440,14 @@ export class CreditPacksService {
             ),
           ),
         )
-        .orderBy(asc(schema.customerCreditPacks.validUntil));
+        .orderBy(
+          // Priorita: vlastni balicky pred firemnimi.
+          // V Postgresu je default ASC NULLS LAST; potrebujeme NULLS FIRST,
+          // protoze NULL znamena vlastni balicek.
+          sql`${schema.customerCreditPacks.corporateAccountId} ASC NULLS FIRST`,
+          // Pak FIFO podle expirace.
+          asc(schema.customerCreditPacks.validUntil),
+        );
 
       // 2. Najdi prvni co matchne service+branch
       for (const alloc of candidates) {

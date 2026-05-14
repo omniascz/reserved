@@ -13,6 +13,7 @@ import { tenants } from './tenants.js';
 import { customers } from './customers.js';
 import { users } from './users.js';
 import { bookings } from './bookings.js';
+import { corporateAccounts } from './corporate-accounts.js';
 
 // Permanentky / kreditové balíčky (sprint 3.1).
 //
@@ -72,9 +73,15 @@ export const customerCreditPacks = pgTable(
     tenantId: uuid('tenant_id')
       .notNull()
       .references(() => tenants.id, { onDelete: 'cascade' }),
-    customerId: uuid('customer_id')
-      .notNull()
-      .references(() => customers.id, { onDelete: 'cascade' }),
+    /**
+     * Vlastnik balicku — bud customer NEBO corporate account, ne oba.
+     * CHECK constraint v migration zarucuje XOR.
+     */
+    customerId: uuid('customer_id').references(() => customers.id, { onDelete: 'cascade' }),
+    /** Firma jako vlastnik (sprint 3.3 phase B2). Sdileni mezi cleny. */
+    corporateAccountId: uuid('corporate_account_id').references(() => corporateAccounts.id, {
+      onDelete: 'cascade',
+    }),
     creditPackId: uuid('credit_pack_id')
       .notNull()
       .references(() => creditPacks.id, { onDelete: 'restrict' }),
@@ -104,6 +111,10 @@ export const customerCreditPacks = pgTable(
   (table) => ({
     tenantIdx: index('customer_credit_packs_tenant_idx').on(table.tenantId),
     customerIdx: index('customer_credit_packs_customer_idx').on(table.customerId, table.status),
+    corporateIdx: index('customer_credit_packs_corporate_idx').on(
+      table.corporateAccountId,
+      table.status,
+    ),
     validityIdx: index('customer_credit_packs_validity_idx').on(table.validUntil, table.status),
   }),
 );
