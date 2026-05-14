@@ -155,6 +155,20 @@
       "when": 1778737220000,
       "tag": "0021_rls_bundle_packs",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1778738915548,
+      "tag": "0023_wonderful_monster_badoon",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1778739000000,
+      "tag": "0024_rls_time_packs",
+      "breakpoints": true
     }
   ]
 }
