@@ -16,6 +16,7 @@ import {
 import { CustomerBundlePacks } from './CustomerBundlePacks';
 import { CustomerCreditPacks } from './CustomerCreditPacks';
 import { CustomerPayments } from './CustomerPayments';
+import { CustomerSubscriptions } from './CustomerSubscriptions';
 import { CustomerTimePacks } from './CustomerTimePacks';
 
 const STATUS_LABEL: Record<string, string> = {
@@ -277,6 +278,10 @@ export default function CustomerDetailPage({ params }: { params: { id: string } 
 
         <div className="mt-6">
           <CustomerTimePacks customerId={params.id} />
+        </div>
+
+        <div className="mt-6">
+          <CustomerSubscriptions customerId={params.id} />
         </div>
 
         <div className="mt-6">
