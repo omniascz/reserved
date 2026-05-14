@@ -14,6 +14,7 @@ export function PortalHeader() {
     { href: `/${tenant}/credit-packs`, label: 'Permanentky' },
     { href: `/${tenant}/bundle-packs`, label: 'Bundle' },
     { href: `/${tenant}/time-packs`, label: 'Časové' },
+    { href: `/${tenant}/subscriptions`, label: 'Předplatné' },
     { href: `/${tenant}/profile`, label: 'Profil' },
   ];
 
