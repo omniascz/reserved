@@ -16,6 +16,7 @@ import { type AppRole, type TenantContext, serviceContext } from '@reserved/rls-
 import { randomBytes } from 'node:crypto';
 import { BundlePacksService } from '../bundle-packs/bundle-packs.service.js';
 import { CreditPacksService } from '../credit-packs/credit-packs.service.js';
+import { GoogleCalendarService } from '../google-calendar/google-calendar.service.js';
 import { SubscriptionsService } from '../subscriptions/subscriptions.service.js';
 import { TimePacksService } from '../time-packs/time-packs.service.js';
 import { CustomersService } from '../customers/customers.service.js';
@@ -68,6 +69,7 @@ export class BookingsService {
     @Inject(BundlePacksService) private readonly bundlePacks: BundlePacksService,
     @Inject(TimePacksService) private readonly timePacks: TimePacksService,
     @Inject(SubscriptionsService) private readonly subscriptions: SubscriptionsService,
+    @Inject(GoogleCalendarService) private readonly googleCal: GoogleCalendarService,
   ) {}
 
   private async emitBookingEvent(
@@ -302,6 +304,25 @@ export class BookingsService {
 
         // Emit booking_created event pro Rules Engine
         await this.emitBookingEvent('booking_created', tenantId, result.booking, 'customer');
+
+        // Google Calendar sync (faze C1) — best-effort, errors swallowed
+        if (result.booking.employeeId) {
+          this.googleCal.syncBookingCreated({
+            tenantId,
+            bookingId: result.booking.id,
+            employeeId: result.booking.employeeId,
+            booking: {
+              id: result.booking.id,
+              startsAt: result.booking.startsAt,
+              endsAt: result.booking.endsAt,
+              customerName: result.booking.customerName,
+              customerEmail: result.booking.customerEmail,
+              customerPhone: result.booking.customerPhone,
+              serviceName: result.service.name,
+              referenceCode: result.booking.referenceCode,
+            },
+          });
+        }
 
         return result.booking;
       });
@@ -618,6 +639,9 @@ export class BookingsService {
     }
 
     await this.emitBookingEvent('booking_cancelled', tenantId, result, 'admin', dto.reason);
+
+    // Google Calendar sync — smaz event (best-effort, errors swallowed)
+    this.googleCal.syncBookingCancelled({ tenantId, bookingId: result.id });
 
     return result;
   }

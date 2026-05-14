@@ -4,6 +4,7 @@ import { EmailModule } from '../email/email.module.js';
 import { AuthModule } from '../auth/auth.module.js';
 import { BundlePacksModule } from '../bundle-packs/bundle-packs.module.js';
 import { CreditPacksModule } from '../credit-packs/credit-packs.module.js';
+import { SubscriptionsModule } from '../subscriptions/subscriptions.module.js';
 import { TimePacksModule } from '../time-packs/time-packs.module.js';
 import { PortalAuthController } from './portal-auth.controller.js';
 import { PortalAuthService } from './portal-auth.service.js';
@@ -20,6 +21,7 @@ import { PortalGuard } from './portal.guard.js';
     CreditPacksModule,
     BundlePacksModule,
     TimePacksModule,
+    SubscriptionsModule,
   ],
   controllers: [PortalAuthController, PortalMeController],
   providers: [PortalAuthService, PortalMeService, PortalJwtService, PortalGuard],

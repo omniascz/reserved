@@ -189,6 +189,151 @@ export async function listEmployees(): Promise<AdminEmployee[]> {
   return data;
 }
 
+// ─── Services CRUD (sprint 1.3) ───────────────────────────────────────
+
+export interface AdminServiceFull extends AdminService {
+  description: string | null;
+  categoryId: string | null;
+  bufferAfterMinutes: number;
+  bufferBeforeMinutes: number;
+  imageUrl: string | null;
+  isPublic: boolean;
+  depositPercent: number | null;
+  capacity: number;
+  sortOrder: number;
+  isActive: boolean;
+  createdAt: string;
+}
+
+export interface AdminServiceCategory {
+  id: string;
+  name: string;
+  description: string | null;
+  color: string | null;
+  icon: string | null;
+  sortOrder: number;
+  isActive: boolean;
+  createdAt: string;
+}
+
+export async function listServicesFull(): Promise<AdminServiceFull[]> {
+  const { data } = await fetchApi<{ data: AdminServiceFull[] }>(`/admin/services`);
+  return data;
+}
+
+export async function listServiceCategories(): Promise<AdminServiceCategory[]> {
+  const { data } = await fetchApi<{ data: AdminServiceCategory[] }>(`/admin/service-categories`);
+  return data;
+}
+
+export async function createService(input: {
+  categoryId?: string | null;
+  name: string;
+  description?: string | null;
+  durationMinutes: number;
+  bufferAfterMinutes?: number;
+  bufferBeforeMinutes?: number;
+  priceHellers: number;
+  currency?: string;
+  color?: string | null;
+  imageUrl?: string | null;
+  isPublic?: boolean;
+  depositPercent?: number | null;
+  capacity?: number;
+  sortOrder?: number;
+}): Promise<AdminServiceFull> {
+  const { data } = await fetchApi<{ data: AdminServiceFull }>(`/admin/services`, {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+  return data;
+}
+
+export async function updateService(
+  id: string,
+  input: Partial<Parameters<typeof createService>[0]> & { isActive?: boolean },
+): Promise<AdminServiceFull> {
+  const { data } = await fetchApi<{ data: AdminServiceFull }>(`/admin/services/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(input),
+  });
+  return data;
+}
+
+export async function deleteService(id: string): Promise<void> {
+  await fetchApi(`/admin/services/${id}`, { method: 'DELETE' });
+}
+
+export async function createServiceCategory(input: {
+  name: string;
+  description?: string | null;
+  color?: string | null;
+  icon?: string | null;
+  sortOrder?: number;
+}): Promise<AdminServiceCategory> {
+  const { data } = await fetchApi<{ data: AdminServiceCategory }>(`/admin/service-categories`, {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+  return data;
+}
+
+// ─── Employees CRUD (sprint 1.3) ──────────────────────────────────────
+
+export interface AdminEmployeeFull extends AdminEmployee {
+  email: string | null;
+  phone: string | null;
+  title: string | null;
+  bio: string | null;
+  avatarUrl: string | null;
+  isActive: boolean;
+  isPublic: boolean;
+  acceptsOnlineBookings: boolean;
+  sortOrder: number;
+  createdAt: string;
+}
+
+export async function listEmployeesFull(): Promise<AdminEmployeeFull[]> {
+  const { data } = await fetchApi<{ data: AdminEmployeeFull[] }>(`/admin/employees`);
+  return data;
+}
+
+export async function createEmployee(input: {
+  firstName: string;
+  lastName: string;
+  displayName?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  title?: string | null;
+  bio?: string | null;
+  color?: string | null;
+  avatarUrl?: string | null;
+  isPublic?: boolean;
+  acceptsOnlineBookings?: boolean;
+  sortOrder?: number;
+}): Promise<AdminEmployeeFull> {
+  const { data } = await fetchApi<{ data: AdminEmployeeFull }>(`/admin/employees`, {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+  return data;
+}
+
+export async function updateEmployee(
+  id: string,
+  input: Partial<Parameters<typeof createEmployee>[0]> & { isActive?: boolean },
+): Promise<AdminEmployeeFull> {
+  const { data } = await fetchApi<{ data: AdminEmployeeFull }>(`/admin/employees/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(input),
+  });
+  return data;
+}
+
+export async function deleteEmployee(id: string): Promise<void> {
+  await fetchApi(`/admin/employees/${id}`, { method: 'DELETE' });
+}
+
 // ─── Customers (sprint 1.7) ──────────────────────────────────────────
 
 export interface AdminCustomer {
@@ -1430,4 +1575,86 @@ export async function getCorporateUsageReport(
     `/admin/corporate-accounts/${id}/usage-report${qs ? `?${qs}` : ''}`,
   );
   return data;
+}
+
+// ─── Google Calendar integration (sprint 3.3 fáze C) ──────────────────
+
+export interface AdminGoogleConnection {
+  id: string;
+  employeeId: string;
+  googleEmail: string | null;
+  calendarId: string;
+  isActive: boolean;
+  lastSyncedAt: string | null;
+  lastSyncError: string | null;
+  consecutiveErrors: string;
+  revokedAt: string | null;
+  createdAt: string;
+}
+
+export async function listGoogleConnections(): Promise<AdminGoogleConnection[]> {
+  const { data } = await fetchApi<{ data: AdminGoogleConnection[] }>(
+    `/admin/integrations/google/connections`,
+  );
+  return data;
+}
+
+export async function startGoogleConnect(employeeId: string): Promise<{ authUrl: string }> {
+  const { data } = await fetchApi<{ data: { authUrl: string } }>(
+    `/admin/integrations/google/connections/${employeeId}/start`,
+    { method: 'POST' },
+  );
+  return data;
+}
+
+export async function revokeGoogleConnection(employeeId: string): Promise<void> {
+  await fetchApi(`/admin/integrations/google/connections/${employeeId}`, {
+    method: 'DELETE',
+  });
+}
+
+// ─── Feature flags (sprint 3.3 fáze D) ────────────────────────────────
+
+export interface AdminFeatureFlag {
+  id: string;
+  key: string;
+  description: string | null;
+  isEnabled: boolean;
+  config: Record<string, unknown>;
+  updatedBy: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export async function listFeatureFlags(): Promise<AdminFeatureFlag[]> {
+  const { data } = await fetchApi<{ data: AdminFeatureFlag[] }>(`/admin/feature-flags`);
+  return data;
+}
+
+export async function upsertFeatureFlag(input: {
+  key: string;
+  description?: string | null;
+  isEnabled: boolean;
+  config?: Record<string, unknown>;
+}): Promise<AdminFeatureFlag> {
+  const { data } = await fetchApi<{ data: AdminFeatureFlag }>(`/admin/feature-flags`, {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+  return data;
+}
+
+export async function toggleFeatureFlag(
+  key: string,
+  isEnabled: boolean,
+): Promise<AdminFeatureFlag> {
+  const { data } = await fetchApi<{ data: AdminFeatureFlag }>(
+    `/admin/feature-flags/${encodeURIComponent(key)}`,
+    { method: 'PATCH', body: JSON.stringify({ isEnabled }) },
+  );
+  return data;
+}
+
+export async function deleteFeatureFlag(key: string): Promise<void> {
+  await fetchApi(`/admin/feature-flags/${encodeURIComponent(key)}`, { method: 'DELETE' });
 }

@@ -81,6 +81,12 @@ export class PortalMeController {
     return { data: await this.me.listMyTimePacks(tenantId, customerId) };
   }
 
+  @Get('subscriptions')
+  async listSubscriptions(@Req() req: Request): Promise<{ data: unknown }> {
+    const { tenantId, customerId } = this.requireAuth(req);
+    return { data: await this.me.listMySubscriptions(tenantId, customerId) };
+  }
+
   @Post('bookings/:id/cancel')
   @HttpCode(200)
   async cancelBooking(
