@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   AdjustTimePackSchema,
   AllocateTimePackSchema,
+  AllocateTimePackToCorporateSchema,
   CreateTimePackSchema,
 } from '../dto/time-pack.dto.js';
 
@@ -176,6 +177,26 @@ describe('AdjustTimePackSchema', () => {
     const result = AdjustTimePackSchema.safeParse({
       extendDays: 7.5,
       note: 'pul dne',
+    });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe('AllocateTimePackToCorporateSchema (B2-extended)', () => {
+  it('accepts minimal input', () => {
+    const result = AllocateTimePackToCorporateSchema.safeParse({ timePackId: UUID_A });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects non-UUID timePackId', () => {
+    const result = AllocateTimePackToCorporateSchema.safeParse({ timePackId: 'not-uuid' });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects negative pricePaidHellers', () => {
+    const result = AllocateTimePackToCorporateSchema.safeParse({
+      timePackId: UUID_A,
+      pricePaidHellers: -1,
     });
     expect(result.success).toBe(false);
   });

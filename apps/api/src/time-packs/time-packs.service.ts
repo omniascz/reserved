@@ -21,13 +21,14 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { and, asc, count, desc, eq, gte, isNull, lt, lte, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, gte, inArray, isNull, lt, lte, or, sql } from 'drizzle-orm';
 import { schema } from '@reserved/db';
 import { type AppRole, serviceContext, type TenantContext } from '@reserved/rls-multitenancy';
 import { DbService } from '../db/db.service.js';
 import type {
   AdjustTimePackDto,
   AllocateTimePackDto,
+  AllocateTimePackToCorporateDto,
   CreateTimePackDto,
   UpdateTimePackDto,
 } from './dto/time-pack.dto.js';
@@ -227,6 +228,78 @@ export class TimePacksService {
     });
   }
 
+  /** Alokace firme (sprint 3.3 fáze B2-extended). */
+  async allocateToCorporate(
+    tenantId: string,
+    userId: string,
+    role: AppRole,
+    corporateAccountId: string,
+    dto: AllocateTimePackToCorporateDto,
+  ) {
+    assertCanAllocate(role);
+    return this.dbService.withRlsContext(ctxFor(tenantId, userId, role), async (tx) => {
+      const [account] = await tx
+        .select({ id: schema.corporateAccounts.id })
+        .from(schema.corporateAccounts)
+        .where(
+          and(
+            eq(schema.corporateAccounts.id, corporateAccountId),
+            eq(schema.corporateAccounts.tenantId, tenantId),
+            eq(schema.corporateAccounts.isActive, true),
+          ),
+        )
+        .limit(1);
+      if (!account) {
+        throw new NotFoundException({
+          error: { code: 'CORPORATE_ACCOUNT_NOT_FOUND', message: 'Aktivní firma nenalezena.' },
+        });
+      }
+
+      const [pack] = await tx
+        .select()
+        .from(schema.timePacks)
+        .where(
+          and(
+            eq(schema.timePacks.id, dto.timePackId),
+            eq(schema.timePacks.tenantId, tenantId),
+            eq(schema.timePacks.isActive, true),
+          ),
+        )
+        .limit(1);
+      if (!pack) {
+        throw new NotFoundException({
+          error: { code: 'TIME_PACK_NOT_FOUND', message: 'Aktivní časový balíček nenalezen.' },
+        });
+      }
+
+      const validFrom = dto.validFromIso ? new Date(dto.validFromIso) : new Date();
+      const validUntil = new Date(validFrom.getTime() + pack.durationDays * 24 * 60 * 60 * 1000);
+
+      const [allocated] = await tx
+        .insert(schema.customerTimePacks)
+        .values({
+          tenantId,
+          customerId: null,
+          corporateAccountId,
+          timePackId: pack.id,
+          snapshotMaxBookingsPerPeriod: pack.maxBookingsPerPeriod,
+          snapshotMaxBookingsPerDay: pack.maxBookingsPerDay,
+          snapshotAllowedServiceIds: pack.allowedServiceIds,
+          snapshotAllowedBranchIds: pack.allowedBranchIds,
+          bookingsUsed: 0,
+          validFrom,
+          validUntil,
+          status: 'active',
+          pricePaidHellers: dto.pricePaidHellers ?? pack.priceHellers,
+          soldBy: userId,
+          note: dto.note ?? null,
+        })
+        .returning();
+
+      return allocated!;
+    });
+  }
+
   async listForCustomer(tenantId: string, userId: string, role: AppRole, customerId: string) {
     return this.dbService.withRlsContext(ctxFor(tenantId, userId, role), async (tx) => {
       const rows = await tx
@@ -334,19 +407,44 @@ export class TimePacksService {
     performedBy: string | null;
   }): Promise<{ allocationId: string; bookingsUsed: number } | null> {
     return this.dbService.withRlsContext(serviceContext(input.tenantId), async (tx) => {
+      // B2-extended: najdi firmy kde je customer aktivni clen
+      const corporateRows = await tx
+        .select({ corporateAccountId: schema.corporateAccountMembers.corporateAccountId })
+        .from(schema.corporateAccountMembers)
+        .where(
+          and(
+            eq(schema.corporateAccountMembers.tenantId, input.tenantId),
+            eq(schema.corporateAccountMembers.customerId, input.customerId),
+            isNull(schema.corporateAccountMembers.removedAt),
+          ),
+        );
+      const corporateIds = corporateRows.map((r) => r.corporateAccountId);
+
+      const ownerFilter =
+        corporateIds.length > 0
+          ? or(
+              eq(schema.customerTimePacks.customerId, input.customerId),
+              inArray(schema.customerTimePacks.corporateAccountId, corporateIds),
+            )
+          : eq(schema.customerTimePacks.customerId, input.customerId);
+
       const candidates = await tx
         .select()
         .from(schema.customerTimePacks)
         .where(
           and(
             eq(schema.customerTimePacks.tenantId, input.tenantId),
-            eq(schema.customerTimePacks.customerId, input.customerId),
+            ownerFilter,
             eq(schema.customerTimePacks.status, 'active'),
             gte(schema.customerTimePacks.validUntil, input.bookingStartsAt),
             lte(schema.customerTimePacks.validFrom, input.bookingStartsAt),
           ),
         )
-        .orderBy(asc(schema.customerTimePacks.validUntil));
+        .orderBy(
+          // Priorita: vlastni pred firemnimi.
+          sql`${schema.customerTimePacks.corporateAccountId} ASC NULLS FIRST`,
+          asc(schema.customerTimePacks.validUntil),
+        );
 
       for (const alloc of candidates) {
         const allowedServices = (alloc.snapshotAllowedServiceIds as string[]) ?? [];

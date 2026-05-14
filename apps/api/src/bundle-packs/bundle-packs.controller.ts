@@ -16,10 +16,12 @@ import { ZodValidationPipe } from '../auth/zod-validation.pipe.js';
 import {
   AdjustBundleItemSchema,
   AllocateBundlePackSchema,
+  AllocateBundlePackToCorporateSchema,
   CreateBundlePackSchema,
   UpdateBundlePackSchema,
   type AdjustBundleItemDto,
   type AllocateBundlePackDto,
+  type AllocateBundlePackToCorporateDto,
   type CreateBundlePackDto,
   type UpdateBundlePackDto,
 } from './dto/bundle-pack.dto.js';
@@ -102,6 +104,27 @@ export class BundlePacksController {
   async uses(@CurrentUser() user: AccessTokenPayload, @Param('id', ParseUUIDPipe) id: string) {
     return {
       data: await this.svc.listUsesForAllocation(user.tenantId, user.sub, user.role, id),
+    };
+  }
+
+  // ─── Corporate allocation (sprint 3.3 fáze B2-extended) ──────────
+
+  @Post('corporate-accounts/:corporateAccountId/bundle-packs')
+  @HttpCode(201)
+  async allocateToCorporate(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('corporateAccountId', ParseUUIDPipe) corporateAccountId: string,
+    @Body(new ZodValidationPipe(AllocateBundlePackToCorporateSchema))
+    dto: AllocateBundlePackToCorporateDto,
+  ) {
+    return {
+      data: await this.svc.allocateToCorporate(
+        user.tenantId,
+        user.sub,
+        user.role,
+        corporateAccountId,
+        dto,
+      ),
     };
   }
 }

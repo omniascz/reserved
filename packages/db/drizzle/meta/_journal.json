@@ -197,6 +197,20 @@
       "when": 1778743600000,
       "tag": "0027_corporate_credit_packs_check",
       "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1778744419177,
+      "tag": "0028_easy_radioactive_man",
+      "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1778744500000,
+      "tag": "0029_corporate_bundle_time_check",
+      "breakpoints": true
     }
   ]
 }

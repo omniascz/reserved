@@ -42,3 +42,12 @@ export const AdjustBundleItemSchema = z.object({
   note: z.string().max(500),
 });
 export type AdjustBundleItemDto = z.infer<typeof AdjustBundleItemSchema>;
+
+// Alokace firme (sprint 3.3 fáze B2-extended)
+export const AllocateBundlePackToCorporateSchema = z.object({
+  bundlePackId: z.string().uuid(),
+  pricePaidHellers: z.number().int().nonnegative().optional(),
+  validFromIso: z.string().datetime().optional(),
+  note: z.string().max(500).optional().nullable(),
+});
+export type AllocateBundlePackToCorporateDto = z.infer<typeof AllocateBundlePackToCorporateSchema>;
