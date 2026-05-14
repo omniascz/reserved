@@ -12,6 +12,7 @@ const NAV = [
   { href: '/credit-packs', label: 'Permanentky' },
   { href: '/bundle-packs', label: 'Bundle' },
   { href: '/time-packs', label: 'Časové' },
+  { href: '/subscription-plans', label: 'Předplatné' },
   { href: '/corporate-accounts', label: 'Firmy' },
   { href: '/payments', label: 'Platby' },
   { href: '/rules', label: 'Pravidla' },
