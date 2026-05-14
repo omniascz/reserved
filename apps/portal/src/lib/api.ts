@@ -233,6 +233,50 @@ export async function listMyCreditPacks(): Promise<PortalCreditPack[]> {
   return data;
 }
 
+export interface PortalBundleItem {
+  serviceId: string;
+  quantity: number;
+}
+
+export interface PortalBundlePack {
+  id: string;
+  bundlePackId: string;
+  packName: string | null;
+  itemsRemaining: PortalBundleItem[];
+  snapshotItems: PortalBundleItem[];
+  validFrom: string;
+  validUntil: string | null;
+  status: 'active' | 'expired' | 'used_up' | 'refunded' | 'cancelled';
+  pricePaidHellers: number;
+  note: string | null;
+  purchasedAt: string;
+}
+
+export async function listMyBundlePacks(): Promise<PortalBundlePack[]> {
+  const { data } = await fetchApi<{ data: PortalBundlePack[] }>(`/portal/me/bundle-packs`);
+  return data;
+}
+
+export interface PortalTimePack {
+  id: string;
+  timePackId: string;
+  packName: string | null;
+  bookingsUsed: number;
+  snapshotMaxBookingsPerPeriod: number | null;
+  snapshotMaxBookingsPerDay: number | null;
+  validFrom: string;
+  validUntil: string;
+  status: 'active' | 'expired' | 'used_up' | 'refunded' | 'cancelled';
+  pricePaidHellers: number;
+  note: string | null;
+  purchasedAt: string;
+}
+
+export async function listMyTimePacks(): Promise<PortalTimePack[]> {
+  const { data } = await fetchApi<{ data: PortalTimePack[] }>(`/portal/me/time-packs`);
+  return data;
+}
+
 export async function rescheduleMyBooking(
   id: string,
   newStartsAt: string,
