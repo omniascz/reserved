@@ -115,6 +115,8 @@ export class StripePaymentProvider implements PaymentProvider {
       amountHellers,
       failureReason,
       rawPayload: event as unknown as Record<string, unknown>,
+      stripeEventType: event.type,
+      stripeEventId: event.id,
     };
   }
 

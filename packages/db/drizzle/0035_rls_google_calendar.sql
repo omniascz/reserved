@@ -1,6 +1,6 @@
 -- ============================================================================
 -- RLS na google_calendar_connections + google_calendar_event_links
--- (sprint 3.3 fáze C1).
+-- (sprint 3.3 fáze C1 — regenerated po mergi s main).
 -- ============================================================================
 
 ALTER TABLE google_calendar_connections ENABLE ROW LEVEL SECURITY;
