@@ -1683,3 +1683,110 @@ export async function toggleFeatureFlag(
 export async function deleteFeatureFlag(key: string): Promise<void> {
   await fetchApi(`/admin/feature-flags/${encodeURIComponent(key)}`, { method: 'DELETE' });
 }
+
+// ─── Outgoing webhooks (sprint 3.3 fáze C5) ──────────────────────────
+
+export const WEBHOOK_EVENT_TYPES = [
+  'booking.created',
+  'booking.confirmed',
+  'booking.cancelled',
+  'booking.completed',
+  'booking.no_show',
+  'customer.created',
+] as const;
+export type WebhookEventType = (typeof WEBHOOK_EVENT_TYPES)[number];
+
+export interface AdminWebhook {
+  id: string;
+  name: string;
+  url: string;
+  eventTypes: WebhookEventType[];
+  isActive: boolean;
+  consecutiveErrors: number;
+  lastSuccessAt: string | null;
+  lastErrorAt: string | null;
+  lastError: string | null;
+  createdAt: string;
+}
+
+export interface AdminWebhookCreated extends Omit<
+  AdminWebhook,
+  'consecutiveErrors' | 'lastSuccessAt' | 'lastErrorAt' | 'lastError'
+> {
+  /** Secret se vraci JEDINKRAT pri create — admin ho musi zkopirovat. */
+  secret: string;
+}
+
+export interface AdminWebhookDelivery {
+  id: string;
+  webhookId: string;
+  eventType: string;
+  status: 'pending' | 'sent' | 'failed';
+  attempts: number;
+  responseStatus: number | null;
+  responseBody: string | null;
+  lastError: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export async function listWebhooks(): Promise<AdminWebhook[]> {
+  const { data } = await fetchApi<{ data: AdminWebhook[] }>(`/admin/webhooks`);
+  return data;
+}
+
+export async function createWebhook(input: {
+  name: string;
+  url: string;
+  eventTypes: WebhookEventType[];
+}): Promise<AdminWebhookCreated> {
+  const { data } = await fetchApi<{ data: AdminWebhookCreated }>(`/admin/webhooks`, {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+  return data;
+}
+
+export async function updateWebhook(
+  id: string,
+  input: {
+    name?: string;
+    url?: string;
+    eventTypes?: WebhookEventType[];
+    isActive?: boolean;
+  },
+): Promise<AdminWebhook> {
+  const { data } = await fetchApi<{ data: AdminWebhook }>(`/admin/webhooks/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(input),
+  });
+  return data;
+}
+
+export async function deleteWebhook(id: string): Promise<void> {
+  await fetchApi(`/admin/webhooks/${id}`, { method: 'DELETE' });
+}
+
+export async function testWebhook(id: string): Promise<{
+  ok: boolean;
+  responseStatus: number | null;
+  responseBody: string | null;
+  error: string | null;
+}> {
+  const { data } = await fetchApi<{
+    data: {
+      ok: boolean;
+      responseStatus: number | null;
+      responseBody: string | null;
+      error: string | null;
+    };
+  }>(`/admin/webhooks/${id}/test`, { method: 'POST' });
+  return data;
+}
+
+export async function listWebhookDeliveries(id: string): Promise<AdminWebhookDelivery[]> {
+  const { data } = await fetchApi<{ data: AdminWebhookDelivery[] }>(
+    `/admin/webhooks/${id}/deliveries`,
+  );
+  return data;
+}
