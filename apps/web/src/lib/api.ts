@@ -931,6 +931,65 @@ export async function createCheckout(input: {
   return data;
 }
 
+// ─── Bundle packs (sprint 3.3 phase A1) ───────────────────────────────
+
+export interface BundleItem {
+  serviceId: string;
+  quantity: number;
+}
+
+export interface AdminBundlePack {
+  id: string;
+  name: string;
+  description: string | null;
+  items: BundleItem[];
+  validityDays: number | null;
+  priceHellers: number;
+  currency: string;
+  allowedBranchIds: string[];
+  sameVisitRequired: boolean;
+  isActive: boolean;
+  createdAt: string;
+}
+
+export async function listBundlePacks(): Promise<AdminBundlePack[]> {
+  const { data } = await fetchApi<{ data: AdminBundlePack[] }>(`/admin/bundle-packs`);
+  return data;
+}
+
+export async function createBundlePack(input: {
+  name: string;
+  description?: string | null;
+  items: BundleItem[];
+  validityDays?: number | null;
+  priceHellers: number;
+  currency?: string;
+  allowedBranchIds?: string[];
+  sameVisitRequired?: boolean;
+  isActive?: boolean;
+}): Promise<AdminBundlePack> {
+  const { data } = await fetchApi<{ data: AdminBundlePack }>(`/admin/bundle-packs`, {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+  return data;
+}
+
+export async function updateBundlePack(
+  id: string,
+  input: Partial<Parameters<typeof createBundlePack>[0]>,
+): Promise<AdminBundlePack> {
+  const { data } = await fetchApi<{ data: AdminBundlePack }>(`/admin/bundle-packs/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(input),
+  });
+  return data;
+}
+
+export async function deleteBundlePack(id: string): Promise<void> {
+  await fetchApi(`/admin/bundle-packs/${id}`, { method: 'DELETE' });
+}
+
 // ─── Corporate accounts (sprint 3.3 B1-B3) ────────────────────────────
 
 export interface AdminCorporateAccount {
