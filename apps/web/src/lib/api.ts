@@ -1577,6 +1577,42 @@ export async function getCorporateUsageReport(
   return data;
 }
 
+// ─── Google Calendar integration (sprint 3.3 fáze C) ──────────────────
+
+export interface AdminGoogleConnection {
+  id: string;
+  employeeId: string;
+  googleEmail: string | null;
+  calendarId: string;
+  isActive: boolean;
+  lastSyncedAt: string | null;
+  lastSyncError: string | null;
+  consecutiveErrors: string;
+  revokedAt: string | null;
+  createdAt: string;
+}
+
+export async function listGoogleConnections(): Promise<AdminGoogleConnection[]> {
+  const { data } = await fetchApi<{ data: AdminGoogleConnection[] }>(
+    `/admin/integrations/google/connections`,
+  );
+  return data;
+}
+
+export async function startGoogleConnect(employeeId: string): Promise<{ authUrl: string }> {
+  const { data } = await fetchApi<{ data: { authUrl: string } }>(
+    `/admin/integrations/google/connections/${employeeId}/start`,
+    { method: 'POST' },
+  );
+  return data;
+}
+
+export async function revokeGoogleConnection(employeeId: string): Promise<void> {
+  await fetchApi(`/admin/integrations/google/connections/${employeeId}`, {
+    method: 'DELETE',
+  });
+}
+
 // ─── Feature flags (sprint 3.3 fáze D) ────────────────────────────────
 
 export interface AdminFeatureFlag {
