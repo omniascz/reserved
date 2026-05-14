@@ -36,6 +36,10 @@ export const CreateServiceSchema = z.object({
   depositPercent: z.number().int().min(0).max(100).optional().nullable(),
   capacity: z.number().int().min(1).max(500).default(1),
   sortOrder: z.number().int().nonnegative().default(0),
+  /** Online služba (videohovor) — bookings dostane meeting URL. */
+  isOnline: z.boolean().default(false),
+  /** Default URL (např. Zoom room) — kopíruje se do booking.onlineMeetingUrl. */
+  defaultOnlineMeetingUrl: z.string().url().max(2000).optional().nullable(),
 });
 export type CreateServiceDto = z.infer<typeof CreateServiceSchema>;
 
