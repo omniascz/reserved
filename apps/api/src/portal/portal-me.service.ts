@@ -103,6 +103,17 @@ export class PortalMeService {
   }
 
   // ---------------------------------------------------------------------------
+  // Bundle / Time / Subscription (sprint 3.3 UI portal)
+  // ---------------------------------------------------------------------------
+  async listMyBundlePacks(tenantId: string, customerId: string) {
+    return this.bundlePacks.listForCustomer(tenantId, customerId, 'customer', customerId);
+  }
+
+  async listMyTimePacks(tenantId: string, customerId: string) {
+    return this.timePacks.listForCustomer(tenantId, customerId, 'customer', customerId);
+  }
+
+  // ---------------------------------------------------------------------------
   // Bookings list
   // ---------------------------------------------------------------------------
   async listBookings(tenantId: string, customerId: string) {
