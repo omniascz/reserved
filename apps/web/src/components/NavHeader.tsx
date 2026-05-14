@@ -8,6 +8,8 @@ const NAV = [
   { href: '/dashboard', label: 'Dashboard' },
   { href: '/calendar', label: 'Kalendář' },
   { href: '/customers', label: 'Zákazníci' },
+  { href: '/services', label: 'Služby' },
+  { href: '/employees', label: 'Zaměstnanci' },
   { href: '/branches', label: 'Pobočky' },
   { href: '/credit-packs', label: 'Permanentky' },
   { href: '/bundle-packs', label: 'Bundle' },
