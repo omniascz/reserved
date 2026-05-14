@@ -239,6 +239,13 @@
       "when": 1778756600000,
       "tag": "0033_rls_feature_flags",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1778760448591,
+      "tag": "0034_curious_garia",
+      "breakpoints": true
     }
   ]
 }

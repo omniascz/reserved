@@ -144,6 +144,7 @@ export class PortalMeService {
         pricePaidHellers: r.booking.pricePaidHellers,
         currency: r.booking.currency,
         customerNote: r.booking.customerNote,
+        onlineMeetingUrl: r.booking.onlineMeetingUrl,
         serviceName: r.serviceName,
         serviceDuration: r.serviceDuration,
         serviceColor: r.serviceColor,

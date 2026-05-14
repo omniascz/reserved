@@ -90,6 +90,10 @@ export const services = pgTable(
     capacity: integer('capacity').notNull().default(1),
     /** Pořadí v rámci kategorie. */
     sortOrder: integer('sort_order').notNull().default(0),
+    /** Online služba (videohovor) — generuje/kopíruje meeting URL do booking. */
+    isOnline: boolean('is_online').notNull().default(false),
+    /** Default meeting URL (např. Zoom room link) — kopíruje se do booking.onlineMeetingUrl. */
+    defaultOnlineMeetingUrl: text('default_online_meeting_url'),
     isActive: boolean('is_active').notNull().default(true),
     /** Volné rozšíření (např. equipment_required, intake_form_url, ...). */
     metadata: jsonb('metadata').notNull().default({}),

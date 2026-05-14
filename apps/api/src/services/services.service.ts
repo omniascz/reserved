@@ -181,6 +181,8 @@ export class ServicesService {
           depositPercent: dto.depositPercent ?? null,
           capacity: dto.capacity,
           sortOrder: dto.sortOrder,
+          isOnline: dto.isOnline,
+          defaultOnlineMeetingUrl: dto.defaultOnlineMeetingUrl ?? null,
         })
         .returning();
       return row;
@@ -217,6 +219,10 @@ export class ServicesService {
           ...(dto.depositPercent !== undefined ? { depositPercent: dto.depositPercent } : {}),
           ...(dto.capacity !== undefined ? { capacity: dto.capacity } : {}),
           ...(dto.sortOrder !== undefined ? { sortOrder: dto.sortOrder } : {}),
+          ...(dto.isOnline !== undefined ? { isOnline: dto.isOnline } : {}),
+          ...(dto.defaultOnlineMeetingUrl !== undefined
+            ? { defaultOnlineMeetingUrl: dto.defaultOnlineMeetingUrl }
+            : {}),
           ...(dto.isActive !== undefined ? { isActive: dto.isActive } : {}),
           updatedAt: new Date(),
         })

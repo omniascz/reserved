@@ -192,6 +192,7 @@ export class BookingsService {
             currency: service.currency,
             customerNote: dto.customerNote ?? null,
             referenceCode: refCode,
+            onlineMeetingUrl: service.isOnline ? service.defaultOnlineMeetingUrl : null,
             metadata: {
               source: 'public_widget',
               ...(discount.discountPercent > 0 && {
@@ -449,6 +450,7 @@ export class BookingsService {
               customerNote: dto.customerNote ?? null,
               internalNote: dto.internalNote ?? null,
               referenceCode: refCode,
+              onlineMeetingUrl: service.isOnline ? service.defaultOnlineMeetingUrl : null,
               metadata: {
                 source: 'admin',
                 createdByUserId: userId,

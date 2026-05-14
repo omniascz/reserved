@@ -81,6 +81,8 @@ export const bookings = pgTable(
     internalNote: text('internal_note'),
     /** Referenční kód, který zákazník dostane v potvrzovacím emailu. */
     referenceCode: varchar('reference_code', { length: 16 }).notNull(),
+    /** Online meeting URL (Zoom, Meet, Teams) — pro online služby (videohovor). */
+    onlineMeetingUrl: text('online_meeting_url'),
     /** Volné metadata (zdroj rezervace: 'web', 'admin', 'phone', ...). */
     metadata: jsonb('metadata').notNull().default({}),
     cancelledAt: timestamp('cancelled_at', { withTimezone: true }),
