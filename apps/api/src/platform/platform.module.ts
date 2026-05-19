@@ -10,10 +10,20 @@ import { PlatformTenantsController } from './platform-tenants.controller.js';
 import { PlatformTenantsService } from './platform-tenants.service.js';
 import { PlatformTenantActionsService } from './platform-tenant-actions.service.js';
 import { PlatformImpersonationService } from './platform-impersonation.service.js';
+import {
+  PlatformAuditController,
+  PlatformDashboardController,
+} from './platform-dashboard.controller.js';
+import { PlatformDashboardService } from './platform-dashboard.service.js';
 
 @Module({
   imports: [DbModule, AuthModule],
-  controllers: [PlatformAuthController, PlatformTenantsController],
+  controllers: [
+    PlatformAuthController,
+    PlatformTenantsController,
+    PlatformDashboardController,
+    PlatformAuditController,
+  ],
   providers: [
     PlatformAuthService,
     PlatformAuditService,
@@ -22,6 +32,7 @@ import { PlatformImpersonationService } from './platform-impersonation.service.j
     PlatformTenantsService,
     PlatformTenantActionsService,
     PlatformImpersonationService,
+    PlatformDashboardService,
   ],
   exports: [PlatformJwtService, PlatformGuard, PlatformAuditService],
 })
