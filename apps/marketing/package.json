@@ -1,0 +1,30 @@
+{
+  "name": "@reserved/marketing",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "Veřejný web reserved.cz — landing, pricing, vertikální landings.",
+  "scripts": {
+    "dev": "next dev -p 4005",
+    "build": "next build",
+    "start": "next start -p 4005",
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "next": "^14.2.18",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.49",
+    "tailwindcss": "^3.4.14",
+    "typescript": "^5.7.0",
+    "vitest": "^2.1.0"
+  }
+}
