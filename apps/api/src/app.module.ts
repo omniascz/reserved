@@ -19,6 +19,7 @@ import { EmployeesModule } from './employees/employees.module.js';
 import { HealthController } from './health/health.controller.js';
 import { HolidaysModule } from './holidays/holidays.module.js';
 import { PaymentsModule } from './payments/payments.module.js';
+import { PlatformModule } from './platform/platform.module.js';
 import { PortalModule } from './portal/portal.module.js';
 import { PublicModule } from './public/public.module.js';
 import { ReportsModule } from './reports/reports.module.js';
@@ -57,6 +58,7 @@ import { TenantMiddleware } from './tenant/tenant.middleware.js';
     PaymentsModule,
     BlocksModule,
     HolidaysModule,
+    PlatformModule,
     PortalModule,
     PublicModule,
     ReportsModule,
