@@ -8,13 +8,17 @@ import {
   clearAuth,
   getAccessToken,
   getBookingRules,
+  getNotificationSettings,
   updateBookingRules,
+  updateNotificationSettings,
   type BookingRules,
+  type NotificationSettings,
 } from '@/lib/api';
 
 export default function SettingsPage() {
   const router = useRouter();
   const [rules, setRules] = useState<BookingRules | null>(null);
+  const [notif, setNotif] = useState<NotificationSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -25,8 +29,11 @@ export default function SettingsPage() {
   }, [router]);
 
   useEffect(() => {
-    getBookingRules()
-      .then(setRules)
+    Promise.all([getBookingRules(), getNotificationSettings()])
+      .then(([r, n]) => {
+        setRules(r);
+        setNotif(n);
+      })
       .catch((e) => {
         if (e instanceof AdminApiError && e.status === 401) {
           clearAuth();
@@ -40,13 +47,17 @@ export default function SettingsPage() {
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
-    if (!rules) return;
+    if (!rules || !notif) return;
     setSaving(true);
     setError(null);
     setSuccess(null);
     try {
-      const updated = await updateBookingRules(rules);
-      setRules(updated);
+      const [updatedRules, updatedNotif] = await Promise.all([
+        updateBookingRules(rules),
+        updateNotificationSettings(notif),
+      ]);
+      setRules(updatedRules);
+      setNotif(updatedNotif);
       setSuccess('Uloženo.');
       setTimeout(() => setSuccess(null), 3000);
     } catch (e) {
@@ -65,7 +76,7 @@ export default function SettingsPage() {
     );
   }
 
-  if (!rules) {
+  if (!rules || !notif) {
     return (
       <div className="min-h-screen flex flex-col">
         <NavHeader />
@@ -181,6 +192,65 @@ export default function SettingsPage() {
                 className="w-32 px-3 py-2 border border-slate-300 rounded-lg"
               />
             </Field>
+          </Card>
+
+          <Card title="Připomínky před rezervací">
+            <Field
+              label="Kolik hodin před začátkem poslat připomínku"
+              suffix="hodin (0 = vypnuto)"
+              help="Worker automaticky pošle email připomínku. Pokud je SMS zapnutá a klient má telefon, pošle se i SMS."
+            >
+              <input
+                type="number"
+                min="0"
+                max="168"
+                value={notif.reminderHoursBefore}
+                onChange={(e) =>
+                  setNotif({ ...notif, reminderHoursBefore: Number(e.target.value) || 0 })
+                }
+                className="w-32 px-3 py-2 border border-slate-300 rounded-lg"
+              />
+            </Field>
+            <div>
+              <label className="block text-sm font-medium mb-1">Primární kanál</label>
+              <div className="flex items-center gap-3">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="primaryChannel"
+                    checked={notif.primaryChannel === 'email'}
+                    onChange={() => setNotif({ ...notif, primaryChannel: 'email' })}
+                  />
+                  <span>E-mail</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="primaryChannel"
+                    checked={notif.primaryChannel === 'sms'}
+                    onChange={() => setNotif({ ...notif, primaryChannel: 'sms' })}
+                  />
+                  <span>SMS (vyžaduje telefon u klienta)</span>
+                </label>
+              </div>
+              <p className="text-xs text-slate-500 mt-1">
+                Pokud zvolíš SMS jako primární a klient nemá telefon, pošle se email jako záloha.
+              </p>
+            </div>
+            <div>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={notif.smsEnabled}
+                  onChange={(e) => setNotif({ ...notif, smsEnabled: e.target.checked })}
+                />
+                <span className="text-sm font-medium">Posílat i SMS připomínku</span>
+              </label>
+              <p className="text-xs text-slate-500 mt-1 ml-6">
+                Pokud zapneš, dostane klient kromě e-mailu i SMS — když má telefon v profilu. SMS
+                stojí navíc (~1 Kč/zpráva).
+              </p>
+            </div>
           </Card>
 
           <button

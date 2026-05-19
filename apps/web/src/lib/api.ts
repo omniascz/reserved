@@ -1861,3 +1861,26 @@ export async function createApiKey(input: {
 export async function revokeApiKey(id: string): Promise<void> {
   await fetchApi(`/admin/api-keys/${id}`, { method: 'DELETE' });
 }
+
+// ─── Notification settings ────────────────────────────────────────────
+
+export interface NotificationSettings {
+  reminderHoursBefore: number;
+  primaryChannel: 'email' | 'sms';
+  smsEnabled: boolean;
+}
+
+export async function getNotificationSettings(): Promise<NotificationSettings> {
+  const { data } = await fetchApi<{ data: NotificationSettings }>(`/admin/settings/notifications`);
+  return data;
+}
+
+export async function updateNotificationSettings(
+  input: Partial<NotificationSettings>,
+): Promise<NotificationSettings> {
+  const { data } = await fetchApi<{ data: NotificationSettings }>(`/admin/settings/notifications`, {
+    method: 'PATCH',
+    body: JSON.stringify(input),
+  });
+  return data;
+}
