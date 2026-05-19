@@ -3,6 +3,7 @@ import { and, asc, eq, inArray, isNull } from 'drizzle-orm';
 import { schema } from '@reserved/db';
 import { type AppRole, type TenantContext } from '@reserved/rls-multitenancy';
 import { DbService } from '../db/db.service.js';
+import { OnboardingService } from '../onboarding/onboarding.service.js';
 import type {
   CreateEmployeeDto,
   SetWorkingHoursDto,
@@ -28,7 +29,10 @@ function assertCanManage(role: AppRole): void {
 
 @Injectable()
 export class EmployeesService {
-  constructor(@Inject(DbService) private readonly dbService: DbService) {}
+  constructor(
+    @Inject(DbService) private readonly dbService: DbService,
+    @Inject(OnboardingService) private readonly onboarding: OnboardingService,
+  ) {}
 
   async list(tenantId: string, userId: string, role: AppRole) {
     return this.dbService.withRlsContext(ctxFor(tenantId, userId, role), async (tx) => {
@@ -83,53 +87,61 @@ export class EmployeesService {
 
   async create(tenantId: string, userId: string, role: AppRole, dto: CreateEmployeeDto) {
     assertCanManage(role);
-    return this.dbService.withRlsContext(ctxFor(tenantId, userId, role), async (tx) => {
-      const [employee] = await tx
-        .insert(schema.employees)
-        .values({
-          tenantId,
-          userId: dto.userId ?? null,
-          firstName: dto.firstName,
-          lastName: dto.lastName,
-          displayName: dto.displayName ?? null,
-          email: dto.email ?? null,
-          phone: dto.phone ?? null,
-          bio: dto.bio ?? null,
-          avatarUrl: dto.avatarUrl ?? null,
-          color: dto.color ?? null,
-          title: dto.title ?? null,
-          isPublic: dto.isPublic,
-          acceptsOnlineBookings: dto.acceptsOnlineBookings,
-          sortOrder: dto.sortOrder,
-        })
-        .returning();
-      if (!employee) throw new Error('Failed to create employee');
-
-      // Many-to-many: pobočky
-      if (dto.branchIds.length > 0) {
-        await tx.insert(schema.employeeBranches).values(
-          dto.branchIds.map((branchId, idx) => ({
+    const created = await this.dbService.withRlsContext(
+      ctxFor(tenantId, userId, role),
+      async (tx) => {
+        const [employee] = await tx
+          .insert(schema.employees)
+          .values({
             tenantId,
-            employeeId: employee.id,
-            branchId,
-            isPrimary: idx === 0, // první pobočka = primární
-          })),
-        );
-      }
+            userId: dto.userId ?? null,
+            firstName: dto.firstName,
+            lastName: dto.lastName,
+            displayName: dto.displayName ?? null,
+            email: dto.email ?? null,
+            phone: dto.phone ?? null,
+            bio: dto.bio ?? null,
+            avatarUrl: dto.avatarUrl ?? null,
+            color: dto.color ?? null,
+            title: dto.title ?? null,
+            isPublic: dto.isPublic,
+            acceptsOnlineBookings: dto.acceptsOnlineBookings,
+            sortOrder: dto.sortOrder,
+          })
+          .returning();
+        if (!employee) throw new Error('Failed to create employee');
 
-      // Many-to-many: služby
-      if (dto.serviceIds.length > 0) {
-        await tx.insert(schema.employeeServices).values(
-          dto.serviceIds.map((serviceId) => ({
-            tenantId,
-            employeeId: employee.id,
-            serviceId,
-          })),
-        );
-      }
+        // Many-to-many: pobočky
+        if (dto.branchIds.length > 0) {
+          await tx.insert(schema.employeeBranches).values(
+            dto.branchIds.map((branchId, idx) => ({
+              tenantId,
+              employeeId: employee.id,
+              branchId,
+              isPrimary: idx === 0, // první pobočka = primární
+            })),
+          );
+        }
 
-      return employee;
-    });
+        // Many-to-many: služby
+        if (dto.serviceIds.length > 0) {
+          await tx.insert(schema.employeeServices).values(
+            dto.serviceIds.map((serviceId) => ({
+              tenantId,
+              employeeId: employee.id,
+              serviceId,
+            })),
+          );
+        }
+
+        return employee;
+      },
+    );
+
+    // Onboarding: tym byl pozvan
+    void this.onboarding.markStep(tenantId, 'teamInvited').catch(() => undefined);
+
+    return created;
   }
 
   async update(

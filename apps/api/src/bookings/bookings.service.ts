@@ -23,6 +23,7 @@ import { CustomersService } from '../customers/customers.service.js';
 import { DbService } from '../db/db.service.js';
 import { EmailService } from '../email/email.service.js';
 import { NotificationsScheduler } from '../email/notifications-scheduler.service.js';
+import { OnboardingService } from '../onboarding/onboarding.service.js';
 import { extractNotificationSettings } from '../settings/settings.types.js';
 import { EventBus } from '../rules/events.bus.js';
 import type { BookingEventPayload, TriggerEvent } from '@reserved/rules-engine';
@@ -73,6 +74,7 @@ export class BookingsService {
     @Inject(SubscriptionsService) private readonly subscriptions: SubscriptionsService,
     @Inject(GoogleCalendarService) private readonly googleCal: GoogleCalendarService,
     @Inject(NotificationsScheduler) private readonly scheduler: NotificationsScheduler,
+    @Inject(OnboardingService) private readonly onboarding: OnboardingService,
   ) {}
 
   /**
@@ -150,6 +152,9 @@ export class BookingsService {
         relatedBookingId: input.bookingId,
       });
     }
+
+    // Onboarding: prvni rezervace prijata (idempotent)
+    void this.onboarding.markStep(input.tenantId, 'firstBookingReceived').catch(() => undefined);
   }
 
   private async emitBookingEvent(

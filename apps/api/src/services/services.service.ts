@@ -6,6 +6,7 @@ import { and, asc, eq, isNull } from 'drizzle-orm';
 import { schema } from '@reserved/db';
 import { type AppRole, type TenantContext } from '@reserved/rls-multitenancy';
 import { DbService } from '../db/db.service.js';
+import { OnboardingService } from '../onboarding/onboarding.service.js';
 import type {
   CreateServiceCategoryDto,
   CreateServiceDto,
@@ -32,7 +33,10 @@ function assertCanManage(role: AppRole): void {
 
 @Injectable()
 export class ServicesService {
-  constructor(@Inject(DbService) private readonly dbService: DbService) {}
+  constructor(
+    @Inject(DbService) private readonly dbService: DbService,
+    @Inject(OnboardingService) private readonly onboarding: OnboardingService,
+  ) {}
 
   // ─── Kategorie ────────────────────────────────────────────────────────
 
@@ -162,31 +166,39 @@ export class ServicesService {
 
   async createService(tenantId: string, userId: string, role: AppRole, dto: CreateServiceDto) {
     assertCanManage(role);
-    return this.dbService.withRlsContext(ctxFor(tenantId, userId, role), async (tx) => {
-      const [row] = await tx
-        .insert(schema.services)
-        .values({
-          tenantId,
-          categoryId: dto.categoryId ?? null,
-          name: dto.name,
-          description: dto.description ?? null,
-          durationMinutes: dto.durationMinutes,
-          bufferAfterMinutes: dto.bufferAfterMinutes,
-          bufferBeforeMinutes: dto.bufferBeforeMinutes,
-          priceHellers: dto.priceHellers,
-          currency: dto.currency,
-          color: dto.color ?? null,
-          imageUrl: dto.imageUrl ?? null,
-          isPublic: dto.isPublic,
-          depositPercent: dto.depositPercent ?? null,
-          capacity: dto.capacity,
-          sortOrder: dto.sortOrder,
-          isOnline: dto.isOnline,
-          defaultOnlineMeetingUrl: dto.defaultOnlineMeetingUrl ?? null,
-        })
-        .returning();
-      return row;
-    });
+    const created = await this.dbService.withRlsContext(
+      ctxFor(tenantId, userId, role),
+      async (tx) => {
+        const [row] = await tx
+          .insert(schema.services)
+          .values({
+            tenantId,
+            categoryId: dto.categoryId ?? null,
+            name: dto.name,
+            description: dto.description ?? null,
+            durationMinutes: dto.durationMinutes,
+            bufferAfterMinutes: dto.bufferAfterMinutes,
+            bufferBeforeMinutes: dto.bufferBeforeMinutes,
+            priceHellers: dto.priceHellers,
+            currency: dto.currency,
+            color: dto.color ?? null,
+            imageUrl: dto.imageUrl ?? null,
+            isPublic: dto.isPublic,
+            depositPercent: dto.depositPercent ?? null,
+            capacity: dto.capacity,
+            sortOrder: dto.sortOrder,
+            isOnline: dto.isOnline,
+            defaultOnlineMeetingUrl: dto.defaultOnlineMeetingUrl ?? null,
+          })
+          .returning();
+        return row;
+      },
+    );
+
+    // Onboarding auto-mark: prvni sluzba vytvorena
+    void this.onboarding.markStep(tenantId, 'firstServiceCreated').catch(() => undefined);
+
+    return created;
   }
 
   async updateService(

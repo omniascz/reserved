@@ -1960,3 +1960,81 @@ export async function resumeBillingSubscription(): Promise<{ resumed: true }> {
   });
   return data;
 }
+
+// ─── Registrace nového tenanta ────────────────────────────────────────
+
+export interface RegisterInput {
+  tenantSlug: string;
+  tenantName: string;
+  email: string;
+  password: string;
+  firstName: string;
+  lastName: string;
+  phone?: string;
+  currency?: 'CZK' | 'EUR' | 'USD';
+  locale?: string;
+}
+
+export interface RegisterResult {
+  tenantId: string;
+  userId: string;
+  tokens: {
+    accessToken: string;
+    refreshToken: string;
+    expiresIn: number;
+  };
+}
+
+export async function registerTenant(input: RegisterInput): Promise<RegisterResult> {
+  const res = await fetch(`${API_BASE}/auth/register`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new AdminApiError(
+      res.status,
+      body?.error?.code ?? 'REGISTER_FAILED',
+      body?.error?.message ?? 'Registrace selhala.',
+    );
+  }
+  return res.json();
+}
+
+// ─── Onboarding ───────────────────────────────────────────────────────
+
+export type OnboardingStep =
+  | 'emailVerified'
+  | 'firstServiceCreated'
+  | 'workingHoursSet'
+  | 'teamInvited'
+  | 'paymentsConnected'
+  | 'firstBookingReceived';
+
+export interface OnboardingChecklist {
+  emailVerified: boolean;
+  firstServiceCreated: boolean;
+  workingHoursSet: boolean;
+  teamInvited: boolean;
+  paymentsConnected: boolean;
+  firstBookingReceived: boolean;
+  completedAt: string | null;
+  startedAt: string | null;
+  completedCount: number;
+  totalCount: number;
+  progressPercent: number;
+}
+
+export async function getOnboardingChecklist(): Promise<OnboardingChecklist> {
+  const { data } = await fetchApi<{ data: OnboardingChecklist }>(`/admin/onboarding/checklist`);
+  return data;
+}
+
+export async function markOnboardingStep(step: OnboardingStep): Promise<OnboardingChecklist> {
+  const { data } = await fetchApi<{ data: OnboardingChecklist }>(`/admin/onboarding/checklist`, {
+    method: 'PATCH',
+    body: JSON.stringify({ step }),
+  });
+  return data;
+}
