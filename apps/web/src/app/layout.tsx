@@ -1,6 +1,7 @@
 import './globals.css';
 import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
+import { DevAutoLogin } from '@/components/DevAutoLogin';
 
 export const metadata: Metadata = {
   title: 'Reserved Admin',
@@ -9,7 +10,9 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="cs">
-      <body>{children}</body>
+      <body>
+        <DevAutoLogin>{children}</DevAutoLogin>
+      </body>
     </html>
   );
 }
