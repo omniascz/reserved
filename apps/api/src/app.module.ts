@@ -19,7 +19,7 @@ import { DbModule } from './db/db.module.js';
 import { EmailModule } from './email/email.module.js';
 import { EmployeesModule } from './employees/employees.module.js';
 import { ExternalModule } from './external/external.module.js';
-import { HealthController } from './health/health.controller.js';
+import { HealthModule } from './health/health.module.js';
 import { HolidaysModule } from './holidays/holidays.module.js';
 import { OnboardingModule } from './onboarding/onboarding.module.js';
 import { PaymentsModule } from './payments/payments.module.js';
@@ -48,6 +48,7 @@ import { TenantMiddleware } from './tenant/tenant.middleware.js';
       { name: 'long', ttl: 3600_000, limit: 5000 },
     ]),
     DbModule,
+    HealthModule,
     TenantModule,
     AuthModule,
     ApiKeysModule,
@@ -79,7 +80,6 @@ import { TenantMiddleware } from './tenant/tenant.middleware.js';
     ReportsModule,
     RulesModule,
   ],
-  controllers: [HealthController],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer): void {
@@ -87,6 +87,7 @@ export class AppModule implements NestModule {
       .apply(TenantMiddleware)
       .exclude(
         { path: 'health', method: RequestMethod.ALL },
+        { path: 'health/ready', method: RequestMethod.ALL },
         { path: 'auth/register', method: RequestMethod.POST },
         { path: 'auth/refresh', method: RequestMethod.POST },
         { path: 'auth/logout', method: RequestMethod.POST },
