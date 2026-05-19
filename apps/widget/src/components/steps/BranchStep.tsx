@@ -1,5 +1,6 @@
 'use client';
 
+import { useT } from '@/i18n/I18nProvider';
 import type { PublicBranch } from '@/lib/api';
 
 export function BranchStep({
@@ -9,11 +10,12 @@ export function BranchStep({
   branches: PublicBranch[];
   onPick: (branch: PublicBranch) => void;
 }) {
+  const t = useT();
   return (
     <div className="space-y-4">
       <div>
-        <h2 className="text-xl font-bold">Vyber pobočku</h2>
-        <p className="text-sm text-slate-500 mt-1">Kam chceš přijít na rezervaci?</p>
+        <h2 className="text-xl font-bold">{t('branch.title')}</h2>
+        <p className="text-sm text-slate-500 mt-1">{t('branch.subtitle')}</p>
       </div>
 
       <div className="grid sm:grid-cols-2 gap-3">

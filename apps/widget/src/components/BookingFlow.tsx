@@ -10,6 +10,7 @@ import {
   type PublicEmployee,
   type PublicService,
 } from '@/lib/api';
+import { useT } from '@/i18n/I18nProvider';
 import { StepIndicator } from './StepIndicator';
 import { BranchStep } from './steps/BranchStep';
 import { ServiceStep } from './steps/ServiceStep';
@@ -36,6 +37,7 @@ export interface BookingState {
 }
 
 export function BookingFlow({ slug, tenantName }: { slug: string; tenantName: string }) {
+  const t = useT();
   const [branches, setBranches] = useState<PublicBranch[] | null>(null);
   const [step, setStep] = useState<BookingStep>('branch');
   const [state, setState] = useState<BookingState>({
@@ -73,16 +75,16 @@ export function BookingFlow({ slug, tenantName }: { slug: string; tenantName: st
 
   const hasMultipleBranches = (branches?.length ?? 0) > 1;
   const STEPS: Array<{ id: BookingStep; label: string }> = [
-    ...(hasMultipleBranches ? [{ id: 'branch' as const, label: 'Pobočka' }] : []),
-    { id: 'service', label: 'Služba' },
-    { id: 'employee', label: 'Specialista' },
-    { id: 'datetime', label: 'Termín' },
-    { id: 'contact', label: 'Kontakt' },
-    { id: 'confirmation', label: 'Potvrzení' },
+    ...(hasMultipleBranches ? [{ id: 'branch' as const, label: t('step.branch') }] : []),
+    { id: 'service', label: t('step.service') },
+    { id: 'employee', label: t('step.employee') },
+    { id: 'datetime', label: t('step.datetime') },
+    { id: 'contact', label: t('step.contact') },
+    { id: 'confirmation', label: t('step.confirmation') },
   ];
 
   if (branches === null) {
-    return <div className="text-slate-400">Načítám…</div>;
+    return <div className="text-slate-400">{t('loading')}</div>;
   }
 
   return (

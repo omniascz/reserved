@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useT } from '@/i18n/I18nProvider';
 import { listServices, type PublicService } from '@/lib/api';
 import { formatPrice, formatDuration } from '@/lib/format';
 
@@ -11,27 +12,24 @@ export function ServiceStep({
   slug: string;
   onPick: (service: PublicService) => void;
 }) {
+  const t = useT();
   const [services, setServices] = useState<PublicService[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     listServices(slug)
       .then(setServices)
-      .catch((e) => setError(e?.message ?? 'Chyba'));
-  }, [slug]);
+      .catch((e) => setError(e?.message ?? t('service.error')));
+  }, [slug, t]);
 
   if (error) return <div className="text-red-600">{error}</div>;
-  if (!services) return <div className="text-slate-400">Načítám služby…</div>;
+  if (!services) return <div className="text-slate-400">{t('service.loading')}</div>;
   if (services.length === 0)
-    return (
-      <div className="text-slate-500 text-center py-8">
-        Tento salon zatím nemá veřejně dostupné služby.
-      </div>
-    );
+    return <div className="text-slate-500 text-center py-8">{t('service.none')}</div>;
 
   return (
     <div className="space-y-4">
-      <h2 className="text-xl font-bold">Vyber službu</h2>
+      <h2 className="text-xl font-bold">{t('service.title')}</h2>
       <div className="grid sm:grid-cols-2 gap-3">
         {services.map((s) => (
           <button
