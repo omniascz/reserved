@@ -1,4 +1,9 @@
 import 'reflect-metadata';
+import { initSentry } from './sentry.js';
+
+// Sentry musí být inicializován co nejdřív, aby zachytil i bootstrap chyby.
+initSentry();
+
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import type { NestExpressApplication } from '@nestjs/platform-express';
@@ -6,6 +11,7 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import express from 'express';
 import { AppModule } from './app.module.js';
 import { AuthExceptionFilter } from './auth/auth-exception.filter.js';
+import { SentryExceptionFilter } from './sentry.filter.js';
 
 async function bootstrap(): Promise<void> {
   // V dev módu povolíme volání z file:// (demo.html) a libovolného localhostu
@@ -51,7 +57,9 @@ async function bootstrap(): Promise<void> {
       transform: true,
     }),
   );
-  app.useGlobalFilters(new AuthExceptionFilter());
+  // Pořadí filterů: SentryExceptionFilter je "catch-all" pro neočekávané chyby,
+  // AuthExceptionFilter zachytává 401/403 → Sentry je nedostane (HttpException).
+  app.useGlobalFilters(new SentryExceptionFilter(), new AuthExceptionFilter());
 
   // ─── Swagger / OpenAPI ─────────────────────────────────────────────────
   // V dev modu je vystaveno na /api-docs (Swagger UI) a /api-docs-json (raw).

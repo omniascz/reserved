@@ -5,14 +5,15 @@
   "type": "module",
   "description": "Customer portal — self-service rezervace.",
   "scripts": {
-    "dev": "next dev -p 3005",
+    "dev": "next dev -p 4003",
     "build": "next build",
-    "start": "next start -p 3005",
+    "start": "next start -p 4003",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
+    "@sentry/nextjs": "^8.43.0",
     "next": "^14.2.18",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"

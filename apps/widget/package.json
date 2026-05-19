@@ -4,14 +4,15 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "next dev -p 3002",
+    "dev": "next dev -p 4004",
     "build": "next build",
-    "start": "next start -p 3002",
+    "start": "next start -p 4004",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
+    "@sentry/nextjs": "^8.43.0",
     "next": "^14.2.18",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
