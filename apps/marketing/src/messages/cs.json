@@ -1,0 +1,123 @@
+{
+  "header": {
+    "verticals": "Pro váš obor",
+    "features": "Funkce",
+    "pricing": "Ceník",
+    "about": "O nás",
+    "contact": "Kontakt",
+    "login": "Přihlášení",
+    "ctaStart": "Začít zdarma"
+  },
+  "verticals": {
+    "kadernictvi": "Kadeřnictví",
+    "fyzioterapie": "Fyzioterapie",
+    "fitness": "Fitness",
+    "lekarska_ordinace": "Lékařská ordinace",
+    "autoskola": "Autoškola"
+  },
+  "footer": {
+    "tagline": "Moderní rezervační systém pro česká studia, kliniky a sportovní centra.",
+    "product": "Produkt",
+    "features": "Funkce",
+    "pricing": "Ceník",
+    "apiDocs": "API dokumentace",
+    "forIndustry": "Pro váš obor",
+    "company": "Firma",
+    "about": "O nás",
+    "contact": "Kontakt",
+    "support": "Podpora",
+    "copyright": "© 2026 Reserved. Vytvořeno s ❤️ v České republice.",
+    "terms": "Obchodní podmínky",
+    "gdpr": "Ochrana osobních údajů"
+  },
+  "home": {
+    "madeIn": "🇨🇿 Vyrobeno v České republice",
+    "h1Part1": "Rezervační systém,",
+    "h1Part2": "který tě nestraší komisemi.",
+    "subhead": "Pro česká studia, kliniky, fitness centra, autoškoly a všechny obory s rezervacemi. Klienta vlastníš ty — žádné poplatky z rezervací, žádný marketplace. Jen férový software.",
+    "ctaPrimary": "Začít zdarma — bez karty",
+    "ctaSecondary": "Zobrazit ceník",
+    "trustTrial": "14 dní trial",
+    "trustNoCard": "Bez platební karty",
+    "trustQuick": "Spuštění za 5 minut",
+    "socialProof": "Reserved používá více než 250 českých studií, klinik a fitness center",
+    "featuresHeadline": "Vše, co salon potřebuje",
+    "featuresSub": "Od online rezervací přes klientskou databázi po platby a marketing. V jednom systému, plně česky.",
+    "compareHeadline": "Proč Reserved, a ne Booksy nebo Fresha?",
+    "compareSub": "Jsme férová alternativa. Klienti jsou tvoji, ne marketplace.",
+    "pricingHeadline": "Jednoduché ceny, bez překvapení",
+    "pricingSub": "Od 590 Kč měsíčně. 14 dní zdarma, můžeš kdykoliv přestat.",
+    "pricingMore": "Detailní porovnání plánů →",
+    "ctaBigHeadline": "Začni přijímat rezervace ještě dnes",
+    "ctaBigSub": "Spuštění za 5 minut. Trial na 14 dní bez platební karty. Když se ti nebude líbit, prostě skončíš.",
+    "ctaBigButton": "Vyzkoušet Reserved zdarma →"
+  },
+  "features": {
+    "onlineBooking": {
+      "title": "Online rezervace 24/7",
+      "text": "Klienti si rezervují přes tvůj web nebo přímo na reserved.cz. Drag-and-drop kalendář s celodenním pohledem."
+    },
+    "crm": {
+      "title": "CRM klientů",
+      "text": "Historie návštěv, poznámky, tagy, no-show tracking. Vidíš, kdo je VIP a kdo má rád konkrétního zaměstnance."
+    },
+    "payments": {
+      "title": "Platby kartou + QR",
+      "text": "Hotovost, terminál, Stripe, GoPay nebo QR z účtu — všechny způsoby v jednom přehledu."
+    },
+    "reminders": {
+      "title": "Připomínky 24h předem",
+      "text": "Automatický email i SMS klientovi den před rezervací. Snížíš no-show až o 60 %."
+    },
+    "packages": {
+      "title": "Permanentky a balíčky",
+      "text": "10× vstup, kreditové permanentky, časová předplatná, firemní účty. Všechno se odečítá automaticky."
+    },
+    "reports": {
+      "title": "Reporty a analytika",
+      "text": "Tržby per zaměstnanec, top služby, vytíženost, no-show rate. Vidíš, co funguje a co ne."
+    },
+    "googleCal": {
+      "title": "Google Calendar sync",
+      "text": "Obousměrně. Zaměstnanci vidí rezervace ve svém Googlu, blokace z Googlu se promítnou do dostupnosti."
+    },
+    "rules": {
+      "title": "Pravidla a automatizace",
+      "text": "Vizuální builder: 'Když klient zmešká 2× → tag VIP_RISK + email majiteli'. Žádné kódování."
+    },
+    "api": {
+      "title": "API + webhooky",
+      "text": "Napoj Reserved na svůj e-shop, CRM nebo vlastní mobilní appku. Plně dokumentované API."
+    }
+  },
+  "compare": {
+    "commission": "Komise z rezervací",
+    "ownClient": "Klient je tvůj",
+    "shared": "Sdílený",
+    "czAccounting": "ČR účetnictví (POHODA, Fakturoid)",
+    "czSupport": "Český support",
+    "supportLimited": "Omezený",
+    "supportEmail": "Email only",
+    "qr": "QR platba SPD/IBAN",
+    "b2b": "Firemní účty (B2B)",
+    "apiWebhooks": "API + Webhooky",
+    "limited": "Omezené"
+  },
+  "plans": {
+    "starter": {
+      "name": "Starter",
+      "for": "Pro malé salony do 3 zaměstnanců"
+    },
+    "professional": {
+      "name": "Professional",
+      "for": "Pro střední salony s 4-10 zaměstnanci"
+    },
+    "business": {
+      "name": "Business",
+      "for": "Pro řetězce, neomezené rezervace, AI"
+    },
+    "popular": "⭐ Nejoblíbenější",
+    "perMonth": "Kč/měsíc",
+    "free": "Zdarma"
+  }
+}

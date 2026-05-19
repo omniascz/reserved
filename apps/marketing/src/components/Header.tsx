@@ -1,16 +1,21 @@
-import Link from 'next/link';
+import { useTranslations } from 'next-intl';
+import { Link } from '@/i18n/navigation';
+import { LanguageSwitcher } from './LanguageSwitcher';
 
 const ADMIN_URL = process.env.NEXT_PUBLIC_ADMIN_BASE_URL ?? 'http://localhost:4002';
 
-const VERTICALS = [
-  { slug: 'kadernictvi', label: 'Kadeřnictví' },
-  { slug: 'fyzioterapie', label: 'Fyzioterapie' },
-  { slug: 'fitness', label: 'Fitness' },
-  { slug: 'lekarska-ordinace', label: 'Lékařská ordinace' },
-  { slug: 'autoskola', label: 'Autoškola' },
+const VERTICALS: Array<{ slug: string; labelKey: string }> = [
+  { slug: 'kadernictvi', labelKey: 'kadernictvi' },
+  { slug: 'fyzioterapie', labelKey: 'fyzioterapie' },
+  { slug: 'fitness', labelKey: 'fitness' },
+  { slug: 'lekarska-ordinace', labelKey: 'lekarska_ordinace' },
+  { slug: 'autoskola', labelKey: 'autoskola' },
 ];
 
 export function Header() {
+  const t = useTranslations('header');
+  const tv = useTranslations('verticals');
+
   return (
     <header className="bg-white border-b border-slate-200 sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
@@ -24,7 +29,7 @@ export function Header() {
         <nav className="hidden md:flex items-center gap-6 text-sm font-medium">
           <div className="relative group">
             <button className="text-slate-700 hover:text-brand-700 flex items-center gap-1">
-              Pro váš obor
+              {t('verticals')}
               <svg width="10" height="6" viewBox="0 0 10 6" fill="none">
                 <path d="M1 1l4 4 4-4" stroke="currentColor" strokeWidth="1.5" />
               </svg>
@@ -36,37 +41,38 @@ export function Header() {
                   href={`/pro/${v.slug}`}
                   className="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
                 >
-                  {v.label}
+                  {tv(v.labelKey)}
                 </Link>
               ))}
             </div>
           </div>
           <Link href="/funkce" className="text-slate-700 hover:text-brand-700">
-            Funkce
+            {t('features')}
           </Link>
           <Link href="/cenik" className="text-slate-700 hover:text-brand-700">
-            Ceník
+            {t('pricing')}
           </Link>
           <Link href="/o-nas" className="text-slate-700 hover:text-brand-700">
-            O nás
+            {t('about')}
           </Link>
           <Link href="/kontakt" className="text-slate-700 hover:text-brand-700">
-            Kontakt
+            {t('contact')}
           </Link>
         </nav>
 
         <div className="flex items-center gap-3 text-sm">
+          <LanguageSwitcher />
           <a
             href={`${ADMIN_URL}/login`}
             className="text-slate-700 hover:text-brand-700 font-medium"
           >
-            Přihlášení
+            {t('login')}
           </a>
           <a
             href={`${ADMIN_URL}/register`}
             className="bg-brand-600 hover:bg-brand-700 text-white font-semibold px-4 py-2 rounded-lg"
           >
-            Začít zdarma
+            {t('ctaStart')}
           </a>
         </div>
       </div>

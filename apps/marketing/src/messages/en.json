@@ -1,0 +1,123 @@
+{
+  "header": {
+    "verticals": "For your industry",
+    "features": "Features",
+    "pricing": "Pricing",
+    "about": "About",
+    "contact": "Contact",
+    "login": "Log in",
+    "ctaStart": "Start free"
+  },
+  "verticals": {
+    "kadernictvi": "Hair salons",
+    "fyzioterapie": "Physiotherapy",
+    "fitness": "Fitness",
+    "lekarska_ordinace": "Medical practices",
+    "autoskola": "Driving schools"
+  },
+  "footer": {
+    "tagline": "Modern booking platform for Czech and European studios, clinics, and sports centers.",
+    "product": "Product",
+    "features": "Features",
+    "pricing": "Pricing",
+    "apiDocs": "API documentation",
+    "forIndustry": "For your industry",
+    "company": "Company",
+    "about": "About",
+    "contact": "Contact",
+    "support": "Support",
+    "copyright": "© 2026 Reserved. Made with ❤️ in the Czech Republic.",
+    "terms": "Terms of Service",
+    "gdpr": "Privacy Policy"
+  },
+  "home": {
+    "madeIn": "🇨🇿 Made in the Czech Republic",
+    "h1Part1": "A booking system",
+    "h1Part2": "that doesn't charge commissions.",
+    "subhead": "For studios, clinics, fitness centers, driving schools, and every service business. Your clients stay yours — no booking fees, no marketplace. Just fair software.",
+    "ctaPrimary": "Start free — no card required",
+    "ctaSecondary": "View pricing",
+    "trustTrial": "14-day trial",
+    "trustNoCard": "No credit card",
+    "trustQuick": "Set up in 5 minutes",
+    "socialProof": "Reserved is used by 250+ studios, clinics, and fitness centers",
+    "featuresHeadline": "Everything a salon needs",
+    "featuresSub": "From online bookings to client database, payments, and marketing. One system, fully localized.",
+    "compareHeadline": "Why Reserved instead of Booksy or Fresha?",
+    "compareSub": "We're the fair alternative. Your clients are yours, not a marketplace's.",
+    "pricingHeadline": "Simple pricing, no surprises",
+    "pricingSub": "From €25/month. 14 days free, cancel anytime.",
+    "pricingMore": "Detailed plan comparison →",
+    "ctaBigHeadline": "Start accepting bookings today",
+    "ctaBigSub": "Set up in 5 minutes. 14-day trial without a credit card. If you don't like it, just walk away.",
+    "ctaBigButton": "Try Reserved for free →"
+  },
+  "features": {
+    "onlineBooking": {
+      "title": "Online bookings 24/7",
+      "text": "Clients book via your website or directly at reserved.cz. Drag-and-drop calendar with day, week, and month views."
+    },
+    "crm": {
+      "title": "Client CRM",
+      "text": "Visit history, notes, tags, no-show tracking. See who's VIP and who prefers a specific staff member."
+    },
+    "payments": {
+      "title": "Card payments + QR",
+      "text": "Cash, terminal, Stripe, GoPay, or QR from bank account — all payment methods in one overview."
+    },
+    "reminders": {
+      "title": "Reminders 24h before",
+      "text": "Automatic email and SMS to the client the day before. Cut no-shows by up to 60%."
+    },
+    "packages": {
+      "title": "Packages and subscriptions",
+      "text": "10-visit packs, credit punches, time-based memberships, corporate accounts. Everything deducted automatically."
+    },
+    "reports": {
+      "title": "Reports and analytics",
+      "text": "Revenue per staff, top services, utilization, no-show rate. See what works and what doesn't."
+    },
+    "googleCal": {
+      "title": "Google Calendar sync",
+      "text": "Two-way. Staff see bookings in their Google, blocks from Google flow into availability."
+    },
+    "rules": {
+      "title": "Rules and automation",
+      "text": "Visual builder: 'When a client misses twice → tag VIP_RISK + email owner'. No coding."
+    },
+    "api": {
+      "title": "API + webhooks",
+      "text": "Connect Reserved to your e-shop, CRM, or custom mobile app. Fully documented API."
+    }
+  },
+  "compare": {
+    "commission": "Commission on bookings",
+    "ownClient": "Client is yours",
+    "shared": "Shared",
+    "czAccounting": "CZ accounting (POHODA, Fakturoid)",
+    "czSupport": "Local support",
+    "supportLimited": "Limited",
+    "supportEmail": "Email only",
+    "qr": "QR payment SPD/IBAN",
+    "b2b": "Corporate accounts (B2B)",
+    "apiWebhooks": "API + Webhooks",
+    "limited": "Limited"
+  },
+  "plans": {
+    "starter": {
+      "name": "Starter",
+      "for": "For small salons up to 3 staff"
+    },
+    "professional": {
+      "name": "Professional",
+      "for": "For medium salons with 4-10 staff"
+    },
+    "business": {
+      "name": "Business",
+      "for": "For chains, unlimited bookings, AI"
+    },
+    "popular": "⭐ Most popular",
+    "perMonth": "CZK/month",
+    "free": "Free"
+  }
+}

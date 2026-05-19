@@ -1,8 +1,10 @@
-import Link from 'next/link';
+import { useTranslations } from 'next-intl';
+import { Link } from '@/i18n/navigation';
 
 const ADMIN_URL = process.env.NEXT_PUBLIC_ADMIN_BASE_URL ?? 'http://localhost:4002';
 
 export default function HomePage() {
+  const t = useTranslations('home');
   return (
     <>
       {/* Hero */}
@@ -10,39 +12,35 @@ export default function HomePage() {
         <div className="max-w-7xl mx-auto px-6 grid lg:grid-cols-2 gap-12 items-center">
           <div>
             <div className="inline-block bg-brand-100 text-brand-700 text-sm font-semibold px-3 py-1 rounded-full mb-4">
-              🇨🇿 Vyrobeno v České republice
+              {t('madeIn')}
             </div>
             <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold leading-tight mb-6">
-              Rezervační systém, <span className="text-brand-700">který tě nestraší komisemi.</span>
+              {t('h1Part1')} <span className="text-brand-700">{t('h1Part2')}</span>
             </h1>
-            <p className="text-lg text-slate-600 mb-8 leading-relaxed">
-              Pro česká studia, kliniky, fitness centra, autoškoly a všechny obory s rezervacemi.
-              Klienta vlastníš ty — žádné poplatky z rezervací, žádný marketplace. Jen férový
-              software.
-            </p>
+            <p className="text-lg text-slate-600 mb-8 leading-relaxed">{t('subhead')}</p>
             <div className="flex flex-col sm:flex-row gap-3 mb-6">
               <a
                 href={`${ADMIN_URL}/register`}
                 className="bg-brand-600 hover:bg-brand-700 text-white font-semibold px-6 py-3 rounded-lg text-center"
               >
-                Začít zdarma — bez karty
+                {t('ctaPrimary')}
               </a>
               <Link
                 href="/cenik"
                 className="bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 font-semibold px-6 py-3 rounded-lg text-center"
               >
-                Zobrazit ceník
+                {t('ctaSecondary')}
               </Link>
             </div>
             <div className="flex items-center gap-6 text-sm text-slate-500">
               <span className="flex items-center gap-1">
-                <span className="text-green-600">✓</span> 14 dní trial
+                <span className="text-green-600">✓</span> {t('trustTrial')}
               </span>
               <span className="flex items-center gap-1">
-                <span className="text-green-600">✓</span> Bez platební karty
+                <span className="text-green-600">✓</span> {t('trustNoCard')}
               </span>
               <span className="flex items-center gap-1">
-                <span className="text-green-600">✓</span> Spuštění za 5 minut
+                <span className="text-green-600">✓</span> {t('trustQuick')}
               </span>
             </div>
           </div>
