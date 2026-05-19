@@ -45,6 +45,13 @@ export interface TenantDetail extends TenantListRow {
   currency: string;
   suspensionReason: string | null;
   updatedAt: Date;
+  /** Stripe billing details — pro master admin přehled. */
+  stripeCustomerId: string | null;
+  stripeSubscriptionId: string | null;
+  stripeSubscriptionStatus: string | null;
+  currentPeriodEnd: Date | null;
+  cancelAtPeriodEnd: boolean;
+  billingEmail: string | null;
 }
 
 export interface TenantActivity {
@@ -158,6 +165,12 @@ export class PlatformTenantsService {
           createdAt: schema.tenants.createdAt,
           updatedAt: schema.tenants.updatedAt,
           deletedAt: schema.tenants.deletedAt,
+          stripeCustomerId: schema.tenants.stripeCustomerId,
+          stripeSubscriptionId: schema.tenants.stripeSubscriptionId,
+          stripeSubscriptionStatus: schema.tenants.stripeSubscriptionStatus,
+          currentPeriodEnd: schema.tenants.currentPeriodEnd,
+          cancelAtPeriodEnd: schema.tenants.cancelAtPeriodEnd,
+          billingEmail: schema.tenants.billingEmail,
           lastActivityAt: sql<Date | null>`(
             SELECT MAX(last_login_at) FROM users WHERE users.tenant_id = ${schema.tenants.id} AND users.role = 'owner'
           )`,
@@ -171,7 +184,7 @@ export class PlatformTenantsService {
           error: { code: 'TENANT_NOT_FOUND', message: 'Tenant neexistuje.' },
         });
       }
-      return row;
+      return { ...row, cancelAtPeriodEnd: row.cancelAtPeriodEnd === 'true' };
     });
   }
 

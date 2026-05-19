@@ -205,6 +205,12 @@ export interface TenantDetail extends TenantListRow {
   currency: string;
   suspensionReason: string | null;
   updatedAt: string;
+  stripeCustomerId: string | null;
+  stripeSubscriptionId: string | null;
+  stripeSubscriptionStatus: string | null;
+  currentPeriodEnd: string | null;
+  cancelAtPeriodEnd: boolean;
+  billingEmail: string | null;
 }
 
 export async function getTenantDetail(id: string): Promise<TenantDetail> {

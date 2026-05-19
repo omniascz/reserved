@@ -1884,3 +1884,79 @@ export async function updateNotificationSettings(
   });
   return data;
 }
+
+// ─── Platform billing (Pavla platí Reserved) ──────────────────────────
+
+export interface PlatformPlan {
+  id: string;
+  key: string;
+  name: string;
+  description: string | null;
+  monthlyPriceHellers: number;
+  yearlyPriceHellers: number;
+  currency: string;
+  stripeMonthlyPriceId: string | null;
+  stripeYearlyPriceId: string | null;
+  trialDays: number;
+  limits: Record<string, unknown>;
+  features: Record<string, boolean>;
+  sortOrder: number;
+}
+
+export interface BillingStatus {
+  tenantId: string;
+  plan: string;
+  planName: string | null;
+  status: string;
+  trialEndsAt: string | null;
+  currentPeriodEnd: string | null;
+  cancelAtPeriodEnd: boolean;
+  hasPaymentMethod: boolean;
+  stripeCustomerId: string | null;
+  stripeSubscriptionId: string | null;
+}
+
+export async function listBillingPlans(): Promise<PlatformPlan[]> {
+  const { data } = await fetchApi<{ data: PlatformPlan[] }>(`/admin/billing/plans`);
+  return data;
+}
+
+export async function getBillingStatus(): Promise<BillingStatus> {
+  const { data } = await fetchApi<{ data: BillingStatus }>(`/admin/billing/status`);
+  return data;
+}
+
+export async function createBillingCheckout(input: {
+  planKey: string;
+  interval: 'monthly' | 'yearly';
+}): Promise<{ checkoutUrl: string; sessionId: string }> {
+  const { data } = await fetchApi<{ data: { checkoutUrl: string; sessionId: string } }>(
+    `/admin/billing/checkout`,
+    { method: 'POST', body: JSON.stringify(input) },
+  );
+  return data;
+}
+
+export async function createBillingPortal(returnUrl?: string): Promise<{ portalUrl: string }> {
+  const { data } = await fetchApi<{ data: { portalUrl: string } }>(`/admin/billing/portal`, {
+    method: 'POST',
+    body: JSON.stringify({ returnUrl }),
+  });
+  return data;
+}
+
+export async function cancelBillingSubscription(
+  atPeriodEnd = true,
+): Promise<{ canceled: true; effectiveAt: 'period_end' | 'immediate' }> {
+  const { data } = await fetchApi<{
+    data: { canceled: true; effectiveAt: 'period_end' | 'immediate' };
+  }>(`/admin/billing/cancel`, { method: 'POST', body: JSON.stringify({ atPeriodEnd }) });
+  return data;
+}
+
+export async function resumeBillingSubscription(): Promise<{ resumed: true }> {
+  const { data } = await fetchApi<{ data: { resumed: true } }>(`/admin/billing/resume`, {
+    method: 'POST',
+  });
+  return data;
+}

@@ -270,6 +270,34 @@ export default function TenantDetailPage() {
               )}
             </div>
 
+            <Section title="Fakturace (Stripe)">
+              <DataRow label="Plán" value={detail.plan} />
+              <DataRow label="Stripe Customer ID" value={detail.stripeCustomerId ?? '—'} />
+              <DataRow label="Stripe Subscription ID" value={detail.stripeSubscriptionId ?? '—'} />
+              <DataRow
+                label="Status v Stripe"
+                value={detail.stripeSubscriptionStatus ?? 'bez subscription'}
+              />
+              <DataRow label="Další platba" value={fmtDate(detail.currentPeriodEnd)} />
+              <DataRow label="Cancel at period end" value={fmtBool(detail.cancelAtPeriodEnd)} />
+              <DataRow
+                label="Fakturační email"
+                value={detail.billingEmail ?? detail.ownerEmail ?? '—'}
+              />
+              {detail.stripeCustomerId && (
+                <div className="pt-2">
+                  <a
+                    href={`https://dashboard.stripe.com/customers/${detail.stripeCustomerId}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sm text-brand-700 hover:underline"
+                  >
+                    Otevřít v Stripe Dashboard ↗
+                  </a>
+                </div>
+              )}
+            </Section>
+
             {onboarding && (
               <Section title="Onboarding checklist">
                 <DataRow label="E-mail ověřen" value={fmtBool(onboarding.emailVerified)} />

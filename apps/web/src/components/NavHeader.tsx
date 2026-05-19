@@ -24,6 +24,7 @@ const NAV = [
   { href: '/webhooks', label: 'Webhooky' },
   { href: '/feature-flags', label: 'Flags' },
   { href: '/api-keys', label: 'API klíče' },
+  { href: '/billing', label: 'Fakturace' },
   { href: '/settings', label: 'Nastavení' },
 ];
 
