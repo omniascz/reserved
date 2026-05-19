@@ -22,6 +22,7 @@ import { ExternalModule } from './external/external.module.js';
 import { HealthController } from './health/health.controller.js';
 import { HolidaysModule } from './holidays/holidays.module.js';
 import { PaymentsModule } from './payments/payments.module.js';
+import { PlatformBillingModule } from './platform-billing/platform-billing.module.js';
 import { PlatformModule } from './platform/platform.module.js';
 import { PortalModule } from './portal/portal.module.js';
 import { PublicModule } from './public/public.module.js';
@@ -70,6 +71,7 @@ import { TenantMiddleware } from './tenant/tenant.middleware.js';
     BlocksModule,
     HolidaysModule,
     PlatformModule,
+    PlatformBillingModule,
     PortalModule,
     PublicModule,
     ReportsModule,

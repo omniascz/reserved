@@ -23,25 +23,22 @@ async function bootstrap(): Promise<void> {
 
   // Raw body capture pro webhook endpointy (Stripe potrebuje pro signature).
   // Pro non-webhook routes pouzijeme standardní JSON parser.
-  app.use(
-    '/api/v1/payments/webhooks',
-    express.raw({ type: '*/*', limit: '1mb' }),
-    (
-      req: express.Request & { rawBody?: Buffer },
-      _res: express.Response,
-      next: express.NextFunction,
-    ) => {
-      // Ulozit raw + paralelně parsovat na JSON pro standardni @Body() decorator
-      req.rawBody = req.body as Buffer;
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (req as any).body = JSON.parse(req.rawBody.toString('utf8'));
-      } catch {
-        // Pokud neni JSON, nech original Buffer
-      }
-      next();
-    },
-  );
+  const rawBodyCapture = (
+    req: express.Request & { rawBody?: Buffer },
+    _res: express.Response,
+    next: express.NextFunction,
+  ): void => {
+    req.rawBody = req.body as Buffer;
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (req as any).body = JSON.parse(req.rawBody.toString('utf8'));
+    } catch {
+      // Pokud neni JSON, nech original Buffer
+    }
+    next();
+  };
+  app.use('/api/v1/payments/webhooks', express.raw({ type: '*/*', limit: '1mb' }), rawBodyCapture);
+  app.use('/api/v1/platform/webhooks', express.raw({ type: '*/*', limit: '1mb' }), rawBodyCapture);
   // Standardni body parser pro vsechny ostatni routes
   app.use(express.json({ limit: '2mb' }));
   app.use(express.urlencoded({ extended: true, limit: '2mb' }));

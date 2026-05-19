@@ -32,6 +32,18 @@ export const tenants = pgTable(
     suspensionReason: text('suspension_reason'),
     businessType: varchar('business_type', { length: 64 }),
     ownerEmail: varchar('owner_email', { length: 255 }),
+    /** Stripe Customer ID — tenant je customer u Reserved (ne u sebe). */
+    stripeCustomerId: varchar('stripe_customer_id', { length: 64 }),
+    /** Aktivní Stripe Subscription ID. */
+    stripeSubscriptionId: varchar('stripe_subscription_id', { length: 64 }),
+    /** Status z Stripe — incomplete | trialing | active | past_due | canceled | unpaid. */
+    stripeSubscriptionStatus: varchar('stripe_subscription_status', { length: 32 }),
+    /** Datum dalšího plateby (z Stripe current_period_end). */
+    currentPeriodEnd: timestamp('current_period_end', { withTimezone: true }),
+    /** Zda subscription bude zrušená na konci období. */
+    cancelAtPeriodEnd: varchar('cancel_at_period_end', { length: 8 }).default('false'),
+    /** Volitelný oddělený fakturační email (jinak owner_email). */
+    billingEmail: varchar('billing_email', { length: 255 }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
     deletedAt: timestamp('deleted_at', { withTimezone: true }),
