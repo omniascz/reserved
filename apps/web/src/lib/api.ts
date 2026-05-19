@@ -30,6 +30,24 @@ export function getTenantSlug(): string | null {
   return localStorage.getItem(TENANT_KEY);
 }
 
+/**
+ * Dekoduje JWT a vrati impersonatedBy claim (UUID master admina), pokud existuje.
+ * Pouziva se k zobrazeni impersonace banneru.
+ */
+export function getImpersonatedBy(): string | null {
+  const token = getAccessToken();
+  if (!token) return null;
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return null;
+    const payloadJson = atob(parts[1]!.replace(/-/g, '+').replace(/_/g, '/'));
+    const payload = JSON.parse(payloadJson) as { impersonatedBy?: string };
+    return payload.impersonatedBy ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export class AdminApiError extends Error {
   constructor(
     readonly status: number,

@@ -1,11 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { login, setAuth, getAccessToken } from '@/lib/api';
+import { getAccessToken, login, setAuth } from '@/lib/api';
 
-const DEMO_TENANT = 'demo';
-const DEMO_EMAIL = 'admin@demo.local';
-const DEMO_PASSWORD = 'admin123';
+const DEMO_EMAIL = 'omniascz@gmail.com';
+const DEMO_PASSWORD = 'reserved2026';
 
 export function DevAutoLogin({ children }: { children: React.ReactNode }) {
   const [ready, setReady] = useState(false);
@@ -15,25 +14,21 @@ export function DevAutoLogin({ children }: { children: React.ReactNode }) {
       setReady(true);
       return;
     }
-    // Neprihlasovat se automaticky, kdyz prichazi impersonation token z master adminu.
-    if (typeof window !== 'undefined' && window.location.hash.includes('impersonate=')) {
-      return;
-    }
     if (getAccessToken()) {
       setReady(true);
       return;
     }
     (async () => {
       try {
-        const tokens = await login(DEMO_TENANT, DEMO_EMAIL, DEMO_PASSWORD);
-        setAuth(tokens.accessToken, tokens.refreshToken, DEMO_TENANT);
+        const tokens = await login(DEMO_EMAIL, DEMO_PASSWORD);
+        setAuth(tokens.accessToken, tokens.refreshToken);
         if (window.location.pathname === '/login') {
-          window.location.replace('/dashboard');
+          window.location.replace('/');
           return;
         }
         window.location.reload();
       } catch (err) {
-        console.error('[DevAutoLogin] failed:', err);
+        console.error('[DevAutoLogin master] failed:', err);
         setReady(true);
       }
     })();
@@ -42,7 +37,7 @@ export function DevAutoLogin({ children }: { children: React.ReactNode }) {
   if (!ready) {
     return (
       <div className="min-h-screen flex items-center justify-center text-slate-400">
-        Přihlašuji dev uživatele…
+        Přihlašuji master admina…
       </div>
     );
   }
