@@ -1,127 +1,96 @@
-import Link from 'next/link';
+import { useTranslations, useMessages } from 'next-intl';
+import { Link } from '@/i18n/navigation';
 
 const ADMIN_URL = process.env.NEXT_PUBLIC_ADMIN_BASE_URL ?? 'http://localhost:4002';
 
+// Plán data — ceny a strukturální klíče zůstávají v kódu, popisky přicházejí
+// z překladového souboru. Tím udržujeme ceny jako jedinou pravdu (kód) a
+// texty jako překládatelné stringy.
 interface PlanRow {
-  key: string;
-  name: string;
-  for: string;
+  key: 'free' | 'starter' | 'professional' | 'business';
   monthlyPriceKc: number;
   yearlyPriceKc: number;
   highlighted?: boolean;
-  features: { label: string; value: string | boolean }[];
+  /** Klíče z `pricingPage.plans.<plan>.features`. Hodnota Value je suffix
+   *  (např. "3" pro počet zaměstnanců); bool true → ✓; bool false → ×. */
+  featureKeys: { key: string; valueKey?: string }[];
 }
 
 const PLANS: PlanRow[] = [
   {
     key: 'free',
-    name: 'Start',
-    for: 'Pro vyzkoušení',
     monthlyPriceKc: 0,
     yearlyPriceKc: 0,
-    features: [
-      { label: 'Zaměstnanci', value: '1' },
-      { label: 'Rezervace / měsíc', value: '50' },
-      { label: 'Pobočky', value: '1' },
-      { label: 'Online rezervace', value: true },
-      { label: 'Email notifikace', value: true },
-      { label: 'SMS notifikace', value: false },
-      { label: 'Google Calendar', value: false },
-      { label: 'Balíčky', value: false },
-      { label: 'API přístup', value: false },
+    featureKeys: [
+      { key: 'employees', valueKey: 'employeesValue' },
+      { key: 'bookings', valueKey: 'bookingsValue' },
+      { key: 'branches', valueKey: 'branchesValue' },
+      { key: 'online' },
+      { key: 'email' },
     ],
   },
   {
     key: 'starter',
-    name: 'Starter',
-    for: 'Pro malé salony',
     monthlyPriceKc: 590,
     yearlyPriceKc: 5900,
-    features: [
-      { label: 'Zaměstnanci', value: '3' },
-      { label: 'Rezervace / měsíc', value: '500' },
-      { label: 'Pobočky', value: '1' },
-      { label: 'Online rezervace', value: true },
-      { label: 'Email notifikace', value: true },
-      { label: 'SMS notifikace', value: true },
-      { label: 'Google Calendar', value: true },
-      { label: 'Balíčky', value: false },
-      { label: 'API přístup', value: false },
+    featureKeys: [
+      { key: 'employees', valueKey: 'employeesValue' },
+      { key: 'bookings', valueKey: 'bookingsValue' },
+      { key: 'branches', valueKey: 'branchesValue' },
+      { key: 'online' },
+      { key: 'email' },
+      { key: 'sms' },
+      { key: 'googleCal' },
     ],
   },
   {
     key: 'professional',
-    name: 'Professional',
-    for: 'Pro střední salony',
     monthlyPriceKc: 1290,
     yearlyPriceKc: 12900,
     highlighted: true,
-    features: [
-      { label: 'Zaměstnanci', value: '10' },
-      { label: 'Rezervace / měsíc', value: '2 000' },
-      { label: 'Pobočky', value: '3' },
-      { label: 'Online rezervace', value: true },
-      { label: 'Email + SMS', value: true },
-      { label: 'Google Calendar', value: true },
-      { label: 'Balíčky a předplatné', value: true },
-      { label: 'Firemní účty (B2B)', value: true },
-      { label: 'API přístup', value: true },
+    featureKeys: [
+      { key: 'employees', valueKey: 'employeesValue' },
+      { key: 'bookings', valueKey: 'bookingsValue' },
+      { key: 'branches', valueKey: 'branchesValue' },
+      { key: 'online' },
+      { key: 'emailSms' },
+      { key: 'googleCal' },
+      { key: 'packages' },
+      { key: 'b2b' },
+      { key: 'api' },
     ],
   },
   {
     key: 'business',
-    name: 'Business',
-    for: 'Pro velké provozy a řetězce',
     monthlyPriceKc: 2490,
     yearlyPriceKc: 24900,
-    features: [
-      { label: 'Zaměstnanci', value: '50' },
-      { label: 'Rezervace / měsíc', value: 'Neomezené' },
-      { label: 'Pobočky', value: '20' },
-      { label: 'Vše ze Starter + Pro', value: true },
-      { label: 'WhatsApp Business', value: true },
-      { label: 'AI no-show prediction', value: true },
-      { label: 'Prioritní podpora', value: true },
+    featureKeys: [
+      { key: 'employees', valueKey: 'employeesValue' },
+      { key: 'bookings', valueKey: 'bookingsValue' },
+      { key: 'branches', valueKey: 'branchesValue' },
+      { key: 'everything' },
+      { key: 'whatsapp' },
+      { key: 'ai' },
+      { key: 'priority' },
     ],
   },
 ];
 
-const FAQ = [
-  {
-    q: 'Můžu kdykoliv zrušit?',
-    a: 'Ano. Předplatné běží měsíčně nebo ročně. Zrušení provedeš jedním klikem v admin sekci „Fakturace". Účet ti zůstane do konce předplaceného období.',
-  },
-  {
-    q: 'Co když překročím limit rezervací nebo zaměstnanců?',
-    a: 'Dáme ti vědět emailem a navrhneme upgrade. Žádné překvapivé poplatky — nikdy ti nestrhneme nic navíc bez tvého souhlasu.',
-  },
-  {
-    q: 'Stojí SMS notifikace navíc?',
-    a: 'Zahrnujeme 100 SMS / měsíc v plánech Starter a vyšších. Nad limit cca 1,50 Kč / SMS. Email je vždy zdarma.',
-  },
-  {
-    q: 'Můžu používat vlastní doménu (např. rezervace.mujsalon.cz)?',
-    a: 'Ano, v plánu Business a Enterprise. V plánech Starter / Pro dostáváš subdoménu (mujsalon.reserved.cz).',
-  },
-  {
-    q: 'Berete komisi z rezervací?',
-    a: 'Ne. Žádné poplatky z rezervací, žádný marketplace, žádný „nový klient fee". Platíš jen měsíční předplatné.',
-  },
-  {
-    q: 'Co když mám zvláštní požadavky (vlastní integrace, SLA, SSO)?',
-    a: 'Mrkni na Enterprise plán nebo nám napiš na sales@reserved.cz — uděláme ti nabídku na míru.',
-  },
-];
-
 export default function PricingPage() {
+  const t = useTranslations('pricingPage');
+  // useMessages pro pole FAQ — t() nepodporuje array directly, dostáváme raw
+  // messages a iterujeme.
+  const messages = useMessages() as unknown as {
+    pricingPage: { faq: { q: string; a: string }[] };
+  };
+  const faq = messages.pricingPage.faq;
+
   return (
     <>
       <section className="py-16 bg-gradient-to-br from-brand-50 to-white">
         <div className="max-w-5xl mx-auto px-6 text-center">
-          <h1 className="text-4xl md:text-5xl font-bold mb-4">Jednoduchý ceník</h1>
-          <p className="text-lg text-slate-600 max-w-2xl mx-auto">
-            Žádné komise. Žádné překvapení. Roční předplatné = 2 měsíce zdarma.
-          </p>
+          <h1 className="text-4xl md:text-5xl font-bold mb-4">{t('title')}</h1>
+          <p className="text-lg text-slate-600 max-w-2xl mx-auto">{t('subtitle')}</p>
         </div>
       </section>
 
@@ -136,45 +105,40 @@ export default function PricingPage() {
                 }`}
               >
                 {plan.highlighted && (
-                  <div className="text-xs font-semibold text-brand-700 mb-1">⭐ Nejoblíbenější</div>
+                  <div className="text-xs font-semibold text-brand-700 mb-1">{t('popular')}</div>
                 )}
-                <h3 className="text-2xl font-bold mb-1">{plan.name}</h3>
-                <p className="text-sm text-slate-500 mb-4">{plan.for}</p>
+                <h3 className="text-2xl font-bold mb-1">{t(`plans.${plan.key}.name`)}</h3>
+                <p className="text-sm text-slate-500 mb-4">{t(`plans.${plan.key}.for`)}</p>
                 <div className="mb-4">
                   {plan.monthlyPriceKc === 0 ? (
-                    <span className="text-3xl font-bold">Zdarma</span>
+                    <span className="text-3xl font-bold">{t('free')}</span>
                   ) : (
                     <>
                       <span className="text-3xl font-bold">
                         {plan.monthlyPriceKc.toLocaleString('cs-CZ')}
                       </span>
-                      <span className="text-sm text-slate-500"> Kč/měsíc</span>
+                      <span className="text-sm text-slate-500"> {t('perMonth')}</span>
                       <div className="text-xs text-slate-500 mt-1">
-                        Nebo {plan.yearlyPriceKc.toLocaleString('cs-CZ')} Kč/rok (2 měsíce zdarma)
+                        {t('yearly', { amount: plan.yearlyPriceKc.toLocaleString('cs-CZ') })}
                       </div>
                     </>
                   )}
                 </div>
 
                 <ul className="space-y-2 text-sm mb-6">
-                  {plan.features.map((f) => (
-                    <li
-                      key={f.label}
-                      className={`flex items-start gap-2 ${
-                        f.value === false ? 'text-slate-400' : ''
-                      }`}
-                    >
-                      <span className={f.value === false ? 'text-slate-300' : 'text-green-600'}>
-                        {f.value === false ? '×' : '✓'}
-                      </span>
-                      <span>
-                        {f.label}
-                        {typeof f.value === 'string' && (
-                          <strong className="font-semibold"> · {f.value}</strong>
-                        )}
-                      </span>
-                    </li>
-                  ))}
+                  {plan.featureKeys.map((f) => {
+                    const label = t(`plans.${plan.key}.features.${f.key}`);
+                    const value = f.valueKey ? t(`plans.${plan.key}.features.${f.valueKey}`) : null;
+                    return (
+                      <li key={f.key} className="flex items-start gap-2">
+                        <span className="text-green-600">✓</span>
+                        <span>
+                          {label}
+                          {value && <strong className="font-semibold"> · {value}</strong>}
+                        </span>
+                      </li>
+                    );
+                  })}
                 </ul>
 
                 <a
@@ -185,7 +149,7 @@ export default function PricingPage() {
                       : 'border border-slate-300 hover:bg-slate-50 text-slate-700'
                   }`}
                 >
-                  {plan.monthlyPriceKc === 0 ? 'Zaregistrovat' : 'Vyzkoušet zdarma'}
+                  {plan.monthlyPriceKc === 0 ? t('ctaRegister') : t('ctaTrial')}
                 </a>
               </div>
             ))}
@@ -193,21 +157,20 @@ export default function PricingPage() {
 
           <div className="text-center mt-8">
             <p className="text-sm text-slate-500">
-              Potřebuješ víc (řetězec, vlastní doména, SSO, SLA)?{' '}
+              {t('enterprise')}{' '}
               <a href="mailto:sales@reserved.cz" className="text-brand-700 hover:underline">
-                Napiš nám pro Enterprise nabídku.
+                sales@reserved.cz
               </a>
             </p>
           </div>
         </div>
       </section>
 
-      {/* FAQ */}
       <section className="py-20 bg-slate-50">
         <div className="max-w-3xl mx-auto px-6">
-          <h2 className="text-3xl font-bold text-center mb-10">Časté otázky</h2>
+          <h2 className="text-3xl font-bold text-center mb-10">{t('faqTitle')}</h2>
           <div className="space-y-4">
-            {FAQ.map((item) => (
+            {faq.map((item) => (
               <details
                 key={item.q}
                 className="bg-white border border-slate-200 rounded-lg p-5 group"
@@ -223,16 +186,15 @@ export default function PricingPage() {
         </div>
       </section>
 
-      {/* CTA */}
       <section className="py-20">
         <div className="max-w-4xl mx-auto px-6 text-center">
-          <h2 className="text-3xl font-bold mb-4">Vyzkoušej Reserved zdarma</h2>
-          <p className="text-lg text-slate-600 mb-8">14 dní bez závazku, bez platební karty.</p>
+          <h2 className="text-3xl font-bold mb-4">{t('ctaBigHeadline')}</h2>
+          <p className="text-lg text-slate-600 mb-8">{t('ctaBigSub')}</p>
           <a
             href={`${ADMIN_URL}/register`}
             className="inline-block bg-brand-600 hover:bg-brand-700 text-white font-semibold px-8 py-4 rounded-lg text-lg"
           >
-            Začít zdarma →
+            {t('ctaBigButton')}
           </a>
         </div>
       </section>

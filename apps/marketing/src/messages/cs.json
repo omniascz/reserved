@@ -119,5 +119,278 @@
     "popular": "⭐ Nejoblíbenější",
     "perMonth": "Kč/měsíc",
     "free": "Zdarma"
+  },
+  "pricingPage": {
+    "title": "Jednoduchý ceník",
+    "subtitle": "Žádné komise. Žádné překvapení. Roční předplatné = 2 měsíce zdarma.",
+    "popular": "⭐ Nejoblíbenější",
+    "free": "Zdarma",
+    "perMonth": "Kč/měsíc",
+    "yearly": "Nebo {amount} Kč/rok (2 měsíce zdarma)",
+    "ctaRegister": "Zaregistrovat",
+    "ctaTrial": "Vyzkoušet zdarma",
+    "enterprise": "Potřebuješ víc (řetězec, vlastní doména, SSO, SLA)? Napiš nám pro Enterprise nabídku.",
+    "faqTitle": "Časté otázky",
+    "ctaBigHeadline": "Vyzkoušej Reserved zdarma",
+    "ctaBigSub": "14 dní bez závazku, bez platební karty.",
+    "ctaBigButton": "Začít zdarma →",
+    "plans": {
+      "free": {
+        "name": "Start",
+        "for": "Pro vyzkoušení",
+        "features": {
+          "employees": "Zaměstnanci",
+          "employeesValue": "1",
+          "bookings": "Rezervace / měsíc",
+          "bookingsValue": "50",
+          "branches": "Pobočky",
+          "branchesValue": "1",
+          "online": "Online rezervace",
+          "email": "Email notifikace",
+          "sms": "SMS notifikace",
+          "googleCal": "Google Calendar",
+          "packages": "Balíčky",
+          "api": "API přístup"
+        }
+      },
+      "starter": {
+        "name": "Starter",
+        "for": "Pro malé salony",
+        "features": {
+          "employees": "Zaměstnanci",
+          "employeesValue": "3",
+          "bookings": "Rezervace / měsíc",
+          "bookingsValue": "500",
+          "branches": "Pobočky",
+          "branchesValue": "1",
+          "online": "Online rezervace",
+          "email": "Email notifikace",
+          "sms": "SMS notifikace",
+          "googleCal": "Google Calendar",
+          "packages": "Balíčky",
+          "api": "API přístup"
+        }
+      },
+      "professional": {
+        "name": "Professional",
+        "for": "Pro střední salony",
+        "features": {
+          "employees": "Zaměstnanci",
+          "employeesValue": "10",
+          "bookings": "Rezervace / měsíc",
+          "bookingsValue": "2 000",
+          "branches": "Pobočky",
+          "branchesValue": "3",
+          "online": "Online rezervace",
+          "emailSms": "Email + SMS",
+          "googleCal": "Google Calendar",
+          "packages": "Balíčky a předplatné",
+          "b2b": "Firemní účty (B2B)",
+          "api": "API přístup"
+        }
+      },
+      "business": {
+        "name": "Business",
+        "for": "Pro velké provozy a řetězce",
+        "features": {
+          "employees": "Zaměstnanci",
+          "employeesValue": "50",
+          "bookings": "Rezervace / měsíc",
+          "bookingsValue": "Neomezené",
+          "branches": "Pobočky",
+          "branchesValue": "20",
+          "everything": "Vše ze Starter + Pro",
+          "whatsapp": "WhatsApp Business",
+          "ai": "AI no-show prediction",
+          "priority": "Prioritní podpora"
+        }
+      }
+    },
+    "faq": [
+      {
+        "q": "Můžu kdykoliv zrušit?",
+        "a": "Ano. Předplatné běží měsíčně nebo ročně. Zrušení provedeš jedním klikem v admin sekci „Fakturace\". Účet ti zůstane do konce předplaceného období."
+      },
+      {
+        "q": "Co když překročím limit rezervací nebo zaměstnanců?",
+        "a": "Dáme ti vědět emailem a navrhneme upgrade. Žádné překvapivé poplatky — nikdy ti nestrhneme nic navíc bez tvého souhlasu."
+      },
+      {
+        "q": "Stojí SMS notifikace navíc?",
+        "a": "Zahrnujeme 100 SMS / měsíc v plánech Starter a vyšších. Nad limit cca 1,50 Kč / SMS. Email je vždy zdarma."
+      },
+      {
+        "q": "Můžu používat vlastní doménu (např. rezervace.mujsalon.cz)?",
+        "a": "Ano, v plánu Business a Enterprise. V plánech Starter / Pro dostáváš subdoménu (mujsalon.reserved.cz)."
+      },
+      {
+        "q": "Berete komisi z rezervací?",
+        "a": "Ne. Žádné poplatky z rezervací, žádný marketplace, žádný „nový klient fee\". Platíš jen měsíční předplatné."
+      },
+      {
+        "q": "Co když mám zvláštní požadavky (vlastní integrace, SLA, SSO)?",
+        "a": "Mrkni na Enterprise plán nebo nám napiš na sales@reserved.cz — uděláme ti nabídku na míru."
+      }
+    ]
+  },
+  "featuresPage": {
+    "title": "Vše, co salon potřebuje",
+    "subtitle": "Reserved je komplexní provozní operační systém pro businessy s rezervacemi. Tady je kompletní inventář funkcí — nic skrytého za příplatkem, jen rozdělení do plánů.",
+    "missingTitle": "Něco chybí?",
+    "missingText": "Reserved se vyvíjí s našimi zákazníky. Pokud potřebuješ funkci, kterou tady nevidíš, napiš nám — pravděpodobně už ji někdo požaduje.",
+    "ctaButton": "Vyzkoušet Reserved zdarma →",
+    "categories": {
+      "online": {
+        "title": "📅 Online rezervace",
+        "items": [
+          "Rezervační widget 24/7 na tvém webu",
+          "Drag-and-drop kalendář (denní / týdenní / měsíční)",
+          "Více poboček, více zaměstnanců",
+          "Skupinové lekce s kapacitou + waiting list",
+          "Buffer time před/po rezervaci",
+          "Hold slot na 10 minut během objednávání (anti-double-booking)"
+        ]
+      },
+      "crm": {
+        "title": "👥 Klientský CRM",
+        "items": [
+          "Karty klientů s celou historií",
+          "Tagy a poznámky (s kategorií: medical, preferences, warning)",
+          "No-show tracking + automatický blacklist po N opakování",
+          "CSV import / export",
+          "GDPR self-service (export osobních dat, právo být zapomenut)"
+        ]
+      },
+      "packages": {
+        "title": "🎁 Balíčky a předplatné",
+        "items": [
+          "Kreditové permanentky (10× vstup za 4 500 Kč)",
+          "Bundle balíčky (3 služby najednou)",
+          "Časová předplatná (neomezeno 30 dní)",
+          "Měsíční členské plány s benefity",
+          "Firemní účty (B2B) — firma kupuje, zaměstnanci čerpají"
+        ]
+      },
+      "payments": {
+        "title": "💳 Platby",
+        "items": [
+          "Hotovost + terminál (manuální záznam)",
+          "Stripe online checkout",
+          "GoPay pro CZ trh",
+          "QR platba (SPD/IBAN) — generuje z účtu",
+          "Záloha při rezervaci (deposit %)",
+          "Refundy (manuální i automatické přes Stripe)"
+        ]
+      },
+      "notifications": {
+        "title": "📲 Notifikace",
+        "items": [
+          "Email potvrzení, změna, zrušení",
+          "SMS notifikace (přes BulkGate, ~1 Kč/SMS)",
+          "Připomínka 24h předem (email + SMS)",
+          "WhatsApp Business (Business plán)",
+          "Push notifikace přes mobilní app (brzy)",
+          "Daily digest pro majitele"
+        ]
+      },
+      "integrations": {
+        "title": "🔗 Integrace",
+        "items": [
+          "Google Calendar — obousměrný sync per zaměstnance",
+          "Outlook, Apple Calendar (přes iCal)",
+          "Zapier / Make přes webhooky",
+          "API + OpenAPI dokumentace na /api-docs",
+          "Fakturoid (CZ účetní brzy)",
+          "POHODA / Money S3 (na roadmapě)"
+        ]
+      },
+      "rules": {
+        "title": "⚡ Pravidla a automatizace",
+        "items": [
+          "Vizuální rule builder s drag-and-drop",
+          "Event triggery: booking_created, cancelled, completed, no_show, customer_registered",
+          "6 akcí: log, email, tag, webhook, charge_storno_fee, deduct_credit",
+          "Storno + přesun pravidla (max dnů dopředu, min hodin předem)",
+          "Per-day reschedule rules (z PO jen do PÁ)",
+          "No-show fee — automatické strhnutí ze zálohy"
+        ]
+      },
+      "reports": {
+        "title": "📊 Reporty",
+        "items": [
+          "Dashboard s metrikami (rezervace, tržby, no-show rate)",
+          "Top služby, zaměstnanci, klienti",
+          "Vytíženost zaměstnanců (utilization)",
+          "Comparison vs předchozí období",
+          "Export do CSV (PDF/ISDOC brzy)",
+          "Reporty per pobočka"
+        ]
+      },
+      "security": {
+        "title": "🛡️ Bezpečnost a GDPR",
+        "items": [
+          "Multi-tenant izolace přes PostgreSQL RLS (bankovní úroveň)",
+          "JWT autentizace + refresh token rotation",
+          "API klíče pro programatický přístup (sandbox/production)",
+          "Audit log všech akcí (kdo kdy co udělal)",
+          "GDPR compliant — DPA na vyžádání",
+          "Šifrované poznámky (RSA 4096 pro medical data)"
+        ]
+      }
+    }
+  },
+  "aboutPage": {
+    "title": "Stavíme Reserved pro Česko",
+    "subtitle": "Software pro salony a kliniky, který je férový k provozovatelům i jejich klientům.",
+    "whyHeader": "Proč jsme začali",
+    "whyP1": "Sledovali jsme, jak české salony platí 20 % komise zahraničním marketplacům za „akvizici\" klientů, kteří už by k nim přišli i tak. Stávající systémy byly buď staromódní (Reservanto, Reservio), nebo příliš drahé pro malé provozovatele (SimplyBook, Calendly).",
+    "whyP2": "Rozhodli jsme se postavit moderní rezervační systém pro český a evropský trh — férový k provozovatelům (žádné komise z rezervací), integrovaný s českým ekosystémem (POHODA, Fakturoid, GoPay, QR platby) a s důrazem na moderní UX.",
+    "valuesHeader": "Co je pro nás důležité",
+    "values": {
+      "v1Title": "Klient je tvůj.",
+      "v1Text": "Žádný marketplace, žádná komise. Když si klient tebe vybere, nikdo do toho mezi vás nevstoupí.",
+      "v2Title": "Žádné překvapení v ceně.",
+      "v2Text": "Pevné měsíční předplatné. Žádné skryté poplatky, žádné Custom Features za příplatek.",
+      "v3Title": "Plně česky.",
+      "v3Text": "Včetně podpory, dokumentace, právních dokumentů a integrací s českým účetnictvím.",
+      "v4Title": "Otevřené API.",
+      "v4Text": "Pokud si chceš napsat vlastní integraci nebo mobilní appku, máš k tomu plnou dokumentaci.",
+      "v5Title": "Soukromí klientů.",
+      "v5Text": "Bankovní úroveň izolace dat (PostgreSQL RLS), GDPR compliant, šifrování citlivých polí."
+    },
+    "whereHeader": "Kde nás najdeš",
+    "whereText": "Sídlíme v Praze. Pracujeme distribuovaně, ale podpora odpovídá v české pracovní době. Kontakt:",
+    "ctaButton": "Vyzkoušet Reserved →"
+  },
+  "contactPage": {
+    "title": "Kontakt",
+    "subtitle": "Ozveme se obvykle do 24 hodin.",
+    "cards": {
+      "support": {
+        "title": "Podpora",
+        "text": "Otázka k produktu, pomoc s nastavením, technický problém."
+      },
+      "sales": {
+        "title": "Prodej (Enterprise)",
+        "text": "Řetězec, vlastní doména, SSO, SLA, custom integrace."
+      },
+      "partner": {
+        "title": "Partnerství",
+        "text": "Spolupráce, integrace, white-label, affiliate program."
+      },
+      "media": {
+        "title": "Tisk a média",
+        "text": "Citáty, rozhovory, případové studie, použití loga."
+      }
+    },
+    "billingHeader": "Fakturační údaje",
+    "billing": {
+      "company": "Reserved s.r.o.",
+      "ico": "IČO: 12345678",
+      "dic": "DIČ: CZ12345678",
+      "address": "Sídlo: Praha, Česká republika",
+      "dataBox": "Datová schránka:"
+    },
+    "billingNote": "(Údaje jsou placeholder — produkce vyplní reálnou s.r.o. po zápisu do OR.)"
   }
 }

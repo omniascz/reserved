@@ -119,5 +119,278 @@
     "popular": "⭐ Most popular",
     "perMonth": "CZK/month",
     "free": "Free"
+  },
+  "pricingPage": {
+    "title": "Simple pricing",
+    "subtitle": "No commissions. No surprises. Yearly plan = 2 months free.",
+    "popular": "⭐ Most popular",
+    "free": "Free",
+    "perMonth": "CZK/month",
+    "yearly": "Or {amount} CZK/year (2 months free)",
+    "ctaRegister": "Sign up",
+    "ctaTrial": "Try free",
+    "enterprise": "Need more (chain, custom domain, SSO, SLA)? Email us for an Enterprise quote.",
+    "faqTitle": "Frequently asked questions",
+    "ctaBigHeadline": "Try Reserved for free",
+    "ctaBigSub": "14 days, no commitment, no credit card.",
+    "ctaBigButton": "Start free →",
+    "plans": {
+      "free": {
+        "name": "Start",
+        "for": "For trying it out",
+        "features": {
+          "employees": "Staff",
+          "employeesValue": "1",
+          "bookings": "Bookings / month",
+          "bookingsValue": "50",
+          "branches": "Branches",
+          "branchesValue": "1",
+          "online": "Online bookings",
+          "email": "Email notifications",
+          "sms": "SMS notifications",
+          "googleCal": "Google Calendar",
+          "packages": "Packages",
+          "api": "API access"
+        }
+      },
+      "starter": {
+        "name": "Starter",
+        "for": "For small salons",
+        "features": {
+          "employees": "Staff",
+          "employeesValue": "3",
+          "bookings": "Bookings / month",
+          "bookingsValue": "500",
+          "branches": "Branches",
+          "branchesValue": "1",
+          "online": "Online bookings",
+          "email": "Email notifications",
+          "sms": "SMS notifications",
+          "googleCal": "Google Calendar",
+          "packages": "Packages",
+          "api": "API access"
+        }
+      },
+      "professional": {
+        "name": "Professional",
+        "for": "For medium-sized salons",
+        "features": {
+          "employees": "Staff",
+          "employeesValue": "10",
+          "bookings": "Bookings / month",
+          "bookingsValue": "2,000",
+          "branches": "Branches",
+          "branchesValue": "3",
+          "online": "Online bookings",
+          "emailSms": "Email + SMS",
+          "googleCal": "Google Calendar",
+          "packages": "Packages and subscriptions",
+          "b2b": "Corporate accounts (B2B)",
+          "api": "API access"
+        }
+      },
+      "business": {
+        "name": "Business",
+        "for": "For large operations and chains",
+        "features": {
+          "employees": "Staff",
+          "employeesValue": "50",
+          "bookings": "Bookings / month",
+          "bookingsValue": "Unlimited",
+          "branches": "Branches",
+          "branchesValue": "20",
+          "everything": "Everything in Starter + Pro",
+          "whatsapp": "WhatsApp Business",
+          "ai": "AI no-show prediction",
+          "priority": "Priority support"
+        }
+      }
+    },
+    "faq": [
+      {
+        "q": "Can I cancel anytime?",
+        "a": "Yes. Subscriptions run monthly or annually. You cancel in one click in the admin Billing section. Your account stays active until the end of your prepaid period."
+      },
+      {
+        "q": "What if I exceed booking or staff limits?",
+        "a": "We email you and propose an upgrade. No surprise charges — we never bill extra without your explicit consent."
+      },
+      {
+        "q": "Are SMS notifications extra?",
+        "a": "100 SMS/month are included in Starter and higher plans. Above that, roughly 1.50 CZK per SMS. Email is always free."
+      },
+      {
+        "q": "Can I use my own domain (e.g. booking.mysalon.com)?",
+        "a": "Yes, on Business and Enterprise plans. Starter / Pro get a subdomain (mysalon.reserved.cz)."
+      },
+      {
+        "q": "Do you take a commission on bookings?",
+        "a": "No. No booking fees, no marketplace, no 'new customer fee'. You only pay the monthly subscription."
+      },
+      {
+        "q": "What if I have special requirements (custom integrations, SLA, SSO)?",
+        "a": "Check out the Enterprise plan or email sales@reserved.cz — we'll prepare a custom quote."
+      }
+    ]
+  },
+  "featuresPage": {
+    "title": "Everything a salon needs",
+    "subtitle": "Reserved is a comprehensive operations system for booking-based businesses. Here's the complete feature inventory — nothing hidden behind add-ons, just split across plans.",
+    "missingTitle": "Something missing?",
+    "missingText": "Reserved evolves with our customers. If you need a feature you don't see here, write to us — someone's probably already asked for it.",
+    "ctaButton": "Try Reserved for free →",
+    "categories": {
+      "online": {
+        "title": "📅 Online bookings",
+        "items": [
+          "24/7 booking widget on your website",
+          "Drag-and-drop calendar (day / week / month)",
+          "Multiple branches, multiple staff",
+          "Group classes with capacity + waiting list",
+          "Buffer time before/after bookings",
+          "Hold slot for 10 minutes during checkout (anti-double-booking)"
+        ]
+      },
+      "crm": {
+        "title": "👥 Client CRM",
+        "items": [
+          "Client profiles with full history",
+          "Tags and notes (categorized: medical, preferences, warning)",
+          "No-show tracking + automatic blacklist after N repeats",
+          "CSV import / export",
+          "GDPR self-service (data export, right to be forgotten)"
+        ]
+      },
+      "packages": {
+        "title": "🎁 Packages and subscriptions",
+        "items": [
+          "Credit packs (10 visits for €180)",
+          "Bundle packs (3 services at once)",
+          "Time-based subscriptions (unlimited for 30 days)",
+          "Monthly membership plans with benefits",
+          "Corporate accounts (B2B) — company buys, employees redeem"
+        ]
+      },
+      "payments": {
+        "title": "💳 Payments",
+        "items": [
+          "Cash + terminal (manual record)",
+          "Stripe online checkout",
+          "GoPay for CZ market",
+          "QR payment (SPD/IBAN) — generated from your account",
+          "Deposit at booking (deposit %)",
+          "Refunds (manual or automatic via Stripe)"
+        ]
+      },
+      "notifications": {
+        "title": "📲 Notifications",
+        "items": [
+          "Email confirmation, change, cancellation",
+          "SMS notifications (via BulkGate, ~€0.05 per SMS)",
+          "24h reminder (email + SMS)",
+          "WhatsApp Business (Business plan)",
+          "Mobile push notifications (coming soon)",
+          "Daily digest for owners"
+        ]
+      },
+      "integrations": {
+        "title": "🔗 Integrations",
+        "items": [
+          "Google Calendar — two-way sync per staff member",
+          "Outlook, Apple Calendar (via iCal)",
+          "Zapier / Make via webhooks",
+          "API + OpenAPI docs at /api-docs",
+          "Fakturoid (CZ accounting, soon)",
+          "POHODA / Money S3 (on the roadmap)"
+        ]
+      },
+      "rules": {
+        "title": "⚡ Rules and automation",
+        "items": [
+          "Visual rule builder with drag-and-drop",
+          "Event triggers: booking_created, cancelled, completed, no_show, customer_registered",
+          "6 actions: log, email, tag, webhook, charge_cancel_fee, deduct_credit",
+          "Cancel + reschedule rules (max days ahead, min hours notice)",
+          "Per-day reschedule rules (from MON only to FRI)",
+          "No-show fee — automatic deduction from deposit"
+        ]
+      },
+      "reports": {
+        "title": "📊 Reports",
+        "items": [
+          "Dashboard with metrics (bookings, revenue, no-show rate)",
+          "Top services, staff, clients",
+          "Staff utilization",
+          "Comparison vs previous period",
+          "Export to CSV (PDF/ISDOC coming soon)",
+          "Reports per branch"
+        ]
+      },
+      "security": {
+        "title": "🛡️ Security and GDPR",
+        "items": [
+          "Multi-tenant isolation via PostgreSQL RLS (bank-grade)",
+          "JWT authentication + refresh token rotation",
+          "API keys for programmatic access (sandbox/production)",
+          "Audit log of all actions (who did what when)",
+          "GDPR compliant — DPA on request",
+          "Encrypted notes (RSA 4096 for medical data)"
+        ]
+      }
+    }
+  },
+  "aboutPage": {
+    "title": "We're building Reserved for Czechia",
+    "subtitle": "Software for salons and clinics that's fair to operators and their clients alike.",
+    "whyHeader": "Why we started",
+    "whyP1": "We watched Czech salons pay 20% commission to foreign marketplaces for 'acquiring' clients who would have come anyway. Existing systems were either outdated (Reservanto, Reservio) or too expensive for small operators (SimplyBook, Calendly).",
+    "whyP2": "We decided to build a modern booking system for the Czech and European market — fair to operators (no booking commissions), integrated with the Czech ecosystem (POHODA, Fakturoid, GoPay, QR payments), with a focus on modern UX.",
+    "valuesHeader": "What matters to us",
+    "values": {
+      "v1Title": "The client is yours.",
+      "v1Text": "No marketplace, no commission. When a client picks you, no one stands between you.",
+      "v2Title": "No price surprises.",
+      "v2Text": "Fixed monthly subscription. No hidden fees, no Custom Features at extra cost.",
+      "v3Title": "Fully localized.",
+      "v3Text": "Including support, documentation, legal documents, and integrations with Czech accounting.",
+      "v4Title": "Open API.",
+      "v4Text": "If you want to build your own integration or mobile app, you have the full documentation.",
+      "v5Title": "Client privacy.",
+      "v5Text": "Bank-grade data isolation (PostgreSQL RLS), GDPR compliant, encryption of sensitive fields."
+    },
+    "whereHeader": "Where to find us",
+    "whereText": "We're based in Prague. We work distributed, but support replies during Czech business hours. Contact:",
+    "ctaButton": "Try Reserved →"
+  },
+  "contactPage": {
+    "title": "Contact",
+    "subtitle": "We usually reply within 24 hours.",
+    "cards": {
+      "support": {
+        "title": "Support",
+        "text": "Product question, setup help, technical issue."
+      },
+      "sales": {
+        "title": "Sales (Enterprise)",
+        "text": "Chain, custom domain, SSO, SLA, custom integrations."
+      },
+      "partner": {
+        "title": "Partnerships",
+        "text": "Cooperation, integrations, white-label, affiliate program."
+      },
+      "media": {
+        "title": "Press and media",
+        "text": "Quotes, interviews, case studies, logo usage."
+      }
+    },
+    "billingHeader": "Billing details",
+    "billing": {
+      "company": "Reserved s.r.o.",
+      "ico": "ID: 12345678",
+      "dic": "VAT: CZ12345678",
+      "address": "Office: Prague, Czech Republic",
+      "dataBox": "Data box ID:"
+    },
+    "billingNote": "(Placeholder details — production will use the registered company info.)"
   }
 }
