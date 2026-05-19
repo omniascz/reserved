@@ -12,7 +12,13 @@
 // Pro local dev: localhost neresolvuje subdoménu, vyžaduje X-Tenant-ID nebo
 // X-Tenant-Slug.
 
-import { Inject, Injectable, NestMiddleware, NotFoundException } from '@nestjs/common';
+import {
+  ForbiddenException,
+  Inject,
+  Injectable,
+  NestMiddleware,
+  NotFoundException,
+} from '@nestjs/common';
 import type { Request, Response, NextFunction } from 'express';
 import { TenantConfig } from './tenant.config.js';
 import { extractTenantCandidates } from './tenant.resolver.js';
@@ -21,16 +27,19 @@ import type { ResolvedTenant } from './tenant.types.js';
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+interface TenantLookupRow {
+  id: string;
+  slug: string;
+  name: string;
+  customDomain: string | null;
+  suspendedAt: Date | null;
+  deletedAt: Date | null;
+}
+
 export interface TenantLookup {
-  bySlug(
-    slug: string,
-  ): Promise<{ id: string; slug: string; name: string; customDomain: string | null } | null>;
-  byCustomDomain(
-    domain: string,
-  ): Promise<{ id: string; slug: string; name: string; customDomain: string | null } | null>;
-  byId(
-    id: string,
-  ): Promise<{ id: string; slug: string; name: string; customDomain: string | null } | null>;
+  bySlug(slug: string): Promise<TenantLookupRow | null>;
+  byCustomDomain(domain: string): Promise<TenantLookupRow | null>;
+  byId(id: string): Promise<TenantLookupRow | null>;
 }
 
 @Injectable()
@@ -61,6 +70,19 @@ export class TenantMiddleware implements NestMiddleware {
     for (const candidate of candidates) {
       const tenant = await this.resolveCandidate(candidate.source, candidate.value);
       if (tenant) {
+        if (tenant.deletedAt) {
+          throw new NotFoundException({
+            error: { code: 'TENANT_NOT_FOUND', message: 'No tenant matches this hostname.' },
+          });
+        }
+        if (tenant.suspendedAt) {
+          throw new ForbiddenException({
+            error: {
+              code: 'TENANT_SUSPENDED',
+              message: 'Tento ucet je do casu prerusen. Kontaktujte podporu Reserved.',
+            },
+          });
+        }
         const resolved: ResolvedTenant = {
           id: tenant.id,
           slug: tenant.slug,
@@ -83,7 +105,7 @@ export class TenantMiddleware implements NestMiddleware {
   private async resolveCandidate(
     source: 'subdomain' | 'custom_domain' | 'header',
     value: string,
-  ): Promise<{ id: string; slug: string; name: string; customDomain: string | null } | null> {
+  ): Promise<TenantLookupRow | null> {
     if (source === 'subdomain') {
       return this.lookup.bySlug(value);
     }

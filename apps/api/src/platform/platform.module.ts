@@ -8,6 +8,7 @@ import { PlatformJwtService } from './platform-jwt.service.js';
 import { PlatformGuard } from './platform.guard.js';
 import { PlatformTenantsController } from './platform-tenants.controller.js';
 import { PlatformTenantsService } from './platform-tenants.service.js';
+import { PlatformTenantActionsService } from './platform-tenant-actions.service.js';
 
 @Module({
   imports: [DbModule, AuthModule],
@@ -18,6 +19,7 @@ import { PlatformTenantsService } from './platform-tenants.service.js';
     PlatformJwtService,
     PlatformGuard,
     PlatformTenantsService,
+    PlatformTenantActionsService,
   ],
   exports: [PlatformJwtService, PlatformGuard, PlatformAuditService],
 })

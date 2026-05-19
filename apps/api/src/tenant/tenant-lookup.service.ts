@@ -13,6 +13,8 @@ type TenantRow = {
   slug: string;
   name: string;
   customDomain: string | null;
+  suspendedAt: Date | null;
+  deletedAt: Date | null;
 };
 
 @Injectable()
@@ -39,6 +41,8 @@ export class DrizzleTenantLookup implements TenantLookup {
           slug: schema.tenants.slug,
           name: schema.tenants.name,
           customDomain: schema.tenants.customDomain,
+          suspendedAt: schema.tenants.suspendedAt,
+          deletedAt: schema.tenants.deletedAt,
         })
         .from(schema.tenants)
         .where(predicate)
