@@ -29,3 +29,4 @@ export * from './subscriptions.js';
 export * from './payments.js';
 export * from './webhooks.js';
 export * from './platform-admins.js';
+export * from './api-keys.js';

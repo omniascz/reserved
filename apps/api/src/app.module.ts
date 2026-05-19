@@ -1,5 +1,6 @@
 import { MiddlewareConsumer, Module, NestModule, RequestMethod } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { ApiKeysModule } from './api-keys/api-keys.module.js';
 import { AuthModule } from './auth/auth.module.js';
 import { AvailabilityModule } from './availability/availability.module.js';
 import { BlocksModule } from './blocks/blocks.module.js';
@@ -16,6 +17,7 @@ import { CustomersModule } from './customers/customers.module.js';
 import { DbModule } from './db/db.module.js';
 import { EmailModule } from './email/email.module.js';
 import { EmployeesModule } from './employees/employees.module.js';
+import { ExternalModule } from './external/external.module.js';
 import { HealthController } from './health/health.controller.js';
 import { HolidaysModule } from './holidays/holidays.module.js';
 import { PaymentsModule } from './payments/payments.module.js';
@@ -39,6 +41,8 @@ import { TenantMiddleware } from './tenant/tenant.middleware.js';
     DbModule,
     TenantModule,
     AuthModule,
+    ApiKeysModule,
+    ExternalModule,
     FeatureFlagsModule,
     WebhooksModule,
     SettingsModule,
@@ -78,6 +82,9 @@ export class AppModule implements NestModule {
         { path: 'admin/(.*)', method: RequestMethod.ALL },
         { path: 'platform/(.*)', method: RequestMethod.ALL },
         { path: 'public/(.*)', method: RequestMethod.ALL },
+        // External API klíče nesou tenantId v key recordu, takže middleware
+        // pro tenant resolution z URL/hostu zde nepoužíváme.
+        { path: 'external/(.*)', method: RequestMethod.ALL },
         // Portal: tenant se resolvuje X-Tenant-ID hlavickou (klient ji posila
         // na vsechny portal requesty), takze tenant middleware na portal/*
         // bezi. Refresh/logout nepotrebuji tenant kontext.

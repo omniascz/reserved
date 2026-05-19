@@ -8,3 +8,6 @@ export type { WebhookEventType } from './schema/webhooks.js';
 
 export { platformActionTypes } from './schema/platform-admins.js';
 export type { PlatformActionType } from './schema/platform-admins.js';
+
+export { API_KEY_SCOPES } from './schema/api-keys.js';
+export type { ApiKeyScope } from './schema/api-keys.js';
