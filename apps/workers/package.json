@@ -2,12 +2,29 @@
   "name": "@reserved/workers",
   "version": "0.0.1",
   "private": true,
-  "description": "BullMQ background jobs — placeholder. Sprint 1.4 zakládá první joby.",
+  "type": "module",
+  "description": "Background workers — notification queue, slot hold expiration, scheduled reminders.",
   "scripts": {
-    "build": "echo 'workers app not yet scaffolded'",
-    "dev": "echo 'workers app not yet scaffolded'",
-    "lint": "echo 'workers app not yet scaffolded'",
-    "typecheck": "echo 'workers app not yet scaffolded'",
-    "test": "echo 'workers app not yet scaffolded'"
+    "dev": "tsx watch --env-file=.env src/main.ts",
+    "start": "node dist/main.js",
+    "build": "tsc",
+    "lint": "echo 'lint not configured yet'",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@reserved/db": "workspace:*",
+    "@reserved/rls-multitenancy": "workspace:*",
+    "drizzle-orm": "^0.45.0",
+    "nodemailer": "^6.9.16",
+    "postgres": "^3.4.0",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/nodemailer": "^6.4.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0",
+    "vitest": "^2.1.0"
   }
 }

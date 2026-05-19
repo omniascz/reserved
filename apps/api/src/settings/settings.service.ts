@@ -8,8 +8,12 @@ import { DbService } from '../db/db.service.js';
 import {
   BookingRulesSchema,
   DEFAULT_BOOKING_RULES,
+  DEFAULT_NOTIFICATION_SETTINGS,
+  NotificationSettingsSchema,
   extractBookingRules,
+  extractNotificationSettings,
   type BookingRules,
+  type NotificationSettings,
 } from './settings.types.js';
 
 const MANAGE_ROLES: AppRole[] = ['owner', 'manager'];
@@ -70,6 +74,50 @@ export class SettingsService {
       return merged;
     });
   }
+
+  // ─── Notifications ──────────────────────────────────────────────────
+
+  async getNotificationSettings(
+    tenantId: string,
+    userId: string,
+    role: AppRole,
+  ): Promise<NotificationSettings> {
+    return this.dbService.withRlsContext(ctxFor(tenantId, userId, role), async (tx) => {
+      const rows = await tx
+        .select({ settings: schema.tenants.settings })
+        .from(schema.tenants)
+        .where(eq(schema.tenants.id, tenantId))
+        .limit(1);
+      return extractNotificationSettings(rows[0]?.settings);
+    });
+  }
+
+  async updateNotificationSettings(
+    tenantId: string,
+    userId: string,
+    role: AppRole,
+    input: Partial<NotificationSettings>,
+  ): Promise<NotificationSettings> {
+    assertCanManage(role);
+    return this.dbService.withRlsContext(ctxFor(tenantId, userId, role), async (tx) => {
+      const rows = await tx
+        .select({ settings: schema.tenants.settings })
+        .from(schema.tenants)
+        .where(eq(schema.tenants.id, tenantId))
+        .limit(1);
+      const current = (rows[0]?.settings as Record<string, unknown> | null) ?? {};
+      const currentSettings = extractNotificationSettings(current);
+      const merged = NotificationSettingsSchema.parse({ ...currentSettings, ...input });
+      const newSettings = { ...current, notifications: merged };
+
+      await tx
+        .update(schema.tenants)
+        .set({ settings: newSettings, updatedAt: new Date() })
+        .where(eq(schema.tenants.id, tenantId));
+
+      return merged;
+    });
+  }
 }
 
-export { DEFAULT_BOOKING_RULES };
+export { DEFAULT_BOOKING_RULES, DEFAULT_NOTIFICATION_SETTINGS };

@@ -22,6 +22,8 @@ import { TimePacksService } from '../time-packs/time-packs.service.js';
 import { CustomersService } from '../customers/customers.service.js';
 import { DbService } from '../db/db.service.js';
 import { EmailService } from '../email/email.service.js';
+import { NotificationsScheduler } from '../email/notifications-scheduler.service.js';
+import { extractNotificationSettings } from '../settings/settings.types.js';
 import { EventBus } from '../rules/events.bus.js';
 import type { BookingEventPayload, TriggerEvent } from '@reserved/rules-engine';
 import type {
@@ -70,7 +72,85 @@ export class BookingsService {
     @Inject(TimePacksService) private readonly timePacks: TimePacksService,
     @Inject(SubscriptionsService) private readonly subscriptions: SubscriptionsService,
     @Inject(GoogleCalendarService) private readonly googleCal: GoogleCalendarService,
+    @Inject(NotificationsScheduler) private readonly scheduler: NotificationsScheduler,
   ) {}
+
+  /**
+   * Naplanuje pripomínky pro novou rezervaci podle tenant settings.
+   * Vola se po confirmFromHold + adminCreate.
+   */
+  private async scheduleBookingReminders(input: {
+    tenantId: string;
+    bookingId: string;
+    startsAt: Date;
+    endsAt: Date;
+    customerEmail: string;
+    customerName: string;
+    customerPhone: string | null;
+    serviceName: string;
+    employeeName: string;
+    tenantName: string;
+    referenceCode: string;
+    onlineMeetingUrl: string | null;
+  }): Promise<void> {
+    // Načti tenant settings pro notifikace
+    const tenantRows = await this.dbService.withRlsContext(
+      serviceContext(input.tenantId),
+      async (tx) => {
+        return tx
+          .select({ settings: schema.tenants.settings })
+          .from(schema.tenants)
+          .where(eq(schema.tenants.id, input.tenantId))
+          .limit(1);
+      },
+    );
+    const settings = extractNotificationSettings(tenantRows[0]?.settings);
+    if (settings.reminderHoursBefore === 0) return;
+
+    const reminderTime = new Date(
+      input.startsAt.getTime() - settings.reminderHoursBefore * 3600_000,
+    );
+    if (reminderTime.getTime() <= Date.now()) {
+      // Rezervace je tak brzy, ze nas reminder by uz mel byt v minulosti — preskakujeme
+      return;
+    }
+
+    const emailVars = {
+      customerName: input.customerName,
+      serviceName: input.serviceName,
+      employeeName: input.employeeName,
+      tenantName: input.tenantName,
+      startsAt: input.startsAt.toLocaleString('cs-CZ'),
+      endsAt: input.endsAt.toLocaleString('cs-CZ'),
+      referenceCode: input.referenceCode,
+      onlineMeetingUrl: input.onlineMeetingUrl,
+    };
+
+    // Primární kanál podle settings
+    if (settings.primaryChannel === 'email' || !settings.smsEnabled || !input.customerPhone) {
+      await this.scheduler.scheduleEmail({
+        tenantId: input.tenantId,
+        templateCode: 'booking_reminder',
+        recipient: input.customerEmail,
+        vars: emailVars,
+        scheduledAt: reminderTime,
+        relatedBookingId: input.bookingId,
+      });
+    }
+    if (settings.smsEnabled && input.customerPhone) {
+      const smsBody =
+        `Pripominka rezervace v ${input.tenantName}: ${input.serviceName} ${input.startsAt.toLocaleString('cs-CZ')}. ` +
+        `Kod: ${input.referenceCode}. Stornovat min ${settings.reminderHoursBefore}h predem.`;
+      await this.scheduler.scheduleSms({
+        tenantId: input.tenantId,
+        templateCode: 'booking_reminder',
+        recipient: input.customerPhone,
+        body: smsBody,
+        scheduledAt: reminderTime,
+        relatedBookingId: input.bookingId,
+      });
+    }
+  }
 
   private async emitBookingEvent(
     eventType: TriggerEvent,
@@ -245,6 +325,10 @@ export class BookingsService {
         );
         const tenant = tenantRows[0]!;
 
+        const employeeName = emp
+          ? (emp.displayName ?? `${emp.firstName} ${emp.lastName}`)
+          : 'Zaměstnanec';
+
         await this.email.enqueue({
           tenantId,
           templateCode: 'booking_confirmed',
@@ -253,15 +337,29 @@ export class BookingsService {
           vars: {
             customerName: dto.customerName,
             serviceName: result.service.name,
-            employeeName: emp
-              ? (emp.displayName ?? `${emp.firstName} ${emp.lastName}`)
-              : 'Zaměstnanec',
+            employeeName,
             tenantName: tenant.name,
             startsAt: result.booking.startsAt.toISOString(),
             endsAt: result.booking.endsAt.toISOString(),
             referenceCode: result.booking.referenceCode,
             onlineMeetingUrl: result.booking.onlineMeetingUrl,
           },
+        });
+
+        // Naplánuj připomínku podle tenant settings (default 24h před)
+        await this.scheduleBookingReminders({
+          tenantId,
+          bookingId: result.booking.id,
+          startsAt: result.booking.startsAt,
+          endsAt: result.booking.endsAt,
+          customerEmail: dto.customerEmail,
+          customerName: dto.customerName,
+          customerPhone: dto.customerPhone ?? null,
+          serviceName: result.service.name,
+          employeeName,
+          tenantName: tenant.name,
+          referenceCode: result.booking.referenceCode,
+          onlineMeetingUrl: result.booking.onlineMeetingUrl,
         });
 
         // Auto-odpocet z balicku (priorita: time-pack > bundle > credit-pack).
@@ -531,6 +629,11 @@ export class BookingsService {
           },
         );
 
+        const employeeName = emp
+          ? (emp.displayName ?? `${emp.firstName} ${emp.lastName}`)
+          : 'Zaměstnanec';
+        const tenantName = tenantRows[0]!.name;
+
         await this.email.enqueue({
           tenantId,
           templateCode: 'booking_confirmed',
@@ -539,15 +642,29 @@ export class BookingsService {
           vars: {
             customerName: result.booking.customerName,
             serviceName: result.service.name,
-            employeeName: emp
-              ? (emp.displayName ?? `${emp.firstName} ${emp.lastName}`)
-              : 'Zaměstnanec',
-            tenantName: tenantRows[0]!.name,
+            employeeName,
+            tenantName,
             startsAt: result.booking.startsAt.toISOString(),
             endsAt: result.booking.endsAt.toISOString(),
             referenceCode: result.booking.referenceCode,
             onlineMeetingUrl: result.booking.onlineMeetingUrl,
           },
+        });
+
+        // Naplánuj připomínku podle tenant settings
+        await this.scheduleBookingReminders({
+          tenantId,
+          bookingId: result.booking.id,
+          startsAt: result.booking.startsAt,
+          endsAt: result.booking.endsAt,
+          customerEmail: result.booking.customerEmail,
+          customerName: result.booking.customerName,
+          customerPhone: result.booking.customerPhone ?? null,
+          serviceName: result.service.name,
+          employeeName,
+          tenantName,
+          referenceCode: result.booking.referenceCode,
+          onlineMeetingUrl: result.booking.onlineMeetingUrl,
         });
 
         return result.booking;

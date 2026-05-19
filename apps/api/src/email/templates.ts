@@ -79,6 +79,24 @@ vaše rezervace č. {{referenceCode}} ({{serviceName}}, {{startsAt}}) byla zruš
 
 Tým {{tenantName}}`,
   },
+  booking_reminder: {
+    subject: 'Připomínka rezervace — {{tenantName}} ({{startsAt}})',
+    body: `Dobrý den {{customerName}},
+
+připomínáme vaši rezervaci v {{tenantName}}:
+
+  Služba:       {{serviceName}}
+  Zaměstnanec:  {{employeeName}}
+  Začátek:      {{startsAt}}
+  Konec:        {{endsAt}}
+  Číslo:        {{referenceCode}}
+{{onlineMeetingSection}}
+Pokud se nemůžete dostavit, prosíme dejte nám vědět co nejdříve.
+
+Těšíme se na vás.
+
+Tým {{tenantName}}`,
+  },
   booking_rescheduled: {
     subject: 'Vaše rezervace byla přesunuta — {{tenantName}}',
     body: `Dobrý den {{customerName}},

@@ -43,3 +43,29 @@ export function extractBookingRules(settings: unknown): BookingRules {
   if (!result.success) return DEFAULT_BOOKING_RULES;
   return result.data;
 }
+
+// ─── Notification settings ─────────────────────────────────────────────
+
+export const NotificationSettingsSchema = z.object({
+  /** Hodiny před začátkem rezervace, kdy poslat připomínku. 0 = vypnuto. Default 24. */
+  reminderHoursBefore: z.number().min(0).max(168).default(24),
+  /** Primární kanál pro připomínky. */
+  primaryChannel: z.enum(['email', 'sms']).default('email'),
+  /** Zda připomínat i přes SMS (pokud klient má telefon). */
+  smsEnabled: z.boolean().default(false),
+});
+
+export type NotificationSettings = z.infer<typeof NotificationSettingsSchema>;
+export const DEFAULT_NOTIFICATION_SETTINGS: NotificationSettings = NotificationSettingsSchema.parse(
+  {},
+);
+
+export function extractNotificationSettings(settings: unknown): NotificationSettings {
+  if (!settings || typeof settings !== 'object') return DEFAULT_NOTIFICATION_SETTINGS;
+  const obj = settings as Record<string, unknown>;
+  const raw = obj.notifications;
+  if (!raw) return DEFAULT_NOTIFICATION_SETTINGS;
+  const result = NotificationSettingsSchema.safeParse(raw);
+  if (!result.success) return DEFAULT_NOTIFICATION_SETTINGS;
+  return result.data;
+}
