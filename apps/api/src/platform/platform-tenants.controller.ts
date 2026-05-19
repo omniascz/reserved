@@ -28,6 +28,10 @@ import {
   type TenantOnboarding,
 } from './platform-tenants.service.js';
 import { PlatformTenantActionsService } from './platform-tenant-actions.service.js';
+import {
+  PlatformImpersonationService,
+  type ImpersonateResult,
+} from './platform-impersonation.service.js';
 import { PlatformAuditService } from './platform-audit.service.js';
 import { CurrentPlatformAdmin } from './decorators/current-admin.decorator.js';
 import type { PlatformAccessPayload } from './platform-jwt.service.js';
@@ -47,6 +51,8 @@ export class PlatformTenantsController {
   constructor(
     @Inject(PlatformTenantsService) private readonly tenants: PlatformTenantsService,
     @Inject(PlatformTenantActionsService) private readonly actions: PlatformTenantActionsService,
+    @Inject(PlatformImpersonationService)
+    private readonly impersonation: PlatformImpersonationService,
     @Inject(PlatformAuditService) private readonly audit: PlatformAuditService,
   ) {}
 
@@ -162,5 +168,18 @@ export class PlatformTenantsController {
     @Param('id', new ParseUUIDPipe()) id: string,
   ): Promise<void> {
     await this.actions.softDelete(id, this.actionContext(req, admin));
+  }
+
+  @Post(':id/impersonate')
+  async impersonate(
+    @Req() req: Request,
+    @CurrentPlatformAdmin() admin: PlatformAccessPayload,
+    @Param('id', new ParseUUIDPipe()) id: string,
+  ): Promise<{ data: ImpersonateResult }> {
+    const data = await this.impersonation.impersonate(id, admin.sub, {
+      ip: req.ip,
+      ua: req.headers['user-agent'],
+    });
+    return { data };
   }
 }

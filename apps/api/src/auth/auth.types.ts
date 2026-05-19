@@ -13,6 +13,8 @@ export interface AccessTokenPayload {
   customRoleId: string | null;
   /** Pobočky, ke kterým má user přístup. Prázdné pro owner (= všechny). */
   branchIds: string[];
+  /** Pokud token vznikl impersonaci master adminem, UUID toho admina (jinak null). */
+  impersonatedBy: string | null;
   /** Standard JWT claims. */
   iat: number;
   exp: number;
