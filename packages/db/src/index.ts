@@ -5,3 +5,6 @@ export * as schema from './schema/index.js';
 // namespace (event types, enums...). Tabulky zustavaji pristupne pres schema.X.
 export { WEBHOOK_EVENT_TYPES } from './schema/webhooks.js';
 export type { WebhookEventType } from './schema/webhooks.js';
+
+export { platformActionTypes } from './schema/platform-admins.js';
+export type { PlatformActionType } from './schema/platform-admins.js';

@@ -28,6 +28,10 @@ export const tenants = pgTable(
     currency: varchar('currency', { length: 3 }).notNull().default('CZK'),
     settings: jsonb('settings').notNull().default({}),
     trialEndsAt: timestamp('trial_ends_at', { withTimezone: true }),
+    suspendedAt: timestamp('suspended_at', { withTimezone: true }),
+    suspensionReason: text('suspension_reason'),
+    businessType: varchar('business_type', { length: 64 }),
+    ownerEmail: varchar('owner_email', { length: 255 }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
     deletedAt: timestamp('deleted_at', { withTimezone: true }),
@@ -36,6 +40,8 @@ export const tenants = pgTable(
     slugIdx: uniqueIndex('tenants_slug_idx').on(table.slug),
     customDomainIdx: uniqueIndex('tenants_custom_domain_idx').on(table.customDomain),
     statusIdx: index('tenants_status_idx').on(table.status),
+    suspendedIdx: index('tenants_suspended_idx').on(table.suspendedAt),
+    businessTypeIdx: index('tenants_business_type_idx').on(table.businessType),
   }),
 );
 
