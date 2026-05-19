@@ -15,6 +15,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import type { Request } from 'express';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Public } from '../auth/decorators/public.decorator.js';
 import { ZodValidationPipe } from '../auth/zod-validation.pipe.js';
 import {
@@ -27,11 +28,14 @@ import {
 } from '../bookings/dto/booking.dto.js';
 import { BookingsService } from '../bookings/bookings.service.js';
 import { ApiKeyGuard, requireScope } from '../api-keys/api-key.guard.js';
+import { ApiKeyThrottlerGuard } from '../api-keys/api-key-throttler.guard.js';
 
 const SYSTEM_USER = '00000000-0000-0000-0000-000000000000';
 
+@ApiTags('External — Bookings')
+@ApiBearerAuth('api-key')
 @Public()
-@UseGuards(ApiKeyGuard)
+@UseGuards(ApiKeyGuard, ApiKeyThrottlerGuard)
 @Controller('external/v1/bookings')
 export class ExternalBookingsController {
   constructor(@Inject(BookingsService) private readonly svc: BookingsService) {}

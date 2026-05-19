@@ -3,6 +3,7 @@
 
 import { Controller, Get, Inject, Query, Req, UseGuards } from '@nestjs/common';
 import type { Request } from 'express';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { and, asc, eq, isNull } from 'drizzle-orm';
 import { schema } from '@reserved/db';
 import { serviceContext } from '@reserved/rls-multitenancy';
@@ -10,9 +11,12 @@ import { Public } from '../auth/decorators/public.decorator.js';
 import { DbService } from '../db/db.service.js';
 import { AvailabilityService } from '../availability/availability.service.js';
 import { ApiKeyGuard, requireScope } from '../api-keys/api-key.guard.js';
+import { ApiKeyThrottlerGuard } from '../api-keys/api-key-throttler.guard.js';
 
+@ApiTags('External — Catalog')
+@ApiBearerAuth('api-key')
 @Public()
-@UseGuards(ApiKeyGuard)
+@UseGuards(ApiKeyGuard, ApiKeyThrottlerGuard)
 @Controller('external/v1')
 export class ExternalCatalogController {
   constructor(

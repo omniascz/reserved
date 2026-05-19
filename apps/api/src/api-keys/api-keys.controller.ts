@@ -12,6 +12,7 @@ import {
   ParseUUIDPipe,
   Post,
 } from '@nestjs/common';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { z } from 'zod';
 import { CurrentUser } from '../auth/decorators/current-user.decorator.js';
 import type { AccessTokenPayload } from '../auth/auth.types.js';
@@ -28,6 +29,8 @@ const CreateApiKeySchema = z.object({
 });
 type CreateApiKeyDto = z.infer<typeof CreateApiKeySchema>;
 
+@ApiTags('Admin — API Keys')
+@ApiBearerAuth('jwt')
 @Controller('admin/api-keys')
 export class ApiKeysController {
   constructor(@Inject(ApiKeysService) private readonly service: ApiKeysService) {}

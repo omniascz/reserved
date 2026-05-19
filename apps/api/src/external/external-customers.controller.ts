@@ -14,6 +14,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import type { Request } from 'express';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { z } from 'zod';
 import { Public } from '../auth/decorators/public.decorator.js';
 import { ZodValidationPipe } from '../auth/zod-validation.pipe.js';
@@ -21,6 +22,7 @@ import { CustomersService } from '../customers/customers.service.js';
 import { DbService } from '../db/db.service.js';
 import { serviceContext } from '@reserved/rls-multitenancy';
 import { ApiKeyGuard, requireScope } from '../api-keys/api-key.guard.js';
+import { ApiKeyThrottlerGuard } from '../api-keys/api-key-throttler.guard.js';
 
 const SYSTEM_USER = '00000000-0000-0000-0000-000000000000';
 
@@ -32,8 +34,10 @@ const CreateCustomerSchema = z.object({
 });
 type CreateCustomerDto = z.infer<typeof CreateCustomerSchema>;
 
+@ApiTags('External — Customers')
+@ApiBearerAuth('api-key')
 @Public()
-@UseGuards(ApiKeyGuard)
+@UseGuards(ApiKeyGuard, ApiKeyThrottlerGuard)
 @Controller('external/v1/customers')
 export class ExternalCustomersController {
   constructor(

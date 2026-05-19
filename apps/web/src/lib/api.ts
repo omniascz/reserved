@@ -1808,3 +1808,56 @@ export async function listWebhookDeliveries(id: string): Promise<AdminWebhookDel
   );
   return data;
 }
+
+// ─── API keys (external integrace) ────────────────────────────────────
+
+export const API_KEY_SCOPES = [
+  'bookings:read',
+  'bookings:write',
+  'customers:read',
+  'customers:write',
+  'services:read',
+  'employees:read',
+  'availability:read',
+  'branches:read',
+  'webhooks:read',
+] as const;
+export type AdminApiKeyScope = (typeof API_KEY_SCOPES)[number] | '*';
+
+export interface AdminApiKey {
+  id: string;
+  name: string;
+  keyPrefix: string;
+  scopes: AdminApiKeyScope[];
+  lastUsedAt: string | null;
+  usageCount: number;
+  expiresAt: string | null;
+  revokedAt: string | null;
+  createdAt: string;
+}
+
+export interface AdminApiKeyCreated extends AdminApiKey {
+  /** PLNÝ KLÍČ — vrátí se pouze pri create, nikdy víc. */
+  rawKey: string;
+}
+
+export async function listApiKeys(): Promise<AdminApiKey[]> {
+  const { data } = await fetchApi<{ data: AdminApiKey[] }>(`/admin/api-keys`);
+  return data;
+}
+
+export async function createApiKey(input: {
+  name: string;
+  scopes?: AdminApiKeyScope[];
+  expiresAt?: string | null;
+}): Promise<AdminApiKeyCreated> {
+  const { data } = await fetchApi<{ data: AdminApiKeyCreated }>(`/admin/api-keys`, {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+  return data;
+}
+
+export async function revokeApiKey(id: string): Promise<void> {
+  await fetchApi(`/admin/api-keys/${id}`, { method: 'DELETE' });
+}

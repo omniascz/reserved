@@ -1,5 +1,6 @@
 import { MiddlewareConsumer, Module, NestModule, RequestMethod } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { ApiKeysModule } from './api-keys/api-keys.module.js';
 import { AuthModule } from './auth/auth.module.js';
 import { AvailabilityModule } from './availability/availability.module.js';
@@ -38,6 +39,12 @@ import { TenantMiddleware } from './tenant/tenant.middleware.js';
       isGlobal: true,
       envFilePath: ['.env.local', '.env'],
     }),
+    // Rate limit: 2 hladiny — krátký burst (60/min) + denní strop (5000/h).
+    // Default in-memory storage; pro multi-instance produkci pridat Redis.
+    ThrottlerModule.forRoot([
+      { name: 'short', ttl: 60_000, limit: 60 },
+      { name: 'long', ttl: 3600_000, limit: 5000 },
+    ]),
     DbModule,
     TenantModule,
     AuthModule,

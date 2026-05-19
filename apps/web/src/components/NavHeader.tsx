@@ -23,6 +23,7 @@ const NAV = [
   { href: '/integrations', label: 'Integrace' },
   { href: '/webhooks', label: 'Webhooky' },
   { href: '/feature-flags', label: 'Flags' },
+  { href: '/api-keys', label: 'API klíče' },
   { href: '/settings', label: 'Nastavení' },
 ];
 
