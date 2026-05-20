@@ -46,9 +46,17 @@ async function fetchApi<T>(path: string, init?: RequestInit): Promise<T> {
 
 // ─── Tenant info ──────────────────────────────────────────────────────
 
+export interface TenantTheme {
+  primaryColor?: string;
+  borderRadius?: 'none' | 'sm' | 'md' | 'lg' | 'xl';
+  logoUrl?: string;
+  fontFamily?: 'system' | 'serif' | 'sans';
+}
+
 export interface TenantInfo {
   slug: string;
   name: string;
+  theme?: TenantTheme;
 }
 
 export async function getTenantInfo(slug: string): Promise<TenantInfo> {

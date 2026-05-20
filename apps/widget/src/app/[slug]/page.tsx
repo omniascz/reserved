@@ -7,11 +7,12 @@ import { ReservedApiError } from '@/lib/api';
 import { BookingFlow } from '@/components/BookingFlow';
 import { I18nProvider, useT } from '@/i18n/I18nProvider';
 import { isLang } from '@/i18n/messages';
+import { themeToCss } from '@/lib/theme';
+import { initAutoResize } from '@/lib/auto-resize';
 
 export default function TenantWidgetPage({ params }: { params: { slug: string } }) {
   const searchParams = useSearchParams();
   const langParam = searchParams.get('lang');
-  // Default je 'cs'; v budoucnu lze rozšířit o tenant.locale z API.
   const lang = isLang(langParam) ? langParam : 'cs';
 
   return (
@@ -38,6 +39,11 @@ function PageInner({ slug }: { slug: string }) {
       });
   }, [slug, t]);
 
+  // Auto-resize iframe (Sprint 8.1) — když je widget embed
+  useEffect(() => {
+    return initAutoResize();
+  }, [tenant]);
+
   if (error) {
     return (
       <div className="min-h-screen flex items-center justify-center p-6">
@@ -60,16 +66,27 @@ function PageInner({ slug }: { slug: string }) {
   }
 
   return (
-    <div className="min-h-screen p-4 md:p-8">
-      <div className="max-w-3xl mx-auto">
-        <header className="mb-6">
-          <p className="text-sm text-brand-600 font-semibold uppercase tracking-wide">
-            {t('onlineBooking')}
-          </p>
-          <h1 className="text-3xl md:text-4xl font-bold mt-1">{tenant.name}</h1>
-        </header>
-        <BookingFlow slug={slug} tenantName={tenant.name} />
+    <>
+      {/* Aplikuje tenant theme přes CSS custom properties */}
+      <style dangerouslySetInnerHTML={{ __html: themeToCss(tenant.theme) }} />
+
+      <div className="min-h-screen p-4 md:p-8">
+        <div className="max-w-3xl mx-auto">
+          <header className="mb-6 flex items-center gap-3">
+            {tenant.theme?.logoUrl && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={tenant.theme.logoUrl} alt={tenant.name} className="h-12 w-auto" />
+            )}
+            <div>
+              <p className="text-sm text-brand-600 font-semibold uppercase tracking-wide">
+                {t('onlineBooking')}
+              </p>
+              <h1 className="text-3xl md:text-4xl font-bold">{tenant.name}</h1>
+            </div>
+          </header>
+          <BookingFlow slug={slug} tenantName={tenant.name} />
+        </div>
       </div>
-    </div>
+    </>
   );
 }

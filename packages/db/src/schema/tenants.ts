@@ -61,6 +61,12 @@ export const tenants = pgTable(
     publicPhotos: jsonb('public_photos').notNull().default([]),
     /** Otevírací hodiny { mon: '9-18', tue: '9-18', ... }. */
     publicBusinessHours: jsonb('public_business_hours').notNull().default({}),
+    /**
+     * Theme pro widget (Sprint 8.1):
+     *   { primaryColor: '#FF6B6B', borderRadius: 'md', logoUrl, fontFamily }
+     * Widget aplikuje pres CSS custom properties.
+     */
+    theme: jsonb('theme').notNull().default({}),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
     deletedAt: timestamp('deleted_at', { withTimezone: true }),

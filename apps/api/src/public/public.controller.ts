@@ -41,16 +41,25 @@ export class PublicController {
     @Inject(BookingsService) private readonly bookings: BookingsService,
   ) {}
 
-  /** GET /api/v1/public/:slug — info o tenant (název, currency, timezone). */
+  /** GET /api/v1/public/:slug — info o tenant (název + theme + currency, timezone). */
   @Public()
   @Get()
   async info(@Param('slug') slug: string) {
     const tenant = await this.resolveTenant(slug);
+    // Načti theme z DB — používá widget pro CSS variables.
+    const themeRow = await this.dbService.withRlsContext(serviceContext(tenant.id), async (tx) => {
+      const rows = await tx
+        .select({ theme: schema.tenants.theme })
+        .from(schema.tenants)
+        .where(eq(schema.tenants.id, tenant.id))
+        .limit(1);
+      return rows[0];
+    });
     return {
       data: {
         slug: tenant.slug,
         name: tenant.name,
-        // Pro UI nepotřebujeme všechno — schválně vrátíme jen veřejně vhodné.
+        theme: (themeRow?.theme ?? {}) as Record<string, unknown>,
       },
     };
   }

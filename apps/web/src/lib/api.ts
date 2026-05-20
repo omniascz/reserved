@@ -2121,3 +2121,32 @@ export async function updateCatalogProfile(
   });
   return data;
 }
+
+// ─── Tenant theme (Sprint 8.1) ─────────────────────────────────────────
+
+export interface TenantTheme {
+  primaryColor?: string;
+  borderRadius?: 'none' | 'sm' | 'md' | 'lg' | 'xl';
+  logoUrl?: string;
+  fontFamily?: 'system' | 'serif' | 'sans';
+}
+
+export async function getTheme(): Promise<TenantTheme> {
+  const { data } = await fetchApi<{ data: TenantTheme }>(`/admin/theme`);
+  return data;
+}
+
+export async function updateTheme(
+  patch: TenantTheme & {
+    primaryColor?: string | null;
+    borderRadius?: TenantTheme['borderRadius'] | null;
+    logoUrl?: string | null;
+    fontFamily?: TenantTheme['fontFamily'] | null;
+  },
+): Promise<TenantTheme> {
+  const { data } = await fetchApi<{ data: TenantTheme }>(`/admin/theme`, {
+    method: 'PATCH',
+    body: JSON.stringify(patch),
+  });
+  return data;
+}
