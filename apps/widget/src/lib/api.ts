@@ -51,6 +51,8 @@ export interface TenantTheme {
   borderRadius?: 'none' | 'sm' | 'md' | 'lg' | 'xl';
   logoUrl?: string;
   fontFamily?: 'system' | 'serif' | 'sans';
+  backgroundColor?: string;
+  customCss?: string;
 }
 
 export interface TenantInfo {

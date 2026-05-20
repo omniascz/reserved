@@ -39,6 +39,8 @@ export function themeToCss(theme: TenantTheme | undefined): string {
   const primary = theme?.primaryColor ?? DEFAULT_PRIMARY;
   const radius = RADIUS_MAP[theme?.borderRadius ?? 'lg'] ?? RADIUS_MAP.lg;
   const font = FONT_MAP[theme?.fontFamily ?? 'system'] ?? FONT_MAP.system;
+  const background = theme?.backgroundColor ?? '#f8fafc';
+  const customCss = theme?.customCss ?? '';
 
   // Derive světlé a tmavé tóny z primary
   const primary50 = shadeColor(primary, 80);
@@ -57,8 +59,10 @@ export function themeToCss(theme: TenantTheme | undefined): string {
   --rw-primary-800: ${primary800};
   --rw-radius: ${radius};
   --rw-font: ${font};
+  --rw-background: ${background};
 }
-body { font-family: var(--rw-font); }
+body { font-family: var(--rw-font); background-color: var(--rw-background); }
+.bg-slate-50 { background-color: var(--rw-background); }
 .bg-brand-50 { background-color: var(--rw-primary-50); }
 .bg-brand-100 { background-color: var(--rw-primary-100); }
 .bg-brand-500 { background-color: var(--rw-primary-500); }
@@ -72,5 +76,6 @@ body { font-family: var(--rw-font); }
 .border-brand-200 { border-color: var(--rw-primary-100); }
 .border-brand-500 { border-color: var(--rw-primary-500); }
 .hover\\:border-brand-500:hover { border-color: var(--rw-primary-500); }
-.focus\\:ring-brand-500:focus { --tw-ring-color: var(--rw-primary-500); }`;
+.focus\\:ring-brand-500:focus { --tw-ring-color: var(--rw-primary-500); }
+${customCss}`;
 }

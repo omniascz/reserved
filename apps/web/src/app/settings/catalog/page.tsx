@@ -9,6 +9,7 @@ import {
   getAccessToken,
   getCatalogProfile,
   updateCatalogProfile,
+  uploadFile,
   type CatalogProfile,
 } from '@/lib/api';
 
@@ -64,7 +65,21 @@ export default function CatalogSettingsPage() {
     setProfile({ ...profile, publicBusinessHours: hours });
   }
 
-  function addPhoto(): void {
+  async function addPhotoFromFile(file: File): Promise<void> {
+    if (!profile) return;
+    if (profile.publicPhotos.length >= 10) {
+      alert('Max 10 fotek.');
+      return;
+    }
+    try {
+      const url = await uploadFile(file, 'catalog-photo');
+      setProfile({ ...profile, publicPhotos: [...profile.publicPhotos, url] });
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Upload selhal.');
+    }
+  }
+
+  function addPhotoFromUrl(): void {
     if (!profile) return;
     const url = prompt('URL fotografie (https://…):');
     if (!url) return;
@@ -197,17 +212,33 @@ export default function CatalogSettingsPage() {
           <section className="bg-white border border-slate-200 rounded-xl p-6">
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-bold text-lg">Fotografie</h2>
-              <button
-                type="button"
-                onClick={addPhoto}
-                className="text-sm text-brand-700 hover:text-brand-800 font-semibold"
-              >
-                + Přidat fotku
-              </button>
+              <div className="flex gap-2">
+                <label className="text-sm text-brand-700 hover:text-brand-800 font-semibold cursor-pointer">
+                  + Nahrát soubor
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/gif"
+                    className="hidden"
+                    onChange={(ev) => {
+                      const f = ev.target.files?.[0];
+                      if (f) {
+                        void addPhotoFromFile(f);
+                      }
+                      ev.target.value = '';
+                    }}
+                  />
+                </label>
+                <button
+                  type="button"
+                  onClick={addPhotoFromUrl}
+                  className="text-sm text-slate-500 hover:text-slate-700"
+                >
+                  Vložit URL
+                </button>
+              </div>
             </div>
             <p className="text-xs text-slate-500 mb-4">
-              První fotka slouží jako cover v katalogu. Max 10 fotek. Upload bude přes admin v
-              budoucnu — zatím vlož URL z hostingu (Imgur, S3, …).
+              První fotka slouží jako cover v katalogu. Max 10 fotek, 5 MB / foto.
             </p>
             {profile.publicPhotos.length === 0 ? (
               <p className="text-sm text-slate-400">Žádné fotky.</p>

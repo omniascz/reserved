@@ -14,12 +14,12 @@ import { clearAuth, getAccessToken, getTenantSlug, AdminApiError } from '@/lib/a
 
 const WIDGET_URL = process.env.NEXT_PUBLIC_WIDGET_URL ?? 'http://localhost:4004';
 
-type EmbedKind = 'iframe' | 'iframe-resize' | 'button';
+type EmbedKind = 'sdk' | 'sdk-modal' | 'iframe-resize' | 'iframe' | 'button';
 
 export default function EmbedSettingsPage() {
   const router = useRouter();
   const slug = getTenantSlug();
-  const [kind, setKind] = useState<EmbedKind>('iframe-resize');
+  const [kind, setKind] = useState<EmbedKind>('sdk');
   const [lang, setLang] = useState<'cs' | 'en'>('cs');
   const [copied, setCopied] = useState(false);
 
@@ -38,8 +38,24 @@ export default function EmbedSettingsPage() {
   const widgetSrc = `${WIDGET_URL}/${slug}${lang === 'en' ? '?lang=en' : ''}`;
 
   const SNIPPETS: Record<EmbedKind, { label: string; description: string; code: string }> = {
+    sdk: {
+      label: '⭐ 1-řádkový script (nejjednodušší)',
+      description:
+        'Vlož jeden řádek a Reserved automaticky vytvoří widget s auto-resize. Žádný iframe ručně, žádný extra JS.',
+      code: `<script src="${WIDGET_URL}/embed.js" data-slug="${slug}"${
+        lang === 'en' ? ' data-lang="en"' : ''
+      } defer></script>`,
+    },
+    'sdk-modal': {
+      label: '⭐ 1-řádkový script — popup tlačítko',
+      description:
+        'Místo iframe se vloží tlačítko, které otevře widget v modal okně. Jeden řádek, vše vyřešeno.',
+      code: `<script src="${WIDGET_URL}/embed.js" data-slug="${slug}"${
+        lang === 'en' ? ' data-lang="en"' : ''
+      } data-mode="modal" data-button-text="Rezervovat termín" defer></script>`,
+    },
     iframe: {
-      label: 'Jednoduchý iframe',
+      label: 'Jednoduchý iframe (pokročilé)',
       description:
         'Fixní výška 800px. Funguje všude. Vhodné když nepotřebuješ aby se výška měnila podle obsahu.',
       code: `<iframe

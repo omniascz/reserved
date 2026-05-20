@@ -2129,6 +2129,8 @@ export interface TenantTheme {
   borderRadius?: 'none' | 'sm' | 'md' | 'lg' | 'xl';
   logoUrl?: string;
   fontFamily?: 'system' | 'serif' | 'sans';
+  backgroundColor?: string;
+  customCss?: string;
 }
 
 export async function getTheme(): Promise<TenantTheme> {
@@ -2142,6 +2144,8 @@ export async function updateTheme(
     borderRadius?: TenantTheme['borderRadius'] | null;
     logoUrl?: string | null;
     fontFamily?: TenantTheme['fontFamily'] | null;
+    backgroundColor?: string | null;
+    customCss?: string | null;
   },
 ): Promise<TenantTheme> {
   const { data } = await fetchApi<{ data: TenantTheme }>(`/admin/theme`, {
@@ -2149,4 +2153,41 @@ export async function updateTheme(
     body: JSON.stringify(patch),
   });
   return data;
+}
+
+// ─── Photo upload (Sprint 8.2-C) ───────────────────────────────────────
+
+export interface UploadSignResult {
+  uploadUrl: string;
+  publicUrl: string;
+  storage: 's3' | 'local';
+  method?: 'PUT' | 'POST';
+}
+
+export async function signUpload(
+  kind: 'logo' | 'catalog-photo' | 'service-image',
+  contentType: string,
+  fileSize?: number,
+): Promise<UploadSignResult> {
+  const { data } = await fetchApi<{ data: UploadSignResult }>(`/admin/uploads/sign`, {
+    method: 'POST',
+    body: JSON.stringify({ kind, contentType, fileSize }),
+  });
+  return data;
+}
+
+export async function uploadFile(
+  file: File,
+  kind: 'logo' | 'catalog-photo' | 'service-image',
+): Promise<string> {
+  const sign = await signUpload(kind, file.type, file.size);
+  const res = await fetch(sign.uploadUrl, {
+    method: sign.method ?? 'PUT',
+    headers: { 'Content-Type': file.type },
+    body: file,
+  });
+  if (!res.ok) {
+    throw new Error(`Upload selhal (HTTP ${res.status}).`);
+  }
+  return sign.publicUrl;
 }

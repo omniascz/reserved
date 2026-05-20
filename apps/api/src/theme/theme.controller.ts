@@ -15,6 +15,12 @@ const ThemePatchSchema = z.object({
   borderRadius: z.enum(['none', 'sm', 'md', 'lg', 'xl']).nullable().optional(),
   logoUrl: z.string().url().max(2000).nullable().optional(),
   fontFamily: z.enum(['system', 'serif', 'sans']).nullable().optional(),
+  backgroundColor: z
+    .string()
+    .regex(/^#[0-9a-fA-F]{6}$/)
+    .nullable()
+    .optional(),
+  customCss: z.string().max(10_000).nullable().optional(),
 });
 
 @ApiTags('theme')

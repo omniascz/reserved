@@ -45,6 +45,25 @@ async function bootstrap(): Promise<void> {
   };
   app.use('/api/v1/payments/webhooks', express.raw({ type: '*/*', limit: '1mb' }), rawBodyCapture);
   app.use('/api/v1/platform/webhooks', express.raw({ type: '*/*', limit: '1mb' }), rawBodyCapture);
+
+  // Local uploads — image binary PUT, max 6 MB
+  app.use(
+    '/api/v1/admin/uploads/local',
+    express.raw({ type: 'image/*', limit: '6mb' }),
+    (
+      req: express.Request & { rawBody?: Buffer },
+      _res: express.Response,
+      next: express.NextFunction,
+    ) => {
+      req.rawBody = req.body as Buffer;
+      next();
+    },
+  );
+
+  // Statické serving pro local uploads (dev mode fallback)
+  const uploadsDir = process.env.UPLOADS_DIR ?? `${process.cwd()}/uploads`;
+  app.use('/uploads', express.static(uploadsDir));
+
   // Standardni body parser pro vsechny ostatni routes
   app.use(express.json({ limit: '2mb' }));
   app.use(express.urlencoded({ extended: true, limit: '2mb' }));

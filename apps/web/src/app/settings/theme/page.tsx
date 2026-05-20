@@ -88,6 +88,8 @@ export default function ThemeSettingsPage() {
         borderRadius: null,
         fontFamily: null,
         logoUrl: null,
+        backgroundColor: null,
+        customCss: null,
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any);
       setTheme(next);
@@ -206,6 +208,51 @@ export default function ThemeSettingsPage() {
                   Zobrazí se v hlavičce widgetu vedle názvu salonu.
                 </p>
               </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2">Barva pozadí widgetu</label>
+                <div className="flex gap-3 items-center">
+                  <input
+                    type="color"
+                    value={theme.backgroundColor ?? '#f8fafc'}
+                    onChange={(e) => patch({ backgroundColor: e.target.value })}
+                    className="w-16 h-12 border border-slate-300 rounded-lg cursor-pointer"
+                  />
+                  <input
+                    type="text"
+                    value={theme.backgroundColor ?? ''}
+                    onChange={(e) => patch({ backgroundColor: e.target.value || undefined })}
+                    placeholder="#f8fafc (světle šedá)"
+                    pattern="^#[0-9a-fA-F]{6}$"
+                    className="flex-1 px-3 py-2 border border-slate-300 rounded-lg font-mono text-sm"
+                  />
+                </div>
+                <p className="text-xs text-slate-500 mt-1">
+                  Pozadí celého widgetu. Default je světle šedá.
+                </p>
+              </div>
+            </section>
+
+            {/* Custom CSS (advanced) */}
+            <section className="bg-white border border-slate-200 rounded-xl p-6">
+              <h2 className="font-bold text-lg mb-3">Pokročilé: Custom CSS</h2>
+              <p className="text-sm text-slate-600 mb-3">
+                Pro pixel-perfect ladění. Pozor: chybné CSS může widget rozbít. Bezpečnostně se
+                blokují <code className="bg-slate-100 px-1 rounded">&lt;script&gt;</code>,{' '}
+                <code className="bg-slate-100 px-1 rounded">javascript:</code>,{' '}
+                <code className="bg-slate-100 px-1 rounded">@import</code>.
+              </p>
+              <textarea
+                value={theme.customCss ?? ''}
+                onChange={(e) => patch({ customCss: e.target.value || undefined })}
+                placeholder={`/* Příklad */\n.bg-brand-600 { background: linear-gradient(45deg, #ff6b6b, #ee5a6f); }`}
+                rows={8}
+                maxLength={10000}
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg font-mono text-xs"
+              />
+              <p className="text-xs text-slate-500 mt-1">
+                {theme.customCss?.length ?? 0} / 10 000 znaků
+              </p>
             </section>
 
             <div className="flex gap-2">

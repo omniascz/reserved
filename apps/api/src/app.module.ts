@@ -35,6 +35,7 @@ import { ServicesModule } from './services/services.module.js';
 import { SettingsModule } from './settings/settings.module.js';
 import { TenantModule } from './tenant/tenant.module.js';
 import { ThemeModule } from './theme/theme.module.js';
+import { UploadsModule } from './uploads/uploads.module.js';
 import { WebhooksModule } from './webhooks/webhooks.module.js';
 import { TenantMiddleware } from './tenant/tenant.middleware.js';
 
@@ -85,6 +86,7 @@ import { TenantMiddleware } from './tenant/tenant.middleware.js';
     ReportsModule,
     RulesModule,
     ThemeModule,
+    UploadsModule,
   ],
 })
 export class AppModule implements NestModule {

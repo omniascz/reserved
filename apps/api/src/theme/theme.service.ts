@@ -17,6 +17,10 @@ export interface TenantTheme {
   borderRadius?: BorderRadius | null;
   logoUrl?: string | null;
   fontFamily?: FontFamily | null;
+  /** Barva pozadí widgetu — hex #RRGGBB. */
+  backgroundColor?: string | null;
+  /** Volitelné custom CSS, vložené do <style> ve widgetu. Max 10 kB. */
+  customCss?: string | null;
 }
 
 const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;
@@ -81,11 +85,50 @@ export class ThemeService {
         error: { code: 'LOGO_URL_TOO_LONG', message: 'Logo URL je moc dlouhé.' },
       });
     }
+    if (
+      patch.backgroundColor !== undefined &&
+      patch.backgroundColor !== null &&
+      !HEX_COLOR.test(patch.backgroundColor)
+    ) {
+      throw new BadRequestException({
+        error: {
+          code: 'INVALID_BACKGROUND_COLOR',
+          message: 'Barva pozadí musí být ve formátu #RRGGBB.',
+        },
+      });
+    }
+    if (patch.customCss !== undefined && patch.customCss !== null) {
+      if (patch.customCss.length > 10_000) {
+        throw new BadRequestException({
+          error: { code: 'CUSTOM_CSS_TOO_LONG', message: 'Custom CSS max 10 000 znaků.' },
+        });
+      }
+      // Bezpecnostni sanitizace: blokuje <script>, javascript:, @import, expression()
+      const lower = patch.customCss.toLowerCase();
+      const blockedPatterns = ['<script', 'javascript:', '@import', 'expression(', 'behavior:'];
+      for (const pattern of blockedPatterns) {
+        if (lower.includes(pattern)) {
+          throw new BadRequestException({
+            error: {
+              code: 'CUSTOM_CSS_UNSAFE',
+              message: `Custom CSS nesmí obsahovat: ${pattern}`,
+            },
+          });
+        }
+      }
+    }
 
     const current = await this.get(tenantId);
     // Merge — undefined fields zachovají existující hodnotu; null je explicitní reset.
     const next: TenantTheme = { ...current };
-    for (const key of ['primaryColor', 'borderRadius', 'logoUrl', 'fontFamily'] as const) {
+    for (const key of [
+      'primaryColor',
+      'borderRadius',
+      'logoUrl',
+      'fontFamily',
+      'backgroundColor',
+      'customCss',
+    ] as const) {
       if (key in patch) {
         const value = patch[key];
         if (value === null) {
