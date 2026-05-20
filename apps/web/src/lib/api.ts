@@ -2072,3 +2072,26 @@ export async function verifyCustomDomain(): Promise<CustomDomainStatus> {
 export async function removeCustomDomain(): Promise<void> {
   await fetchApi<void>(`/admin/custom-domain`, { method: 'DELETE' });
 }
+
+// ─── No-show risk score (Sprint 8.0-2) ─────────────────────────────────
+
+export type RiskLevel = 'low' | 'medium' | 'high';
+
+export interface NoShowRisk {
+  score: number;
+  level: RiskLevel;
+  reasons: string[];
+  stats: {
+    totalBookings: number;
+    completedBookings: number;
+    noShowCount: number;
+    cancelledByCustomerCount: number;
+  };
+}
+
+export async function getNoShowRisk(customerId: string): Promise<NoShowRisk> {
+  const { data } = await fetchApi<{ data: NoShowRisk }>(
+    `/admin/customers/${customerId}/no-show-risk`,
+  );
+  return data;
+}

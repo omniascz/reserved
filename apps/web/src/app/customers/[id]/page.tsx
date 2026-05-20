@@ -13,6 +13,7 @@ import {
   removeCustomerTag,
   type AdminCustomerDetail,
 } from '@/lib/api';
+import { NoShowRiskBadge } from '@/components/NoShowRiskBadge';
 import { CustomerBundlePacks } from './CustomerBundlePacks';
 import { CustomerCreditPacks } from './CustomerCreditPacks';
 import { CustomerPayments } from './CustomerPayments';
@@ -148,6 +149,11 @@ export default function CustomerDetailPage({ params }: { params: { id: string } 
             label="Utraceno"
             value={`${totalSpent} ${c.metadata && 'currency' in c.metadata ? '' : 'Kč'}`}
           />
+        </div>
+
+        {/* No-show risk panel (Sprint 8.0-2) */}
+        <div className="mb-6">
+          <NoShowRiskBadge customerId={c.id} showDetails />
         </div>
 
         <div className="grid md:grid-cols-2 gap-6">
