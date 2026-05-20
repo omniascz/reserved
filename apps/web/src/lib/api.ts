@@ -2095,3 +2095,29 @@ export async function getNoShowRisk(customerId: string): Promise<NoShowRisk> {
   );
   return data;
 }
+
+// ─── Katalog public profile (Sprint 8.0-4) ─────────────────────────────
+
+export interface CatalogProfile {
+  listedInCatalog: boolean;
+  publicDescription: string | null;
+  publicCity: string | null;
+  publicAddress: string | null;
+  publicPhotos: string[];
+  publicBusinessHours: Record<string, string>;
+}
+
+export async function getCatalogProfile(): Promise<CatalogProfile> {
+  const { data } = await fetchApi<{ data: CatalogProfile }>(`/admin/catalog-profile`);
+  return data;
+}
+
+export async function updateCatalogProfile(
+  patch: Partial<CatalogProfile>,
+): Promise<CatalogProfile> {
+  const { data } = await fetchApi<{ data: CatalogProfile }>(`/admin/catalog-profile`, {
+    method: 'PATCH',
+    body: JSON.stringify(patch),
+  });
+  return data;
+}

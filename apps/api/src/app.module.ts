@@ -8,6 +8,7 @@ import { BlocksModule } from './blocks/blocks.module.js';
 import { BookingsModule } from './bookings/bookings.module.js';
 import { BranchesModule } from './branches/branches.module.js';
 import { BundlePacksModule } from './bundle-packs/bundle-packs.module.js';
+import { CatalogModule } from './catalog/catalog.module.js';
 import { CorporateAccountsModule } from './corporate-accounts/corporate-accounts.module.js';
 import { CreditPacksModule } from './credit-packs/credit-packs.module.js';
 import { CustomDomainsModule } from './custom-domains/custom-domains.module.js';
@@ -66,6 +67,7 @@ import { TenantMiddleware } from './tenant/tenant.middleware.js';
     BookingsModule,
     CreditPacksModule,
     BundlePacksModule,
+    CatalogModule,
     TimePacksModule,
     CorporateAccountsModule,
     CustomDomainsModule,

@@ -1,4 +1,5 @@
 import {
+  boolean,
   pgTable,
   uuid,
   varchar,
@@ -48,6 +49,18 @@ export const tenants = pgTable(
     cancelAtPeriodEnd: varchar('cancel_at_period_end', { length: 8 }).default('false'),
     /** Volitelný oddělený fakturační email (jinak owner_email). */
     billingEmail: varchar('billing_email', { length: 255 }),
+    /** Marketplace v1: tenant je viditelný v katalogu na reserved.cz. */
+    listedInCatalog: boolean('listed_in_catalog').notNull().default(false),
+    /** Dlouhý popis pro katalog (markdown OK). */
+    publicDescription: text('public_description'),
+    /** Město pro vyhledávání. */
+    publicCity: varchar('public_city', { length: 100 }),
+    /** Plná adresa s ulicí a PSČ. */
+    publicAddress: text('public_address'),
+    /** Pole URL fotografií (cover + další). */
+    publicPhotos: jsonb('public_photos').notNull().default([]),
+    /** Otevírací hodiny { mon: '9-18', tue: '9-18', ... }. */
+    publicBusinessHours: jsonb('public_business_hours').notNull().default({}),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
     deletedAt: timestamp('deleted_at', { withTimezone: true }),
