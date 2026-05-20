@@ -10,6 +10,7 @@ import { loadConfig } from './config.js';
 import { createDb } from './db.js';
 import { EmailProvider } from './providers/email.provider.js';
 import { createSmsProvider } from './providers/sms/index.js';
+import { createWhatsAppProvider } from './providers/whatsapp/index.js';
 import { Poller } from './lib/poller.js';
 import { NotificationsWorker } from './workers/notifications.worker.js';
 import { SlotHoldsWorker } from './workers/slot-holds.worker.js';
@@ -22,8 +23,9 @@ async function bootstrap(): Promise<void> {
   const { db, close: closeDb } = createDb(env.DATABASE_APP_URL ?? env.DATABASE_URL);
   const email = new EmailProvider(env);
   const sms = createSmsProvider(env);
+  const whatsapp = createWhatsAppProvider(env);
 
-  const notificationsWorker = new NotificationsWorker(db, email, sms);
+  const notificationsWorker = new NotificationsWorker(db, email, sms, whatsapp);
   const slotHoldsWorker = new SlotHoldsWorker(db);
 
   const pollers: Poller[] = [
@@ -42,7 +44,7 @@ async function bootstrap(): Promise<void> {
   pollers.forEach((p) => p.start());
 
   // eslint-disable-next-line no-console
-  console.log(`[workers] running (SMS provider: ${sms.name})`);
+  console.log(`[workers] running (SMS: ${sms.name}, WhatsApp: ${whatsapp.name})`);
 
   // Graceful shutdown
   const shutdown = async (signal: string): Promise<void> => {

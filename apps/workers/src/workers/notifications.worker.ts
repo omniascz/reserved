@@ -12,6 +12,7 @@ import { schema } from '@reserved/db';
 import type { Database } from '../db.js';
 import type { EmailProvider } from '../providers/email.provider.js';
 import type { SmsProvider } from '../providers/sms/index.js';
+import type { WhatsAppProvider } from '../providers/whatsapp/index.js';
 
 const BATCH_SIZE = 50;
 const MAX_ATTEMPTS = 5;
@@ -22,6 +23,7 @@ export class NotificationsWorker {
     private readonly db: Database,
     private readonly email: EmailProvider,
     private readonly sms: SmsProvider,
+    private readonly whatsapp: WhatsAppProvider,
   ) {}
 
   async tick(): Promise<void> {
@@ -68,6 +70,29 @@ export class NotificationsWorker {
         const result = await this.sms.send({
           to: n.recipient,
           body: n.body,
+        });
+        providerMessageId = result.messageId;
+      } else if (n.channel === 'whatsapp') {
+        // Pro WhatsApp se z notification.metadata vyčte templateName + variables.
+        // metadata schema: { template: string, language?: string, variables?: string[] }
+        const meta = (n.metadata as Record<string, unknown> | null) ?? {};
+        const templateName = typeof meta.template === 'string' ? meta.template : null;
+        if (!templateName) {
+          await this.markFailed(
+            n.id,
+            'WhatsApp notification chybí metadata.template (musí být schválený WA template)',
+            MAX_ATTEMPTS,
+          );
+          return;
+        }
+        const language = typeof meta.language === 'string' ? meta.language : 'cs';
+        const variables = Array.isArray(meta.variables) ? meta.variables.map((v) => String(v)) : [];
+
+        const result = await this.whatsapp.send({
+          to: n.recipient,
+          templateName,
+          language,
+          variables,
         });
         providerMessageId = result.messageId;
       } else {

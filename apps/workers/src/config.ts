@@ -18,6 +18,10 @@ const EnvSchema = z.object({
   BULKGATE_APP_ID: z.string().optional(),
   BULKGATE_APP_TOKEN: z.string().optional(),
   BULKGATE_SENDER: z.string().default('Reserved'),
+  // WhatsApp Business
+  WHATSAPP_PROVIDER: z.enum(['mock', 'bulkgate']).default('mock'),
+  /** Číslo registrované jako WhatsApp Business sender (E.164). */
+  BULKGATE_WHATSAPP_FROM: z.string().optional(),
 });
 
 export type Env = z.infer<typeof EnvSchema>;
