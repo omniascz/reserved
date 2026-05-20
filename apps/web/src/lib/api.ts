@@ -2038,3 +2038,37 @@ export async function markOnboardingStep(step: OnboardingStep): Promise<Onboardi
   });
   return data;
 }
+
+// ─── Custom doména (Sprint 8.0-1) ──────────────────────────────────────
+
+export interface CustomDomainStatus {
+  customDomain: string | null;
+  verifiedAt: string | null;
+  verificationToken: string | null;
+  verificationRecord: string | null;
+  dnsTarget: string;
+}
+
+export async function getCustomDomain(): Promise<CustomDomainStatus> {
+  const { data } = await fetchApi<{ data: CustomDomainStatus }>(`/admin/custom-domain`);
+  return data;
+}
+
+export async function setCustomDomain(domain: string): Promise<CustomDomainStatus> {
+  const { data } = await fetchApi<{ data: CustomDomainStatus }>(`/admin/custom-domain`, {
+    method: 'PUT',
+    body: JSON.stringify({ domain }),
+  });
+  return data;
+}
+
+export async function verifyCustomDomain(): Promise<CustomDomainStatus> {
+  const { data } = await fetchApi<{ data: CustomDomainStatus }>(`/admin/custom-domain/verify`, {
+    method: 'POST',
+  });
+  return data;
+}
+
+export async function removeCustomDomain(): Promise<void> {
+  await fetchApi<void>(`/admin/custom-domain`, { method: 'DELETE' });
+}

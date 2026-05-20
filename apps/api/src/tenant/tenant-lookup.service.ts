@@ -2,7 +2,7 @@
 // custom domény nebo UUID. Používáno TenantMiddleware.
 
 import { Inject, Injectable } from '@nestjs/common';
-import { eq } from 'drizzle-orm';
+import { and, eq, isNotNull, type SQL } from 'drizzle-orm';
 import { schema } from '@reserved/db';
 import { serviceContext } from '@reserved/rls-multitenancy';
 import { DbService } from '../db/db.service.js';
@@ -26,14 +26,21 @@ export class DrizzleTenantLookup implements TenantLookup {
   }
 
   async byCustomDomain(domain: string): Promise<TenantRow | null> {
-    return this.lookupBy(eq(schema.tenants.customDomain, domain));
+    // Pouze ověřené domény routujeme — neověřené visí v DB jako 'pending'
+    // dokud tenant nepotvrdí TXT záznam přes /admin/custom-domain/verify.
+    const predicate = and(
+      eq(schema.tenants.customDomain, domain),
+      isNotNull(schema.tenants.customDomainVerifiedAt),
+    );
+    if (!predicate) return null;
+    return this.lookupBy(predicate);
   }
 
   async byId(id: string): Promise<TenantRow | null> {
     return this.lookupBy(eq(schema.tenants.id, id));
   }
 
-  private async lookupBy(predicate: ReturnType<typeof eq>): Promise<TenantRow | null> {
+  private async lookupBy(predicate: SQL<unknown>): Promise<TenantRow | null> {
     const rows = await this.dbService.withRlsContext(serviceContext(), async (tx) => {
       return tx
         .select({

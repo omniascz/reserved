@@ -10,6 +10,7 @@ import { BranchesModule } from './branches/branches.module.js';
 import { BundlePacksModule } from './bundle-packs/bundle-packs.module.js';
 import { CorporateAccountsModule } from './corporate-accounts/corporate-accounts.module.js';
 import { CreditPacksModule } from './credit-packs/credit-packs.module.js';
+import { CustomDomainsModule } from './custom-domains/custom-domains.module.js';
 import { FeatureFlagsModule } from './feature-flags/feature-flags.module.js';
 import { GoogleCalendarModule } from './google-calendar/google-calendar.module.js';
 import { SubscriptionsModule } from './subscriptions/subscriptions.module.js';
@@ -67,6 +68,7 @@ import { TenantMiddleware } from './tenant/tenant.middleware.js';
     BundlePacksModule,
     TimePacksModule,
     CorporateAccountsModule,
+    CustomDomainsModule,
     SubscriptionsModule,
     GoogleCalendarModule,
     PaymentsModule,

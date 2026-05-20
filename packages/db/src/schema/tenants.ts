@@ -21,6 +21,10 @@ export const tenants = pgTable(
     slug: varchar('slug', { length: 64 }).notNull(),
     name: varchar('name', { length: 200 }).notNull(),
     customDomain: varchar('custom_domain', { length: 255 }),
+    /** NOT NULL = doména je ověřená přes DNS TXT záznam (a používá se v middleware). */
+    customDomainVerifiedAt: timestamp('custom_domain_verified_at', { withTimezone: true }),
+    /** Token, který musí být v TXT záznamu `_reserved-verification.<domain>`. */
+    customDomainVerificationToken: varchar('custom_domain_verification_token', { length: 64 }),
     plan: varchar('plan', { length: 32 }).notNull().default('starter'),
     status: varchar('status', { length: 32 }).notNull().default('trial'),
     locale: varchar('locale', { length: 8 }).notNull().default('cs-CZ'),
