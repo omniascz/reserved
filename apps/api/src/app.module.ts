@@ -34,6 +34,7 @@ import { RulesModule } from './rules/rules.module.js';
 import { ServicesModule } from './services/services.module.js';
 import { SettingsModule } from './settings/settings.module.js';
 import { TenantModule } from './tenant/tenant.module.js';
+import { TenantSiteModule } from './tenant-site/tenant-site.module.js';
 import { ThemeModule } from './theme/theme.module.js';
 import { UploadsModule } from './uploads/uploads.module.js';
 import { WebhooksModule } from './webhooks/webhooks.module.js';
@@ -85,6 +86,7 @@ import { TenantMiddleware } from './tenant/tenant.middleware.js';
     PublicModule,
     ReportsModule,
     RulesModule,
+    TenantSiteModule,
     ThemeModule,
     UploadsModule,
   ],

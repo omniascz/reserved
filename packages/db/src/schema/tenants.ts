@@ -67,6 +67,17 @@ export const tenants = pgTable(
      * Widget aplikuje pres CSS custom properties.
      */
     theme: jsonb('theme').notNull().default({}),
+    /**
+     * Sprint 9.0: Mini-website šablona.
+     * 'elegant' | 'bold' | 'fresh' | null (= jen widget na doméně).
+     */
+    siteTemplate: varchar('site_template', { length: 32 }),
+    /** Sprint 9.0: Mini-website je aktivní (publikovaná na custom doméně). */
+    siteEnabled: boolean('site_enabled').notNull().default(false),
+    /**
+     * Sprint 9.0: Obsah sekcí mini-webu (hero, about, team, gallery, faq, contact, ...).
+     */
+    siteContent: jsonb('site_content').notNull().default({}),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
     deletedAt: timestamp('deleted_at', { withTimezone: true }),

@@ -2191,3 +2191,68 @@ export async function uploadFile(
   }
   return sign.publicUrl;
 }
+
+// ─── Tenant site (Sprint 9.0) ──────────────────────────────────────────
+
+export type SiteTemplate = 'elegant' | 'bold' | 'fresh';
+
+export interface SiteContent {
+  hero?: {
+    headline?: string;
+    subheadline?: string;
+    coverPhotoUrl?: string;
+    ctaText?: string;
+  };
+  about?: {
+    headline?: string;
+    text?: string;
+    photoUrl?: string;
+  };
+  team?: {
+    headline?: string;
+    members?: Array<{ name: string; role?: string; photoUrl?: string; bio?: string }>;
+  };
+  gallery?: {
+    headline?: string;
+    photos?: string[];
+  };
+  testimonials?: {
+    headline?: string;
+    items?: Array<{ author: string; text: string }>;
+  };
+  faq?: {
+    headline?: string;
+    items?: Array<{ q: string; a: string }>;
+  };
+  contact?: {
+    headline?: string;
+    showAddress?: boolean;
+    showHours?: boolean;
+    showPhone?: boolean;
+    phone?: string;
+    email?: string;
+    mapEmbedUrl?: string;
+  };
+  enabledSections?: string[];
+}
+
+export interface SiteSettings {
+  template: SiteTemplate | null;
+  enabled: boolean;
+  content: SiteContent;
+}
+
+export async function getSiteSettings(): Promise<SiteSettings> {
+  const { data } = await fetchApi<{ data: SiteSettings }>(`/admin/site`);
+  return data;
+}
+
+export async function updateSiteSettings(
+  patch: Partial<SiteSettings> & { template?: SiteTemplate | null },
+): Promise<SiteSettings> {
+  const { data } = await fetchApi<{ data: SiteSettings }>(`/admin/site`, {
+    method: 'PATCH',
+    body: JSON.stringify(patch),
+  });
+  return data;
+}
