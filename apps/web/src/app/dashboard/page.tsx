@@ -18,6 +18,7 @@ import {
 } from 'recharts';
 import { NavHeader } from '@/components/NavHeader';
 import { OnboardingWidget } from '@/components/OnboardingWidget';
+import { ShareBookingCard } from '@/components/ShareBookingCard';
 import {
   AdminApiError,
   clearAuth,
@@ -166,6 +167,7 @@ export default function DashboardPage() {
       <NavHeader />
       <main className="flex-1 p-6 max-w-7xl mx-auto w-full">
         <OnboardingWidget />
+        <ShareBookingCard />
         <div className="flex items-center justify-between mb-4 flex-wrap gap-3 no-print">
           <h1 className="text-2xl font-bold">Dashboard</h1>
           <div className="flex gap-2 items-center text-sm">
