@@ -743,4 +743,99 @@ describe('Fitness flow E2E (10.0–10.2)', () => {
       expect(forms.data.some((f) => f.name === 'Vstupní zdravotní dotazník')).toBe(true);
     });
   });
+
+  // ─── 10.12 Permanentky na lekcích ─────────────────────────────────────
+  describe('Permanentky na lekcích (10.12)', () => {
+    const packEmail = 'pack-tester@fit.local';
+    let packId: string;
+    let allocId: string;
+    let custId: string;
+    let sessionA: string;
+    let bookingA: string;
+
+    it('založí kreditovou permanentku (per_visit) pro skupinovou službu', async () => {
+      const pack = await apiCall<{ data: { id: string } }>('/admin/credit-packs', {
+        method: 'POST',
+        token,
+        body: JSON.stringify({
+          name: '5× skupinová lekce',
+          mode: 'per_visit',
+          totalCredits: 5,
+          priceHellers: 200000,
+          allowedServiceIds: [groupServiceId],
+        }),
+      });
+      packId = pack.data.id;
+      expect(packId).toBeTruthy();
+    });
+
+    it('po přihlášení vznikne klient; přidělení permanentky dá plný kredit', async () => {
+      // Přihlášení vytvoří zákazníka (zatím bez permanentky → bez odečtu).
+      const seed = await apiCall<{ data: { id: string } }>('/admin/class-sessions', {
+        method: 'POST',
+        token,
+        body: JSON.stringify({
+          serviceId: groupServiceId,
+          startsAt: '2032-01-05T10:00:00.000Z',
+          capacity: 5,
+        }),
+      });
+      await apiCall(`/public/${slug}/class-sessions/${seed.data.id}/join`, {
+        method: 'POST',
+        body: JSON.stringify({ customerName: 'Pack Tester', customerEmail: packEmail }),
+      });
+
+      const custs = await apiCall<{ data: Array<{ id: string; email: string }> }>(
+        '/admin/customers',
+        { token },
+      );
+      custId = custs.data.find((c) => c.email.toLowerCase() === packEmail)!.id;
+
+      const alloc = await apiCall<{ data: { id: string; creditsRemaining: number } }>(
+        `/admin/customers/${custId}/credit-packs`,
+        { method: 'POST', token, body: JSON.stringify({ creditPackId: packId }) },
+      );
+      allocId = alloc.data.id;
+      expect(alloc.data.creditsRemaining).toBe(5);
+    });
+
+    it('přihlášení na lekci odečte 1 kredit z permanentky', async () => {
+      const s = await apiCall<{ data: { id: string } }>('/admin/class-sessions', {
+        method: 'POST',
+        token,
+        body: JSON.stringify({
+          serviceId: groupServiceId,
+          startsAt: '2032-01-06T10:00:00.000Z',
+          capacity: 5,
+        }),
+      });
+      sessionA = s.data.id;
+      const j = await apiCall<{ data: { id: string } }>(
+        `/public/${slug}/class-sessions/${sessionA}/join`,
+        {
+          method: 'POST',
+          body: JSON.stringify({ customerName: 'Pack Tester', customerEmail: packEmail }),
+        },
+      );
+      bookingA = j.data.id;
+
+      const list = await apiCall<{ data: Array<{ id: string; creditsRemaining: number }> }>(
+        `/admin/customers/${custId}/credit-packs`,
+        { token },
+      );
+      expect(list.data.find((x) => x.id === allocId)?.creditsRemaining).toBe(4);
+    });
+
+    it('odhlášení z lekce vrátí kredit zpět', async () => {
+      await apiCall(`/admin/class-sessions/${sessionA}/participants/${bookingA}/leave`, {
+        method: 'POST',
+        token,
+      });
+      const list = await apiCall<{ data: Array<{ id: string; creditsRemaining: number }> }>(
+        `/admin/customers/${custId}/credit-packs`,
+        { token },
+      );
+      expect(list.data.find((x) => x.id === allocId)?.creditsRemaining).toBe(5);
+    });
+  });
 });

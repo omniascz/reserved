@@ -22,6 +22,9 @@ import type { Database } from '../db/db.service.js';
 import { randomBytes } from 'node:crypto';
 import { DbService } from '../db/db.service.js';
 import { CustomersService } from '../customers/customers.service.js';
+import { TimePacksService } from '../time-packs/time-packs.service.js';
+import { BundlePacksService } from '../bundle-packs/bundle-packs.service.js';
+import { CreditPacksService } from '../credit-packs/credit-packs.service.js';
 import type { CreateClassSessionDto, JoinClassSessionDto } from './dto/class-session.dto.js';
 
 const MANAGE_ROLES: AppRole[] = ['owner', 'manager', 'employee', 'receptionist'];
@@ -55,7 +58,70 @@ export class ClassSessionsService {
   constructor(
     @Inject(DbService) private readonly dbService: DbService,
     @Inject(CustomersService) private readonly customers: CustomersService,
+    @Inject(TimePacksService) private readonly timePacks: TimePacksService,
+    @Inject(BundlePacksService) private readonly bundlePacks: BundlePacksService,
+    @Inject(CreditPacksService) private readonly creditPacks: CreditPacksService,
   ) {}
+
+  // ─── Permanentky / balíčky na lekce (sprint 10.12) ──────────────────
+
+  /** Odečte vhodný balíček za účast na lekci (priorita time → bundle → credit).
+   *  Best-effort — selhání odečtu neblokuje rezervaci (klient platí jinak). */
+  private async deductPacksForBooking(b: typeof schema.bookings.$inferSelect): Promise<void> {
+    if (!b.customerId) return;
+    try {
+      const timeHit = await this.timePacks.deductForBooking({
+        tenantId: b.tenantId,
+        customerId: b.customerId,
+        bookingId: b.id,
+        serviceId: b.serviceId,
+        branchId: b.branchId,
+        bookingStartsAt: b.startsAt,
+        performedBy: null,
+      });
+      if (!timeHit) {
+        const bundleHit = await this.bundlePacks.deductForBooking({
+          tenantId: b.tenantId,
+          customerId: b.customerId,
+          bookingId: b.id,
+          serviceId: b.serviceId,
+          branchId: b.branchId,
+          performedBy: null,
+        });
+        if (!bundleHit) {
+          await this.creditPacks.deductForBooking({
+            tenantId: b.tenantId,
+            customerId: b.customerId,
+            bookingId: b.id,
+            serviceId: b.serviceId,
+            branchId: b.branchId,
+            performedBy: null,
+          });
+        }
+      }
+    } catch {
+      // odečet permanentky neblokuje přihlášení
+    }
+  }
+
+  /** Vrátí dříve odečtený balíček při zrušení účasti (idempotentní per typ). */
+  private async refundPacksForBooking(tenantId: string, bookingId: string): Promise<void> {
+    try {
+      await this.timePacks.refundForBooking({ tenantId, bookingId, performedBy: null });
+    } catch {
+      // ignoruj
+    }
+    try {
+      await this.bundlePacks.refundForBooking({ tenantId, bookingId, performedBy: null });
+    } catch {
+      // ignoruj
+    }
+    try {
+      await this.creditPacks.refundForBooking({ tenantId, bookingId, performedBy: null });
+    } catch {
+      // ignoruj
+    }
+  }
 
   // ─── Vypsání lekce ──────────────────────────────────────────────────
 
@@ -379,7 +445,9 @@ export class ClassSessionsService {
     const outcome = await this.dbService.withRlsContext(ctxFor(tenantId, userId, role), (tx) =>
       this.performJoin(tx, tenantId, sessionId, dto, { changedBy: userId, source: 'admin' }),
     );
-    return this.unwrapJoin(outcome);
+    const booking = this.unwrapJoin(outcome);
+    await this.deductPacksForBooking(booking); // odečti permanentku (po commitu)
+    return booking;
   }
 
   /** Veřejné self-service přihlášení z widgetu (bez admin role). */
@@ -390,7 +458,9 @@ export class ClassSessionsService {
         source: 'public_widget',
       }),
     );
-    return this.unwrapJoin(outcome);
+    const booking = this.unwrapJoin(outcome);
+    await this.deductPacksForBooking(booking); // odečti permanentku (po commitu)
+    return booking;
   }
 
   /**
@@ -485,119 +555,151 @@ export class ClassSessionsService {
     bookingId: string,
   ) {
     assertCanManage(role);
-    return this.dbService.withRlsContext(ctxFor(tenantId, userId, role), async (tx) => {
-      const [updated] = await tx
-        .update(schema.bookings)
-        .set({ status: 'cancelled', cancelledAt: new Date(), updatedAt: new Date() })
-        .where(
-          and(
-            eq(schema.bookings.id, bookingId),
-            eq(schema.bookings.tenantId, tenantId),
-            eq(schema.bookings.sessionId, sessionId),
-            sql`${schema.bookings.status} NOT IN ('cancelled', 'no_show')`,
-          ),
-        )
-        .returning();
+    const result = await this.dbService.withRlsContext(
+      ctxFor(tenantId, userId, role),
+      async (tx) => {
+        const [updated] = await tx
+          .update(schema.bookings)
+          .set({ status: 'cancelled', cancelledAt: new Date(), updatedAt: new Date() })
+          .where(
+            and(
+              eq(schema.bookings.id, bookingId),
+              eq(schema.bookings.tenantId, tenantId),
+              eq(schema.bookings.sessionId, sessionId),
+              sql`${schema.bookings.status} NOT IN ('cancelled', 'no_show')`,
+            ),
+          )
+          .returning();
 
-      if (!updated) {
-        throw new NotFoundException({
-          error: {
-            code: 'PARTICIPANT_NOT_FOUND',
-            message: 'Účastník v této lekci nenalezen nebo už je odhlášený.',
-          },
+        if (!updated) {
+          throw new NotFoundException({
+            error: {
+              code: 'PARTICIPANT_NOT_FOUND',
+              message: 'Účastník v této lekci nenalezen nebo už je odhlášený.',
+            },
+          });
+        }
+
+        // Uvolni místo (nikdy pod 0).
+        await tx
+          .update(schema.classSessions)
+          .set({
+            bookedCount: sql`GREATEST(${schema.classSessions.bookedCount} - 1, 0)`,
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(schema.classSessions.id, sessionId),
+              eq(schema.classSessions.tenantId, tenantId),
+            ),
+          );
+
+        await tx.insert(schema.bookingStatusHistory).values({
+          tenantId,
+          bookingId,
+          fromStatus: updated.status === 'cancelled' ? 'confirmed' : updated.status,
+          toStatus: 'cancelled',
+          changedBy: userId,
+          reason: 'left_class_session',
         });
-      }
 
-      // Uvolni místo (nikdy pod 0).
-      await tx
-        .update(schema.classSessions)
-        .set({
-          bookedCount: sql`GREATEST(${schema.classSessions.bookedCount} - 1, 0)`,
-          updatedAt: new Date(),
-        })
-        .where(
-          and(eq(schema.classSessions.id, sessionId), eq(schema.classSessions.tenantId, tenantId)),
-        );
+        // Auto-promote z pořadníku — uvolnilo se místo, povýš prvního čekajícího.
+        const [sessionRow] = await tx
+          .select()
+          .from(schema.classSessions)
+          .where(
+            and(
+              eq(schema.classSessions.id, sessionId),
+              eq(schema.classSessions.tenantId, tenantId),
+            ),
+          )
+          .limit(1);
+        let promoted: typeof schema.bookings.$inferSelect | null = null;
+        if (sessionRow) {
+          promoted = await this.promoteFromWaitlist(tx, tenantId, sessionRow);
+        }
 
-      await tx.insert(schema.bookingStatusHistory).values({
-        tenantId,
-        bookingId,
-        fromStatus: updated.status === 'cancelled' ? 'confirmed' : updated.status,
-        toStatus: 'cancelled',
-        changedBy: userId,
-        reason: 'left_class_session',
-      });
+        return { left: updated, promoted };
+      },
+    );
 
-      // Auto-promote z pořadníku — uvolnilo se místo, povýš prvního čekajícího.
-      const [sessionRow] = await tx
-        .select()
-        .from(schema.classSessions)
-        .where(
-          and(eq(schema.classSessions.id, sessionId), eq(schema.classSessions.tenantId, tenantId)),
-        )
-        .limit(1);
-      if (sessionRow) {
-        await this.promoteFromWaitlist(tx, tenantId, sessionRow);
-      }
+    // Po commitu: vrať permanentku odhlášenému, odečti případně povýšenému z pořadníku.
+    await this.refundPacksForBooking(tenantId, result.left.id);
+    if (result.promoted) {
+      await this.deductPacksForBooking(result.promoted);
+    }
 
-      return updated;
-    });
+    return result.left;
   }
 
   // ─── Zrušení celé lekce ─────────────────────────────────────────────
 
   async cancelSession(tenantId: string, userId: string, role: AppRole, sessionId: string) {
     assertCanManage(role);
-    return this.dbService.withRlsContext(ctxFor(tenantId, userId, role), async (tx) => {
-      const sessRows = await tx
-        .select()
-        .from(schema.classSessions)
-        .where(
-          and(eq(schema.classSessions.id, sessionId), eq(schema.classSessions.tenantId, tenantId)),
-        )
-        .limit(1);
-      const session = sessRows[0];
-      if (!session) {
-        throw new NotFoundException({
-          error: { code: 'SESSION_NOT_FOUND', message: 'Lekce nenalezena.' },
-        });
-      }
-      if (session.status === 'cancelled') {
-        throw new BadRequestException({
-          error: { code: 'ALREADY_CANCELLED', message: 'Lekce už je zrušená.' },
-        });
-      }
+    const result = await this.dbService.withRlsContext(
+      ctxFor(tenantId, userId, role),
+      async (tx) => {
+        const sessRows = await tx
+          .select()
+          .from(schema.classSessions)
+          .where(
+            and(
+              eq(schema.classSessions.id, sessionId),
+              eq(schema.classSessions.tenantId, tenantId),
+            ),
+          )
+          .limit(1);
+        const session = sessRows[0];
+        if (!session) {
+          throw new NotFoundException({
+            error: { code: 'SESSION_NOT_FOUND', message: 'Lekce nenalezena.' },
+          });
+        }
+        if (session.status === 'cancelled') {
+          throw new BadRequestException({
+            error: { code: 'ALREADY_CANCELLED', message: 'Lekce už je zrušená.' },
+          });
+        }
 
-      // Zruš všechny aktivní účastníky.
-      await tx
-        .update(schema.bookings)
-        .set({
-          status: 'cancelled',
-          cancelledAt: new Date(),
-          cancelledReason: 'class_session_cancelled',
-          updatedAt: new Date(),
-        })
-        .where(
-          and(
-            eq(schema.bookings.tenantId, tenantId),
-            eq(schema.bookings.sessionId, sessionId),
-            sql`${schema.bookings.status} NOT IN ('cancelled', 'no_show')`,
-          ),
-        );
+        // Zruš všechny aktivní účastníky (zachyť jejich ID pro vrácení permanentek).
+        const cancelledParticipants = await tx
+          .update(schema.bookings)
+          .set({
+            status: 'cancelled',
+            cancelledAt: new Date(),
+            cancelledReason: 'class_session_cancelled',
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(schema.bookings.tenantId, tenantId),
+              eq(schema.bookings.sessionId, sessionId),
+              sql`${schema.bookings.status} NOT IN ('cancelled', 'no_show')`,
+            ),
+          )
+          .returning({ id: schema.bookings.id });
 
-      const [updated] = await tx
-        .update(schema.classSessions)
-        .set({
-          status: 'cancelled',
-          bookedCount: 0,
-          cancelledAt: new Date(),
-          updatedAt: new Date(),
-        })
-        .where(eq(schema.classSessions.id, sessionId))
-        .returning();
+        const [updated] = await tx
+          .update(schema.classSessions)
+          .set({
+            status: 'cancelled',
+            bookedCount: 0,
+            cancelledAt: new Date(),
+            updatedAt: new Date(),
+          })
+          .where(eq(schema.classSessions.id, sessionId))
+          .returning();
 
-      return updated!;
-    });
+        return { session: updated!, cancelledIds: cancelledParticipants.map((p) => p.id) };
+      },
+    );
+
+    // Po commitu: vrať permanentku každému zrušenému účastníkovi.
+    for (const id of result.cancelledIds) {
+      await this.refundPacksForBooking(tenantId, id);
+    }
+
+    return result.session;
   }
 
   // ─── Pořadník / waitlist (sprint 10.5) ──────────────────────────────
@@ -798,8 +900,8 @@ export class ClassSessionsService {
     tx: Database,
     tenantId: string,
     session: typeof schema.classSessions.$inferSelect,
-  ): Promise<boolean> {
-    if (session.status !== 'open') return false;
+  ): Promise<typeof schema.bookings.$inferSelect | null> {
+    if (session.status !== 'open') return null;
 
     const [entry] = await tx
       .select()
@@ -813,7 +915,7 @@ export class ClassSessionsService {
       )
       .orderBy(asc(schema.classSessionWaitlist.position))
       .limit(1);
-    if (!entry) return false;
+    if (!entry) return null;
 
     // Atomicky zarezervuj uvolněné místo.
     const reserved = await tx
@@ -828,7 +930,7 @@ export class ClassSessionsService {
         ),
       )
       .returning({ bookedCount: schema.classSessions.bookedCount });
-    if (reserved.length === 0) return false;
+    if (reserved.length === 0) return null;
 
     const nameParts = entry.customerName.trim().split(/\s+/);
     const firstName = nameParts[0] ?? entry.customerName;
@@ -847,7 +949,7 @@ export class ClassSessionsService {
       .limit(1);
 
     try {
-      await tx.transaction(async (sp) => {
+      const promoted = await tx.transaction(async (sp) => {
         const [b] = await sp
           .insert(schema.bookings)
           .values({
@@ -879,13 +981,14 @@ export class ClassSessionsService {
           changedBy: 'system',
           metadata: { source: 'waitlist_promote', kind: 'class_session' },
         });
+        return b!;
       });
 
       await tx
         .update(schema.classSessionWaitlist)
         .set({ status: 'promoted', updatedAt: new Date() })
         .where(eq(schema.classSessionWaitlist.id, entry.id));
-      return true;
+      return promoted;
     } catch (err) {
       const e = err as { code?: string; cause?: { code?: string } };
       if ((e.code ?? e.cause?.code) === '23505') {
@@ -901,7 +1004,7 @@ export class ClassSessionsService {
           .update(schema.classSessionWaitlist)
           .set({ status: 'cancelled', updatedAt: new Date() })
           .where(eq(schema.classSessionWaitlist.id, entry.id));
-        return false;
+        return null;
       }
       throw err;
     }
