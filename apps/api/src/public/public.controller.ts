@@ -10,6 +10,7 @@ import {
   Inject,
   NotFoundException,
   Param,
+  ParseUUIDPipe,
   Post,
   Query,
 } from '@nestjs/common';
@@ -33,6 +34,8 @@ import { SubmitReviewSchema, type SubmitReviewDto } from '../reviews/dto/review.
 import { VouchersService } from '../vouchers/vouchers.service.js';
 import { IntakeService } from '../intake/intake.service.js';
 import { SubmitFormSchema, type SubmitFormDto } from '../intake/dto/intake.dto.js';
+import { SmartService } from '../smart/smart.service.js';
+import { RespondConfirmationSchema, type RespondConfirmationDto } from '../smart/dto/smart.dto.js';
 import { DrizzleTenantLookup } from '../tenant/tenant-lookup.service.js';
 import { randomBytes } from 'node:crypto';
 
@@ -53,6 +56,7 @@ export class PublicController {
     @Inject(ReviewsService) private readonly reviews: ReviewsService,
     @Inject(VouchersService) private readonly vouchers: VouchersService,
     @Inject(IntakeService) private readonly intake: IntakeService,
+    @Inject(SmartService) private readonly smart: SmartService,
   ) {}
 
   /** GET /api/v1/public/:slug — info o tenant (název + theme + currency, timezone). */
@@ -483,6 +487,21 @@ export class PublicController {
   ) {
     const tenant = await this.resolveTenant(slug);
     const data = await this.intake.submitPublic(tenant.id, id, dto);
+    return { data };
+  }
+
+  // ─── Smart vrstva: potvrzení účasti (sprint 10.13) ──────────────────
+
+  /** POST /api/v1/public/:slug/confirm/:token — klient potvrdí nebo odmítne účast. */
+  @Public()
+  @Post('confirm/:token')
+  async respondConfirmation(
+    @Param('slug') slug: string,
+    @Param('token', ParseUUIDPipe) token: string,
+    @Body(new ZodValidationPipe(RespondConfirmationSchema)) dto: RespondConfirmationDto,
+  ) {
+    const tenant = await this.resolveTenant(slug);
+    const data = await this.smart.respondByToken(tenant.id, token, dto.action);
     return { data };
   }
 

@@ -838,4 +838,121 @@ describe('Fitness flow E2E (10.0–10.2)', () => {
       expect(list.data.find((x) => x.id === allocId)?.creditsRemaining).toBe(5);
     });
   });
+
+  // ─── 10.13 Smart vrstva — potvrzení účasti ────────────────────────────
+  describe('Smart vrstva — potvrzení účasti (10.13)', () => {
+    // Blízká budoucnost (v hodinách od teď) — kvůli oknu withinHours.
+    const hin = (h: number) => new Date(Date.now() + h * 3_600_000).toISOString();
+    const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+    let confirmBookingId: string;
+    let confirmToken: string;
+    let declineSessionId: string;
+    let declineToken: string;
+    let riskyUpcomingBookingId: string;
+
+    async function newSession(startsAt: string, capacity: number): Promise<string> {
+      const s = await apiCall<{ data: { id: string } }>('/admin/class-sessions', {
+        method: 'POST',
+        token,
+        body: JSON.stringify({ serviceId: groupServiceId, startsAt, capacity }),
+      });
+      return s.data.id;
+    }
+    async function join(sessionId: string, name: string, emailAddr: string): Promise<string> {
+      const j = await apiCall<{ data: { id: string } }>(
+        `/public/${slug}/class-sessions/${sessionId}/join`,
+        { method: 'POST', body: JSON.stringify({ customerName: name, customerEmail: emailAddr }) },
+      );
+      return j.data.id;
+    }
+
+    it('admin vyžádá potvrzení účasti → vznikne jednorázový token', async () => {
+      const sessionId = await newSession(hin(3), 5);
+      confirmBookingId = await join(sessionId, 'Smart Confirm', 'smart-confirm@fit.local');
+      const r = await apiCall<{ data: { confirmationToken: string; scheduledAt: string } }>(
+        `/admin/smart/bookings/${confirmBookingId}/request-confirmation`,
+        { method: 'POST', token, body: JSON.stringify({ channel: 'email' }) },
+      );
+      confirmToken = r.data.confirmationToken;
+      expect(confirmToken).toMatch(UUID_RE);
+      expect(new Date(r.data.scheduledAt).getTime()).toBeGreaterThan(Date.now());
+    });
+
+    it('klient potvrdí účast přes veřejný odkaz; token je jednorázový', async () => {
+      const r = await apiCall<{ data: { status: string; freedSpot: boolean } }>(
+        `/public/${slug}/confirm/${confirmToken}`,
+        { method: 'POST', body: JSON.stringify({ action: 'confirm' }) },
+      );
+      expect(r.data.status).toBe('confirmed');
+      expect(r.data.freedSpot).toBe(false);
+
+      const reuse = await expectFail(`/public/${slug}/confirm/${confirmToken}`, {
+        method: 'POST',
+        body: JSON.stringify({ action: 'confirm' }),
+      });
+      expect(reuse).toMatch(/INVALID_OR_USED_TOKEN|404/);
+    });
+
+    it('odmítnutí účasti uvolní místo v lekci', async () => {
+      // Skupinová lekce musí mít kapacitu ≥ 2 → naplníme ji dvěma účastníky.
+      declineSessionId = await newSession(hin(4), 2);
+      const bookingId = await join(declineSessionId, 'Decliner', 'decliner@fit.local');
+      await join(declineSessionId, 'Filler', 'filler@fit.local');
+
+      // Lekce je plná (2/2) → zmizí z veřejného výpisu volných.
+      const before = await apiCall<{ data: Array<{ id: string }> }>(
+        `/public/${slug}/class-sessions?serviceId=${groupServiceId}`,
+      );
+      expect(before.data.some((x) => x.id === declineSessionId)).toBe(false);
+
+      const req = await apiCall<{ data: { confirmationToken: string } }>(
+        `/admin/smart/bookings/${bookingId}/request-confirmation`,
+        { method: 'POST', token, body: JSON.stringify({ channel: 'email' }) },
+      );
+      declineToken = req.data.confirmationToken;
+
+      const resp = await apiCall<{ data: { status: string; freedSpot: boolean } }>(
+        `/public/${slug}/confirm/${declineToken}`,
+        { method: 'POST', body: JSON.stringify({ action: 'decline' }) },
+      );
+      expect(resp.data.status).toBe('declined');
+      expect(resp.data.freedSpot).toBe(true);
+
+      // Místo se uvolnilo → lekce je zase ve výpisu s 1 volným místem (1/2).
+      const after = await apiCall<{ data: Array<{ id: string; freeSpots: number }> }>(
+        `/public/${slug}/class-sessions?serviceId=${groupServiceId}`,
+      );
+      expect(after.data.find((x) => x.id === declineSessionId)?.freeSpots).toBe(1);
+    });
+
+    it('rizikový klient (no-show historie) se objeví v at-risk a dostane hromadnou výzvu', async () => {
+      // Vytvoř no-show historii: klient se přihlásí a admin ho označí jako no-show.
+      const pastish = await newSession(hin(1), 5);
+      const b1 = await join(pastish, 'Risky One', 'risky@fit.local');
+      await apiCall(`/admin/bookings/${b1}/mark-no-show`, { method: 'POST', token });
+
+      // Nadcházející rezervace stejného klienta → vysoké riziko.
+      const future = await newSession(hin(6), 5);
+      riskyUpcomingBookingId = await join(future, 'Risky One', 'risky@fit.local');
+
+      const at = await apiCall<{
+        data: Array<{ bookingId: string; risk: { level: string } }>;
+      }>('/admin/smart/at-risk?withinHours=24', { token });
+      const found = at.data.find((x) => x.bookingId === riskyUpcomingBookingId);
+      expect(found).toBeDefined();
+      expect(found?.risk.level).toBe('high');
+
+      // Hromadná výzva jen pro vysoké riziko → zachytí naši nadcházející rezervaci.
+      const bulk = await apiCall<{ data: { requested: number; scanned: number } }>(
+        '/admin/smart/request-confirmations',
+        {
+          method: 'POST',
+          token,
+          body: JSON.stringify({ withinHours: 24, minLevel: 'high', channel: 'email' }),
+        },
+      );
+      expect(bulk.data.requested).toBeGreaterThanOrEqual(1);
+    });
+  });
 });

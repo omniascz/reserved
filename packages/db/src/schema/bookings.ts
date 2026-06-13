@@ -97,6 +97,16 @@ export const bookings = pgTable(
     cancelledAt: timestamp('cancelled_at', { withTimezone: true }),
     cancelledReason: text('cancelled_reason'),
     completedAt: timestamp('completed_at', { withTimezone: true }),
+    /**
+     * Smart vrstva (sprint 10.13) — proaktivní potvrzení účasti.
+     * 'none' = nevyžádáno, 'requested' = odeslána výzva, 'confirmed' = klient potvrdil,
+     * 'declined' = klient odmítl / nepotvrdil (místo se uvolnilo).
+     */
+    confirmationStatus: varchar('confirmation_status', { length: 16 }).notNull().default('none'),
+    /** Jednorázový token pro veřejné potvrzení/odmítnutí přes magic-link. */
+    confirmationToken: uuid('confirmation_token'),
+    confirmationRequestedAt: timestamp('confirmation_requested_at', { withTimezone: true }),
+    confirmationRespondedAt: timestamp('confirmation_responded_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
@@ -112,6 +122,7 @@ export const bookings = pgTable(
     refCodeIdx: index('bookings_ref_code_idx').on(table.referenceCode),
     branchIdx: index('bookings_branch_idx').on(table.branchId, table.startsAt),
     sessionIdx: index('bookings_session_idx').on(table.sessionId),
+    confirmationTokenIdx: index('bookings_confirmation_token_idx').on(table.confirmationToken),
   }),
 );
 

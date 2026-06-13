@@ -632,6 +632,78 @@ export class ClassSessionsService {
     return result.left;
   }
 
+  /**
+   * Systémové odhlášení účastníka (smart vrstva 10.13) — bez usera/role,
+   * pod serviceContext. Uvolní místo, vrátí permanentku, povýší z pořadníku.
+   * Vrací true, pokud bylo co odhlásit. Idempotentní (na zrušené vrací false).
+   */
+  async leaveSystem(
+    tenantId: string,
+    sessionId: string,
+    bookingId: string,
+    reason: string,
+  ): Promise<boolean> {
+    const result = await this.dbService.withRlsContext(serviceContext(tenantId), async (tx) => {
+      const [updated] = await tx
+        .update(schema.bookings)
+        .set({
+          status: 'cancelled',
+          cancelledAt: new Date(),
+          cancelledReason: reason,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(schema.bookings.id, bookingId),
+            eq(schema.bookings.tenantId, tenantId),
+            eq(schema.bookings.sessionId, sessionId),
+            sql`${schema.bookings.status} NOT IN ('cancelled', 'no_show')`,
+          ),
+        )
+        .returning();
+      if (!updated) return null;
+
+      await tx
+        .update(schema.classSessions)
+        .set({
+          bookedCount: sql`GREATEST(${schema.classSessions.bookedCount} - 1, 0)`,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(eq(schema.classSessions.id, sessionId), eq(schema.classSessions.tenantId, tenantId)),
+        );
+
+      await tx.insert(schema.bookingStatusHistory).values({
+        tenantId,
+        bookingId,
+        fromStatus: updated.status === 'cancelled' ? 'confirmed' : updated.status,
+        toStatus: 'cancelled',
+        changedBy: 'system',
+        reason,
+      });
+
+      const [sessionRow] = await tx
+        .select()
+        .from(schema.classSessions)
+        .where(
+          and(eq(schema.classSessions.id, sessionId), eq(schema.classSessions.tenantId, tenantId)),
+        )
+        .limit(1);
+      let promoted: typeof schema.bookings.$inferSelect | null = null;
+      if (sessionRow) {
+        promoted = await this.promoteFromWaitlist(tx, tenantId, sessionRow);
+      }
+      return { left: updated, promoted };
+    });
+
+    if (!result) return false;
+    await this.refundPacksForBooking(tenantId, result.left.id);
+    if (result.promoted) {
+      await this.deductPacksForBooking(result.promoted);
+    }
+    return true;
+  }
+
   // ─── Zrušení celé lekce ─────────────────────────────────────────────
 
   async cancelSession(tenantId: string, userId: string, role: AppRole, sessionId: string) {

@@ -39,6 +39,7 @@ import { ReviewsModule } from './reviews/reviews.module.js';
 import { RulesModule } from './rules/rules.module.js';
 import { ServicesModule } from './services/services.module.js';
 import { SettingsModule } from './settings/settings.module.js';
+import { SmartModule } from './smart/smart.module.js';
 import { TenantModule } from './tenant/tenant.module.js';
 import { TenantSiteModule } from './tenant-site/tenant-site.module.js';
 import { ThemeModule } from './theme/theme.module.js';
@@ -105,6 +106,7 @@ import { TenantMiddleware } from './tenant/tenant.middleware.js';
     UploadsModule,
     VouchersModule,
     VerticalPresetsModule,
+    SmartModule,
   ],
 })
 export class AppModule implements NestModule {
