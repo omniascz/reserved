@@ -2226,4 +2226,62 @@ describe('Fitness flow E2E (10.0–10.2)', () => {
       expect(att.data.pending).toBe(0);
     });
   });
+
+  // ─── 10.28 Hloubka D: hlubší reporting ────────────────────────────────
+  describe('Reporting hloubka (10.28)', () => {
+    it('vytíženost lekcí: kapacita, obsazenost, fill rate, docházka', async () => {
+      const s = await apiCall<{ data: { id: string } }>('/admin/class-sessions', {
+        method: 'POST',
+        token,
+        body: JSON.stringify({
+          serviceId: groupServiceId,
+          startsAt: '2038-01-15T10:00:00.000Z',
+          capacity: 4,
+        }),
+      });
+      const sid = s.data.id;
+      const j1 = await apiCall<{ data: { id: string } }>(
+        `/public/${slug}/class-sessions/${sid}/join`,
+        {
+          method: 'POST',
+          body: JSON.stringify({ customerName: 'Rep Jedna', customerEmail: 'r1@rep.local' }),
+        },
+      );
+      await apiCall(`/public/${slug}/class-sessions/${sid}/join`, {
+        method: 'POST',
+        body: JSON.stringify({ customerName: 'Rep Dva', customerEmail: 'r2@rep.local' }),
+      });
+      // jeden přítomen
+      await apiCall(`/admin/class-sessions/${sid}/participants/${j1.data.id}/attendance`, {
+        method: 'POST',
+        token,
+        body: JSON.stringify({ attended: true }),
+      });
+
+      const u = await apiCall<{
+        data: {
+          sessions: number;
+          totalCapacity: number;
+          totalBooked: number;
+          fillRatePct: number;
+          present: number;
+        };
+      }>('/admin/reports/class-utilization?from=2037-12-01T00:00:00Z&to=2038-02-01T00:00:00Z', {
+        token,
+      });
+      expect(u.data.sessions).toBe(1);
+      expect(u.data.totalCapacity).toBe(4);
+      expect(u.data.totalBooked).toBe(2);
+      expect(u.data.fillRatePct).toBe(50); // 2/4
+      expect(u.data.present).toBe(1);
+    });
+
+    it('MRR endpoint funguje (0 aktivních předplatných v čerstvém tenantu)', async () => {
+      const r = await apiCall<{
+        data: { activeSubscriptions: number; mrrHellers: number; arrHellers: number };
+      }>('/admin/reports/mrr', { token });
+      expect(r.data.activeSubscriptions).toBe(0);
+      expect(r.data.mrrHellers).toBe(0);
+    });
+  });
 });

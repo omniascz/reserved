@@ -4,7 +4,7 @@
 // SQL aggregaty s drizzle (COUNT, SUM, AVG, date_trunc).
 
 import { ForbiddenException, Inject, Injectable } from '@nestjs/common';
-import { and, count, desc, eq, gte, isNull, lt, sql, sum } from 'drizzle-orm';
+import { and, count, desc, eq, gte, isNotNull, isNull, lt, sql, sum } from 'drizzle-orm';
 import { schema } from '@reserved/db';
 import { type AppRole, type TenantContext } from '@reserved/rls-multitenancy';
 import { DbService } from '../db/db.service.js';
@@ -367,6 +367,89 @@ export class ReportsService {
         totalCreditsRemaining: r.totalCreditsRemaining ?? 0,
         totalRevenueHellers: r.totalRevenueHellers ?? 0,
       }));
+    });
+  }
+
+  // ─── Hloubka D (sprint 10.28): vytíženost lekcí + MRR ────────────────
+
+  /** Vytíženost skupinových lekcí v období + docházka. */
+  async classUtilization(tenantId: string, userId: string, role: AppRole, filters: ReportFilters) {
+    assertCanView(role);
+    return this.dbService.withRlsContext(ctxFor(tenantId, userId, role), async (tx) => {
+      const [s] = await tx
+        .select({
+          sessions: count(),
+          totalCapacity: sum(schema.classSessions.capacity).mapWith(Number),
+          totalBooked: sum(schema.classSessions.bookedCount).mapWith(Number),
+        })
+        .from(schema.classSessions)
+        .where(
+          and(
+            eq(schema.classSessions.tenantId, tenantId),
+            gte(schema.classSessions.startsAt, filters.from),
+            lt(schema.classSessions.startsAt, filters.to),
+            sql`${schema.classSessions.status} <> 'cancelled'`,
+          ),
+        );
+      const sessions = s?.sessions ?? 0;
+      const totalCapacity = s?.totalCapacity ?? 0;
+      const totalBooked = s?.totalBooked ?? 0;
+
+      // Docházka u lekcí (session bookings) v období.
+      const att = await tx
+        .select({ status: schema.bookings.status, c: count() })
+        .from(schema.bookings)
+        .where(
+          and(
+            eq(schema.bookings.tenantId, tenantId),
+            isNotNull(schema.bookings.sessionId),
+            gte(schema.bookings.startsAt, filters.from),
+            lt(schema.bookings.startsAt, filters.to),
+          ),
+        )
+        .groupBy(schema.bookings.status);
+      const present = att.find((a) => a.status === 'completed')?.c ?? 0;
+      const noShow = att.find((a) => a.status === 'no_show')?.c ?? 0;
+
+      return {
+        sessions,
+        totalCapacity,
+        totalBooked,
+        fillRatePct: totalCapacity > 0 ? Math.round((totalBooked / totalCapacity) * 100) : 0,
+        present,
+        noShow,
+        attendanceRatePct:
+          present + noShow > 0 ? Math.round((present / (present + noShow)) * 100) : 0,
+      };
+    });
+  }
+
+  /** Měsíční opakující se tržba (MRR) z aktivních předplatných. */
+  async mrr(tenantId: string, userId: string, role: AppRole) {
+    assertCanView(role);
+    return this.dbService.withRlsContext(ctxFor(tenantId, userId, role), async (tx) => {
+      const rows = await tx
+        .select({
+          interval: schema.customerSubscriptions.snapshotBillingInterval,
+          price: schema.customerSubscriptions.snapshotPriceHellers,
+        })
+        .from(schema.customerSubscriptions)
+        .where(
+          and(
+            eq(schema.customerSubscriptions.tenantId, tenantId),
+            sql`${schema.customerSubscriptions.status} IN ('active', 'trialing')`,
+          ),
+        );
+      let mrrHellers = 0;
+      for (const r of rows) {
+        const divisor = r.interval === 'yearly' ? 12 : r.interval === 'quarterly' ? 3 : 1;
+        mrrHellers += Math.round(r.price / divisor);
+      }
+      return {
+        activeSubscriptions: rows.length,
+        mrrHellers,
+        arrHellers: mrrHellers * 12,
+      };
     });
   }
 }
