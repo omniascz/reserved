@@ -20,6 +20,7 @@ export * from './class-session-waitlist.js';
 export * from './reviews.js';
 export * from './marketing-campaigns.js';
 export * from './loyalty.js';
+export * from './gift-vouchers.js';
 export * from './bookings.js';
 export * from './notifications.js';
 export * from './customers.js';

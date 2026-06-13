@@ -41,6 +41,7 @@ import { SettingsModule } from './settings/settings.module.js';
 import { TenantModule } from './tenant/tenant.module.js';
 import { TenantSiteModule } from './tenant-site/tenant-site.module.js';
 import { ThemeModule } from './theme/theme.module.js';
+import { VouchersModule } from './vouchers/vouchers.module.js';
 import { UploadsModule } from './uploads/uploads.module.js';
 import { WebhooksModule } from './webhooks/webhooks.module.js';
 import { TenantMiddleware } from './tenant/tenant.middleware.js';
@@ -99,6 +100,7 @@ import { TenantMiddleware } from './tenant/tenant.middleware.js';
     TenantSiteModule,
     ThemeModule,
     UploadsModule,
+    VouchersModule,
   ],
 })
 export class AppModule implements NestModule {

@@ -30,6 +30,7 @@ import {
 } from '../class-sessions/dto/class-session.dto.js';
 import { ReviewsService } from '../reviews/reviews.service.js';
 import { SubmitReviewSchema, type SubmitReviewDto } from '../reviews/dto/review.dto.js';
+import { VouchersService } from '../vouchers/vouchers.service.js';
 import { DrizzleTenantLookup } from '../tenant/tenant-lookup.service.js';
 import { randomBytes } from 'node:crypto';
 
@@ -48,6 +49,7 @@ export class PublicController {
     @Inject(BookingsService) private readonly bookings: BookingsService,
     @Inject(ClassSessionsService) private readonly classSessions: ClassSessionsService,
     @Inject(ReviewsService) private readonly reviews: ReviewsService,
+    @Inject(VouchersService) private readonly vouchers: VouchersService,
   ) {}
 
   /** GET /api/v1/public/:slug — info o tenant (název + theme + currency, timezone). */
@@ -444,6 +446,15 @@ export class PublicController {
       });
     }
     const data = await this.reviews.publicForService(tenant.id, serviceId);
+    return { data };
+  }
+
+  /** GET /api/v1/public/:slug/vouchers/:code — ověření dárkového poukazu (zůstatek/platnost). */
+  @Public()
+  @Get('vouchers/:code')
+  async getVoucher(@Param('slug') slug: string, @Param('code') code: string) {
+    const tenant = await this.resolveTenant(slug);
+    const data = await this.vouchers.getByCode(tenant.id, code);
     return { data };
   }
 

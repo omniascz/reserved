@@ -580,4 +580,69 @@ describe('Fitness flow E2E (10.0–10.2)', () => {
       expect(r.data.balance).toBe(25);
     });
   });
+
+  // ─── 10.9 Dárkové vouchery ────────────────────────────────────────────
+
+  describe('Dárkové vouchery (10.9)', () => {
+    let code: string;
+
+    it('vydání poukazu + veřejné ověření', async () => {
+      const v = await apiCall<{ data: { id: string; code: string } }>('/admin/vouchers', {
+        method: 'POST',
+        token,
+        body: JSON.stringify({ valueHellers: 50000 }),
+      });
+      code = v.data.code;
+
+      const look = await apiCall<{
+        data: { remainingValueHellers: number; status: string; expired: boolean };
+      }>(`/public/${slug}/vouchers/${code}`);
+      expect(look.data.remainingValueHellers).toBe(50000);
+      expect(look.data.status).toBe('active');
+      expect(look.data.expired).toBe(false);
+    });
+
+    it('částečné uplatnění + nedostatek + vyčerpání', async () => {
+      const r1 = await apiCall<{ data: { remainingValueHellers: number } }>(
+        '/admin/vouchers/redeem',
+        { method: 'POST', token, body: JSON.stringify({ code, amountHellers: 20000 }) },
+      );
+      expect(r1.data.remainingValueHellers).toBe(30000);
+
+      const fail = await expectFail('/admin/vouchers/redeem', {
+        method: 'POST',
+        token,
+        body: JSON.stringify({ code, amountHellers: 40000 }),
+      });
+      expect(fail).toMatch(/INSUFFICIENT_VALUE|400/);
+
+      const r2 = await apiCall<{ data: { remainingValueHellers: number; status: string } }>(
+        '/admin/vouchers/redeem',
+        { method: 'POST', token, body: JSON.stringify({ code, amountHellers: 30000 }) },
+      );
+      expect(r2.data.remainingValueHellers).toBe(0);
+      expect(r2.data.status).toBe('redeemed');
+
+      const after = await expectFail('/admin/vouchers/redeem', {
+        method: 'POST',
+        token,
+        body: JSON.stringify({ code, amountHellers: 1 }),
+      });
+      expect(after).toMatch(/VOUCHER_NOT_ACTIVE|400/);
+    });
+
+    it('expirovaný poukaz nelze uplatnit', async () => {
+      const v = await apiCall<{ data: { code: string } }>('/admin/vouchers', {
+        method: 'POST',
+        token,
+        body: JSON.stringify({ valueHellers: 10000, validUntilIso: '2020-01-01T00:00:00.000Z' }),
+      });
+      const fail = await expectFail('/admin/vouchers/redeem', {
+        method: 'POST',
+        token,
+        body: JSON.stringify({ code: v.data.code, amountHellers: 100 }),
+      });
+      expect(fail).toMatch(/VOUCHER_EXPIRED|400/);
+    });
+  });
 });
