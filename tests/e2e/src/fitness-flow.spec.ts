@@ -353,4 +353,86 @@ describe('Fitness flow E2E (10.0–10.2)', () => {
       expect(dup).toMatch(/ALREADY_JOINED|400/);
     });
   });
+
+  // ─── 10.6 Recenze ─────────────────────────────────────────────────────
+
+  describe('Recenze (10.6)', () => {
+    let revBookingId: string;
+    let reviewId: string;
+    const revEmail = 'rev@fit.local';
+
+    it('odeslání recenze k rezervaci (ověřené e-mailem)', async () => {
+      const s = await apiCall<{ data: { id: string } }>('/admin/class-sessions', {
+        method: 'POST',
+        token,
+        body: JSON.stringify({
+          serviceId: groupServiceId,
+          startsAt: '2031-12-01T10:00:00.000Z',
+          capacity: 5,
+        }),
+      });
+      const j = await apiCall<{ data: { id: string } }>(
+        `/public/${slug}/class-sessions/${s.data.id}/join`,
+        {
+          method: 'POST',
+          body: JSON.stringify({ customerName: 'Rev Klient', customerEmail: revEmail }),
+        },
+      );
+      revBookingId = j.data.id;
+
+      const rev = await apiCall<{ data: { id: string; rating: number } }>(
+        `/public/${slug}/reviews`,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            bookingId: revBookingId,
+            customerEmail: revEmail,
+            rating: 5,
+            comment: 'Super!',
+          }),
+        },
+      );
+      expect(rev.data.rating).toBe(5);
+      reviewId = rev.data.id;
+    });
+
+    it('špatný e-mail → EMAIL_MISMATCH; duplicita → ALREADY_REVIEWED', async () => {
+      const wrong = await expectFail(`/public/${slug}/reviews`, {
+        method: 'POST',
+        body: JSON.stringify({
+          bookingId: revBookingId,
+          customerEmail: 'kdokoli@fit.local',
+          rating: 1,
+        }),
+      });
+      expect(wrong).toMatch(/EMAIL_MISMATCH|403|400/);
+
+      const dupe = await expectFail(`/public/${slug}/reviews`, {
+        method: 'POST',
+        body: JSON.stringify({ bookingId: revBookingId, customerEmail: revEmail, rating: 4 }),
+      });
+      expect(dupe).toMatch(/ALREADY_REVIEWED|400/);
+    });
+
+    it('veřejný průměr služby zahrnuje publikovanou recenzi', async () => {
+      const res = await apiCall<{ data: { aggregate: { count: number; avg: number } } }>(
+        `/public/${slug}/reviews?serviceId=${groupServiceId}`,
+      );
+      expect(res.data.aggregate.count).toBeGreaterThanOrEqual(1);
+      expect(res.data.aggregate.avg).toBeGreaterThanOrEqual(1);
+    });
+
+    it('admin skryje recenzi → zmizí z veřejného průměru', async () => {
+      await apiCall(`/admin/reviews/${reviewId}`, {
+        method: 'PATCH',
+        token,
+        body: JSON.stringify({ status: 'hidden' }),
+      });
+      const res = await apiCall<{ data: { aggregate: { count: number }; items: unknown[] } }>(
+        `/public/${slug}/reviews?serviceId=${groupServiceId}`,
+      );
+      expect(res.data.aggregate.count).toBe(0);
+      expect(res.data.items.length).toBe(0);
+    });
+  });
 });

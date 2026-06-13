@@ -28,6 +28,8 @@ import {
   JoinClassSessionSchema,
   type JoinClassSessionDto,
 } from '../class-sessions/dto/class-session.dto.js';
+import { ReviewsService } from '../reviews/reviews.service.js';
+import { SubmitReviewSchema, type SubmitReviewDto } from '../reviews/dto/review.dto.js';
 import { DrizzleTenantLookup } from '../tenant/tenant-lookup.service.js';
 import { randomBytes } from 'node:crypto';
 
@@ -45,6 +47,7 @@ export class PublicController {
     @Inject(AvailabilityService) private readonly availability: AvailabilityService,
     @Inject(BookingsService) private readonly bookings: BookingsService,
     @Inject(ClassSessionsService) private readonly classSessions: ClassSessionsService,
+    @Inject(ReviewsService) private readonly reviews: ReviewsService,
   ) {}
 
   /** GET /api/v1/public/:slug — info o tenant (název + theme + currency, timezone). */
@@ -413,6 +416,35 @@ export class PublicController {
     const tenant = await this.resolveTenant(slug);
     const entry = await this.classSessions.joinWaitlistPublic(tenant.id, id, dto);
     return { data: { id: entry.id, position: entry.position, status: entry.status } };
+  }
+
+  // ─── Recenze (sprint 10.6) ──────────────────────────────────────────
+
+  /** POST /api/v1/public/:slug/reviews — odeslání recenze k rezervaci. */
+  @Public()
+  @Post('reviews')
+  @HttpCode(201)
+  async submitReview(
+    @Param('slug') slug: string,
+    @Body(new ZodValidationPipe(SubmitReviewSchema)) dto: SubmitReviewDto,
+  ) {
+    const tenant = await this.resolveTenant(slug);
+    const review = await this.reviews.submitPublic(tenant.id, dto);
+    return { data: { id: review.id, rating: review.rating, status: review.status } };
+  }
+
+  /** GET /api/v1/public/:slug/reviews?serviceId=… — publikované recenze + průměr. */
+  @Public()
+  @Get('reviews')
+  async listReviews(@Param('slug') slug: string, @Query('serviceId') serviceId: string) {
+    const tenant = await this.resolveTenant(slug);
+    if (!serviceId || !/^[0-9a-f-]{36}$/i.test(serviceId)) {
+      throw new BadRequestException({
+        error: { code: 'INVALID_SERVICE_ID', message: 'serviceId je povinné a musí být UUID.' },
+      });
+    }
+    const data = await this.reviews.publicForService(tenant.id, serviceId);
+    return { data };
   }
 
   // ─── Helpers ──────────────────────────────────────────────────────────

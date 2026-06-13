@@ -32,6 +32,7 @@ import { PortalModule } from './portal/portal.module.js';
 import { PublicModule } from './public/public.module.js';
 import { ReportsModule } from './reports/reports.module.js';
 import { ResourcesModule } from './resources/resources.module.js';
+import { ReviewsModule } from './reviews/reviews.module.js';
 import { RulesModule } from './rules/rules.module.js';
 import { ServicesModule } from './services/services.module.js';
 import { SettingsModule } from './settings/settings.module.js';
@@ -89,6 +90,7 @@ import { TenantMiddleware } from './tenant/tenant.middleware.js';
     PublicModule,
     ReportsModule,
     ResourcesModule,
+    ReviewsModule,
     RulesModule,
     TenantSiteModule,
     ThemeModule,
