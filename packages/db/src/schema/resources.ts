@@ -10,7 +10,7 @@ import { branches } from './branches.js';
 // Dvojí rezervaci stejného přístroje ve stejný čas hlídá EXCLUDE constraint
 // na class_sessions (migrace 0052), analogicky k 1:1 ochraně zaměstnance.
 
-export const resourceTypes = ['ems_machine', 'room', 'equipment', 'other'] as const;
+export const resourceTypes = ['ems_machine', 'room', 'equipment', 'vehicle', 'other'] as const;
 export type ResourceType = (typeof resourceTypes)[number];
 
 export const resources = pgTable(

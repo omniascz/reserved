@@ -1676,4 +1676,110 @@ describe('Fitness flow E2E (10.0–10.2)', () => {
       expect(id).toBeTruthy();
     });
   });
+
+  // ─── 10.22 Motor 2: pobyt na dny (hotel / půjčovna) ───────────────────
+  describe('Pobyt na dny (10.22)', () => {
+    let r1: string;
+    let r2: string;
+    let stay1: string;
+
+    async function mkRoom(name: string): Promise<string> {
+      const r = await apiCall<{ data: { id: string } }>('/admin/resources', {
+        method: 'POST',
+        token,
+        body: JSON.stringify({ branchId, name, type: 'room' }),
+      });
+      return r.data.id;
+    }
+
+    it('příprava: 2 pokoje', async () => {
+      r1 = await mkRoom('Pokoj 101');
+      r2 = await mkRoom('Pokoj 102');
+      expect(r1).toBeTruthy();
+    });
+
+    it('rezervace pobytu spočítá noci a cenu', async () => {
+      const s = await apiCall<{ data: { id: string; nights: number; totalHellers: number } }>(
+        '/admin/stays',
+        {
+          method: 'POST',
+          token,
+          body: JSON.stringify({
+            resourceId: r1,
+            customerName: 'Host Novák',
+            checkIn: '2033-08-01',
+            checkOut: '2033-08-04',
+            guests: 2,
+            pricePerNightHellers: 200000,
+          }),
+        },
+      );
+      expect(s.data.nights).toBe(3);
+      expect(s.data.totalHellers).toBe(600000); // 3× 2000 Kč
+      stay1 = s.data.id;
+    });
+
+    it('dostupnost: obsazený pokoj zmizí, volný zůstane', async () => {
+      const av = await apiCall<{ data: Array<{ id: string }> }>(
+        '/admin/stays/available?checkIn=2033-08-02&checkOut=2033-08-03',
+        { token },
+      );
+      expect(av.data.some((u) => u.id === r1)).toBe(false); // obsazený
+      expect(av.data.some((u) => u.id === r2)).toBe(true); // volný
+    });
+
+    it('překrývající se pobyt na stejném pokoji selže (STAY_CONFLICT)', async () => {
+      const clash = await expectFail('/admin/stays', {
+        method: 'POST',
+        token,
+        body: JSON.stringify({
+          resourceId: r1,
+          customerName: 'X',
+          checkIn: '2033-08-03',
+          checkOut: '2033-08-06',
+          pricePerNightHellers: 200000,
+        }),
+      });
+      expect(clash).toMatch(/STAY_CONFLICT|400/);
+    });
+
+    it('navazující pobyt (odjezd = příjezd) projde — půlotevřený interval', async () => {
+      const s = await apiCall<{ data: { id: string } }>('/admin/stays', {
+        method: 'POST',
+        token,
+        body: JSON.stringify({
+          resourceId: r1,
+          customerName: 'Host Dva',
+          checkIn: '2033-08-04', // = checkout prvního
+          checkOut: '2033-08-06',
+          pricePerNightHellers: 200000,
+        }),
+      });
+      expect(s.data.id).toBeTruthy();
+    });
+
+    it('odjezd před příjezdem → INVALID_DATES', async () => {
+      const bad = await expectFail('/admin/stays', {
+        method: 'POST',
+        token,
+        body: JSON.stringify({
+          resourceId: r2,
+          customerName: 'X',
+          checkIn: '2033-08-10',
+          checkOut: '2033-08-09',
+          pricePerNightHellers: 100000,
+        }),
+      });
+      expect(bad).toMatch(/INVALID_DATES|400/);
+    });
+
+    it('zrušení pobytu uvolní pokoj', async () => {
+      await apiCall(`/admin/stays/${stay1}/cancel`, { method: 'POST', token });
+      const av = await apiCall<{ data: Array<{ id: string }> }>(
+        '/admin/stays/available?checkIn=2033-08-02&checkOut=2033-08-03',
+        { token },
+      );
+      expect(av.data.some((u) => u.id === r1)).toBe(true); // zase volný
+    });
+  });
 });
