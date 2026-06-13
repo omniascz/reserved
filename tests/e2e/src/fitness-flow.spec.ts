@@ -1867,4 +1867,94 @@ describe('Fitness flow E2E (10.0–10.2)', () => {
       expect(clash).toMatch(/SEGMENT_CONFLICT|400/);
     });
   });
+
+  // ─── 10.24 Motor 4: dispečink zakázek (logistika) ─────────────────────
+  describe('Dispečink zakázek (10.24)', () => {
+    let van1: string;
+    let van2: string;
+    let d1: string;
+    let d2: string;
+    let job1: string;
+
+    async function mkVehicle(name: string): Promise<string> {
+      const r = await apiCall<{ data: { id: string } }>('/admin/resources', {
+        method: 'POST',
+        token,
+        body: JSON.stringify({ branchId, name, type: 'vehicle' }),
+      });
+      return r.data.id;
+    }
+    async function mkDriver(last: string): Promise<string> {
+      const r = await apiCall<{ data: { id: string } }>('/admin/employees', {
+        method: 'POST',
+        token,
+        body: JSON.stringify({ firstName: 'Řidič', lastName: last, branchIds: [branchId] }),
+      });
+      return r.data.id;
+    }
+    function job(vehicleId: string, driverId: string, startsAt: string) {
+      return {
+        vehicleId,
+        driverId,
+        pickupAddress: 'Sklad, Brno',
+        dropoffAddress: 'Náměstí, Praha',
+        startsAt,
+        durationMinutes: 60,
+      };
+    }
+
+    it('příprava: 2 dodávky, 2 řidiči', async () => {
+      van1 = await mkVehicle('Dodávka 1A');
+      van2 = await mkVehicle('Dodávka 2B');
+      d1 = await mkDriver('Alfa');
+      d2 = await mkDriver('Beta');
+      expect(van1).toBeTruthy();
+    });
+
+    it('naplánuje zakázku (vůz + řidič v okně)', async () => {
+      const r = await apiCall<{ data: { id: string; status: string } }>('/admin/dispatch/jobs', {
+        method: 'POST',
+        token,
+        body: JSON.stringify(job(van1, d1, '2034-10-01T09:00:00.000Z')),
+      });
+      expect(r.data.status).toBe('scheduled');
+      job1 = r.data.id;
+    });
+
+    it('obsazený vůz → VEHICLE_BUSY (i s jiným řidičem)', async () => {
+      const clash = await expectFail('/admin/dispatch/jobs', {
+        method: 'POST',
+        token,
+        body: JSON.stringify(job(van1, d2, '2034-10-01T09:30:00.000Z')),
+      });
+      expect(clash).toMatch(/VEHICLE_BUSY|400/);
+    });
+
+    it('obsazený řidič → DRIVER_BUSY (i s jiným vozem)', async () => {
+      const clash = await expectFail('/admin/dispatch/jobs', {
+        method: 'POST',
+        token,
+        body: JSON.stringify(job(van2, d1, '2034-10-01T09:30:00.000Z')),
+      });
+      expect(clash).toMatch(/DRIVER_BUSY|400/);
+    });
+
+    it('nepřekrývající se zakázka projde; po zrušení se vůz uvolní', async () => {
+      const later = await apiCall<{ data: { id: string } }>('/admin/dispatch/jobs', {
+        method: 'POST',
+        token,
+        body: JSON.stringify(job(van1, d1, '2034-10-01T11:00:00.000Z')),
+      });
+      expect(later.data.id).toBeTruthy();
+
+      await apiCall(`/admin/dispatch/jobs/${job1}/cancel`, { method: 'POST', token });
+      // teď je vůz v 9:00 volný
+      const reuse = await apiCall<{ data: { id: string } }>('/admin/dispatch/jobs', {
+        method: 'POST',
+        token,
+        body: JSON.stringify(job(van1, d2, '2034-10-01T09:00:00.000Z')),
+      });
+      expect(reuse.data.id).toBeTruthy();
+    });
+  });
 });
