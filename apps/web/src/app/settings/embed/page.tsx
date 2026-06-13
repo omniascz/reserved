@@ -14,7 +14,7 @@ import { clearAuth, getAccessToken, getTenantSlug, AdminApiError } from '@/lib/a
 
 const WIDGET_URL = process.env.NEXT_PUBLIC_WIDGET_URL ?? 'http://localhost:4004';
 
-type EmbedKind = 'sdk' | 'sdk-modal' | 'iframe-resize' | 'iframe' | 'button';
+type EmbedKind = 'sdk' | 'sdk-modal' | 'timetable' | 'iframe-resize' | 'iframe' | 'button';
 
 export default function EmbedSettingsPage() {
   const router = useRouter();
@@ -53,6 +53,14 @@ export default function EmbedSettingsPage() {
       code: `<script src="${WIDGET_URL}/embed.js" data-slug="${slug}"${
         lang === 'en' ? ' data-lang="en"' : ''
       } data-mode="modal" data-button-text="Rezervovat termín" defer></script>`,
+    },
+    timetable: {
+      label: '📅 Rozvrh lekcí (timetable)',
+      description:
+        'Týdenní mřížka skupinových lekcí s volnými místy a přihlášením/pořadníkem přímo na stránce. Pro fitness/EMS/jógu. Doporučená širší šířka.',
+      code: `<script src="${WIDGET_URL}/embed.js" data-slug="${slug}"${
+        lang === 'en' ? ' data-lang="en"' : ''
+      } data-view="timetable" data-max-width="1000" defer></script>`,
     },
     iframe: {
       label: 'Jednoduchý iframe (pokročilé)',

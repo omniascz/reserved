@@ -244,3 +244,33 @@ export async function joinClassSession(
   );
   return data;
 }
+
+/** Rozvrh (sprint 10.17) — všechny otevřené lekce v období, napříč službami. */
+export async function listAllClassSessions(
+  slug: string,
+  range: { from: string; to: string },
+): Promise<PublicClassSession[]> {
+  const params = new URLSearchParams({ from: range.from, to: range.to });
+  const { data } = await fetchApi<{ data: PublicClassSession[] }>(
+    `/public/${slug}/class-sessions?${params.toString()}`,
+  );
+  return data;
+}
+
+export interface WaitlistEntry {
+  id: string;
+  position: number;
+  status: string;
+}
+
+export async function joinClassWaitlist(
+  slug: string,
+  sessionId: string,
+  input: { customerName: string; customerEmail: string; customerPhone?: string | null },
+): Promise<WaitlistEntry> {
+  const { data } = await fetchApi<{ data: WaitlistEntry }>(
+    `/public/${slug}/class-sessions/${sessionId}/waitlist`,
+    { method: 'POST', body: JSON.stringify(input) },
+  );
+  return data;
+}

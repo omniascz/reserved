@@ -10,6 +10,7 @@
  * Atributy:
  *   data-slug          tenant slug (povinné)
  *   data-lang          'cs' | 'en' (default 'cs')
+ *   data-view          'booking' (default, průvodce) | 'timetable' (rozvrh lekcí)
  *   data-mode          'inline' (default) | 'button' | 'modal'
  *   data-button-text   text tlačítka pro mode=button/modal (default 'Rezervovat')
  *   data-button-color  barva tlačítka (default tenant theme nebo #3b82f6)
@@ -57,8 +58,11 @@
   var containerSelector = thisScript.getAttribute('data-container');
   var maxWidth = parseInt(thisScript.getAttribute('data-max-width') || '600', 10);
   var initialHeight = parseInt(thisScript.getAttribute('data-height') || '600', 10);
+  // data-view: 'booking' (default, průvodce rezervací) | 'timetable' (rozvrh lekcí)
+  var view = thisScript.getAttribute('data-view') || 'booking';
 
-  var widgetUrl = WIDGET_BASE + '/' + encodeURIComponent(slug) + (lang === 'en' ? '?lang=en' : '');
+  var path = '/' + encodeURIComponent(slug) + (view === 'timetable' ? '/timetable' : '');
+  var widgetUrl = WIDGET_BASE + path + (lang === 'en' ? '?lang=en' : '');
 
   // Unikátní ID pro tento embed (umožní více widgetů na jedné stránce)
   var widgetId = 'rw-' + Math.random().toString(36).slice(2, 9);

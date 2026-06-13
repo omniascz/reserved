@@ -69,6 +69,24 @@ export const messages = {
     // CountdownTimer
     'timer.expired': '⏱ Termín už není rezervovaný — vrať se prosím a vyber znovu.',
     'timer.lockedFor': '⏱ Slot je pro tebe zamknutý ještě',
+
+    // Timetable (rozvrh lekcí)
+    'timetable.title': 'Rozvrh lekcí',
+    'timetable.prev': '‹ Předchozí',
+    'timetable.next': 'Další ›',
+    'timetable.thisWeek': 'Tento týden',
+    'timetable.empty': 'V tomto týdnu nejsou žádné lekce.',
+    'timetable.loading': 'Načítám rozvrh…',
+    'timetable.spots': 'volných míst',
+    'timetable.full': 'PLNO',
+    'timetable.book': 'Rezervovat',
+    'timetable.waitlist': 'Pořadník',
+    'timetable.joinTitle': 'Přihlášení na lekci',
+    'timetable.waitlistTitle': 'Zařazení do pořadníku',
+    'timetable.joined': 'Hotovo! Přihlášení je potvrzené.',
+    'timetable.waitlisted': 'Jsi v pořadníku. Dáme vědět, až se uvolní místo.',
+    'timetable.cancel': 'Zrušit',
+    'timetable.error': 'Něco se nepovedlo. Zkus to prosím znovu.',
   },
   en: {
     onlineBooking: 'Online booking',
@@ -127,6 +145,24 @@ export const messages = {
 
     'timer.expired': '⏱ Slot reservation expired — please go back and pick again.',
     'timer.lockedFor': '⏱ Slot is locked for you for',
+
+    // Timetable
+    'timetable.title': 'Class schedule',
+    'timetable.prev': '‹ Previous',
+    'timetable.next': 'Next ›',
+    'timetable.thisWeek': 'This week',
+    'timetable.empty': 'No classes this week.',
+    'timetable.loading': 'Loading schedule…',
+    'timetable.spots': 'spots left',
+    'timetable.full': 'FULL',
+    'timetable.book': 'Book',
+    'timetable.waitlist': 'Waitlist',
+    'timetable.joinTitle': 'Join class',
+    'timetable.waitlistTitle': 'Join waitlist',
+    'timetable.joined': "Done! You're booked.",
+    'timetable.waitlisted': "You're on the waitlist. We'll notify you when a spot opens.",
+    'timetable.cancel': 'Cancel',
+    'timetable.error': 'Something went wrong. Please try again.',
   },
 } as const;
 
