@@ -88,6 +88,12 @@ export const services = pgTable(
     depositPercent: integer('deposit_percent'),
     /** Maximální počet účastníků (1 = individuální, >1 = skupinová). */
     capacity: integer('capacity').notNull().default(1),
+    /**
+     * Archetyp služby (sprint 10.1): osobni_1_1 | skupinova_lekce | volny_trener |
+     * ems_pristrojovy | hybridni_blok. NULL = klasická služba bez archetypu.
+     * Nastavuje rozumné defaulty (kapacitu) a rozhoduje 1:1 vs skupinový flow.
+     */
+    archetype: varchar('archetype', { length: 32 }),
     /** Pořadí v rámci kategorie. */
     sortOrder: integer('sort_order').notNull().default(0),
     /** Online služba (videohovor) — generuje/kopíruje meeting URL do booking. */

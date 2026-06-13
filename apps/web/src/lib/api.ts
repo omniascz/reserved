@@ -219,9 +219,26 @@ export interface AdminServiceFull extends AdminService {
   isPublic: boolean;
   depositPercent: number | null;
   capacity: number;
+  /** Archetyp služby (sprint 10.1) — NULL = bez archetypu. */
+  archetype: string | null;
   sortOrder: number;
   isActive: boolean;
   createdAt: string;
+}
+
+// ─── Archetypy služeb (sprint 10.1) ───────────────────────────────────
+
+export interface ServiceArchetypeSpec {
+  id: string;
+  label: string;
+  description: string;
+  defaultCapacity: number;
+  group: boolean;
+}
+
+export async function listServiceArchetypes(): Promise<ServiceArchetypeSpec[]> {
+  const { data } = await fetchApi<{ data: ServiceArchetypeSpec[] }>(`/admin/services/archetypes`);
+  return data;
 }
 
 export interface AdminServiceCategory {
@@ -259,6 +276,7 @@ export async function createService(input: {
   isPublic?: boolean;
   depositPercent?: number | null;
   capacity?: number;
+  archetype?: string | null;
   sortOrder?: number;
 }): Promise<AdminServiceFull> {
   const { data } = await fetchApi<{ data: AdminServiceFull }>(`/admin/services`, {
