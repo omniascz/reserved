@@ -44,6 +44,7 @@ export * from './feature-flags.js';
 export * from './google-calendar.js';
 export * from './subscriptions.js';
 export * from './payments.js';
+export * from './payment-connections.js';
 export * from './webhooks.js';
 export * from './platform-admins.js';
 export * from './api-keys.js';

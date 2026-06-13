@@ -2284,4 +2284,176 @@ describe('Fitness flow E2E (10.0–10.2)', () => {
       expect(r.data.mrrHellers).toBe(0);
     });
   });
+
+  // ─── 10.29 Platby P1–P3: Connect + záloha + dynamická záloha dle rizika ──
+  describe('Platby — záloha & dynamická záloha (10.29)', () => {
+    let depSvc: string; // služba se zálohou 30 %
+    let noDepSvc: string;
+    let custAId: string; // vysoké riziko
+    let custBId: string; // nízké riziko
+    let bookingForDeposit: string;
+
+    it('P1: připojení provideru (mock) → aktivní', async () => {
+      const before = await apiCall<{ data: unknown[] }>('/admin/payments/connect/status', {
+        token,
+      });
+      expect(Array.isArray(before.data)).toBe(true);
+      const c = await apiCall<{ data: { status: string; chargesEnabled: boolean } }>(
+        '/admin/payments/connect/start',
+        { method: 'POST', token, body: JSON.stringify({ provider: 'mock' }) },
+      );
+      expect(c.data.status).toBe('active');
+      expect(c.data.chargesEnabled).toBe(true);
+    });
+
+    it('P2: kvóta zálohy ze služby (30 % z 500 Kč = 150 Kč)', async () => {
+      depSvc = (
+        await apiCall<{ data: { id: string } }>('/admin/services', {
+          method: 'POST',
+          token,
+          body: JSON.stringify({
+            name: 'Lekce se zálohou',
+            durationMinutes: 60,
+            priceHellers: 50000,
+            archetype: 'skupinova_lekce',
+            depositPercent: 30,
+          }),
+        })
+      ).data.id;
+      noDepSvc = (
+        await apiCall<{ data: { id: string } }>('/admin/services', {
+          method: 'POST',
+          token,
+          body: JSON.stringify({
+            name: 'Lekce bez zálohy',
+            durationMinutes: 60,
+            priceHellers: 50000,
+            archetype: 'skupinova_lekce',
+          }),
+        })
+      ).data.id;
+
+      const q = await apiCall<{ data: { requiresDeposit: boolean; depositHellers: number } }>(
+        `/admin/payments/deposit/quote?serviceId=${depSvc}`,
+        { token },
+      );
+      expect(q.data.requiresDeposit).toBe(true);
+      expect(q.data.depositHellers).toBe(15000);
+
+      const q2 = await apiCall<{ data: { requiresDeposit: boolean } }>(
+        `/admin/payments/deposit/quote?serviceId=${noDepSvc}`,
+        { token },
+      );
+      expect(q2.data.requiresDeposit).toBe(false);
+    });
+
+    it('příprava klientů: A vysoké riziko (no-show), B nízké riziko', async () => {
+      // A: přihlásí se na lekci a označí se no-show → vysoké riziko
+      const sA1 = (
+        await apiCall<{ data: { id: string } }>('/admin/class-sessions', {
+          method: 'POST',
+          token,
+          body: JSON.stringify({
+            serviceId: depSvc,
+            startsAt: '2039-01-05T18:00:00.000Z',
+            capacity: 5,
+          }),
+        })
+      ).data.id;
+      const bA1 = (
+        await apiCall<{ data: { id: string } }>(`/public/${slug}/class-sessions/${sA1}/join`, {
+          method: 'POST',
+          body: JSON.stringify({ customerName: 'Riziko A', customerEmail: 'riskA@dep.local' }),
+        })
+      ).data.id;
+      await apiCall(`/admin/bookings/${bA1}/mark-no-show`, { method: 'POST', token });
+
+      // A: druhá lekce = rezervace, na kterou budeme chtít zálohu
+      const sA2 = (
+        await apiCall<{ data: { id: string } }>('/admin/class-sessions', {
+          method: 'POST',
+          token,
+          body: JSON.stringify({
+            serviceId: depSvc,
+            startsAt: '2039-01-12T18:00:00.000Z',
+            capacity: 5,
+          }),
+        })
+      ).data.id;
+      bookingForDeposit = (
+        await apiCall<{ data: { id: string } }>(`/public/${slug}/class-sessions/${sA2}/join`, {
+          method: 'POST',
+          body: JSON.stringify({ customerName: 'Riziko A', customerEmail: 'riskA@dep.local' }),
+        })
+      ).data.id;
+
+      // B: spolehlivý — jen se přihlásí (0 no-show) → nízké riziko
+      const sB = (
+        await apiCall<{ data: { id: string } }>('/admin/class-sessions', {
+          method: 'POST',
+          token,
+          body: JSON.stringify({
+            serviceId: depSvc,
+            startsAt: '2039-01-06T18:00:00.000Z',
+            capacity: 5,
+          }),
+        })
+      ).data.id;
+      await apiCall(`/public/${slug}/class-sessions/${sB}/join`, {
+        method: 'POST',
+        body: JSON.stringify({ customerName: 'Spolehlivy B', customerEmail: 'safeB@dep.local' }),
+      });
+
+      const custs = await apiCall<{ data: Array<{ id: string; email: string }> }>(
+        '/admin/customers',
+        { token },
+      );
+      custAId = custs.data.find((c) => c.email.toLowerCase() === 'riska@dep.local')!.id;
+      custBId = custs.data.find((c) => c.email.toLowerCase() === 'safeb@dep.local')!.id;
+    });
+
+    it('P3: dynamická záloha — vysoké riziko platí, spolehlivý ne', async () => {
+      await apiCall('/admin/settings/booking', {
+        method: 'PATCH',
+        token,
+        body: JSON.stringify({ dynamicDepositByRisk: true }),
+      });
+
+      const qA = await apiCall<{ data: { requiresDeposit: boolean; riskLevel: string } }>(
+        `/admin/payments/deposit/quote?serviceId=${depSvc}&customerId=${custAId}`,
+        { token },
+      );
+      expect(qA.data.requiresDeposit).toBe(true);
+      expect(qA.data.riskLevel).toBe('high');
+
+      const qB = await apiCall<{ data: { requiresDeposit: boolean; riskLevel: string } }>(
+        `/admin/payments/deposit/quote?serviceId=${depSvc}&customerId=${custBId}`,
+        { token },
+      );
+      expect(qB.data.requiresDeposit).toBe(false); // spolehlivý neplatí zálohu
+      expect(qB.data.riskLevel).toBe('low');
+    });
+
+    it('collect-deposit: bez propojeného provideru selže, přes mock vytvoří checkout', async () => {
+      // stripe není propojený → PAYMENTS_NOT_CONNECTED
+      const fail = await expectFail('/admin/payments/deposit/collect', {
+        method: 'POST',
+        token,
+        body: JSON.stringify({ bookingId: bookingForDeposit, methodType: 'stripe' }),
+      });
+      expect(fail).toMatch(/PAYMENTS_NOT_CONNECTED|400/);
+
+      // mock je propojený → checkout na zálohu
+      const r = await apiCall<{
+        data: { requiresDeposit: boolean; depositHellers: number; checkoutUrl: string };
+      }>('/admin/payments/deposit/collect', {
+        method: 'POST',
+        token,
+        body: JSON.stringify({ bookingId: bookingForDeposit, methodType: 'mock' }),
+      });
+      expect(r.data.requiresDeposit).toBe(true);
+      expect(r.data.depositHellers).toBe(15000);
+      expect(r.data.checkoutUrl).toContain('mock-checkout');
+    });
+  });
 });

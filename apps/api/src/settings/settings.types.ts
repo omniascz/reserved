@@ -34,6 +34,12 @@ export const BookingRulesSchema = z.object({
    * v čase). Fitko s více sály paralelně nechá false.
    */
   oneTrainingPerBranch: z.boolean().default(false),
+  /**
+   * Dynamická záloha dle no-show rizika (sprint 10.29). Default false.
+   * Když true: záloha (deposit_percent služby) se vyžaduje JEN u rizikových
+   * klientů (no-show level high); spolehliví platí bez zálohy. Diferenciátor.
+   */
+  dynamicDepositByRisk: z.boolean().default(false),
 });
 
 export type BookingRules = z.infer<typeof BookingRulesSchema>;
