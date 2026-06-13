@@ -77,6 +77,38 @@ export class ClassSessionsController {
     return { data };
   }
 
+  // ─── Pořadník (sprint 10.5) ─────────────────────────────────────────
+
+  @Get(':id/waitlist')
+  async listWaitlist(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    const data = await this.svc.listWaitlist(user.tenantId, user.sub, user.role, id);
+    return { data };
+  }
+
+  @Post(':id/waitlist')
+  @HttpCode(201)
+  async joinWaitlist(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(new ZodValidationPipe(JoinClassSessionSchema)) dto: JoinClassSessionDto,
+  ) {
+    const data = await this.svc.joinWaitlist(user.tenantId, user.sub, user.role, id, dto);
+    return { data };
+  }
+
+  @Post(':id/waitlist/:waitlistId/leave')
+  async leaveWaitlist(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('waitlistId', ParseUUIDPipe) waitlistId: string,
+  ) {
+    const data = await this.svc.leaveWaitlist(user.tenantId, user.sub, user.role, id, waitlistId);
+    return { data };
+  }
+
   @Post(':id/cancel')
   async cancel(@CurrentUser() user: AccessTokenPayload, @Param('id', ParseUUIDPipe) id: string) {
     const data = await this.svc.cancelSession(user.tenantId, user.sub, user.role, id);

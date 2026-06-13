@@ -528,6 +528,18 @@ export class ClassSessionsService {
         reason: 'left_class_session',
       });
 
+      // Auto-promote z pořadníku — uvolnilo se místo, povýš prvního čekajícího.
+      const [sessionRow] = await tx
+        .select()
+        .from(schema.classSessions)
+        .where(
+          and(eq(schema.classSessions.id, sessionId), eq(schema.classSessions.tenantId, tenantId)),
+        )
+        .limit(1);
+      if (sessionRow) {
+        await this.promoteFromWaitlist(tx, tenantId, sessionRow);
+      }
+
       return updated;
     });
   }
@@ -586,5 +598,312 @@ export class ClassSessionsService {
 
       return updated!;
     });
+  }
+
+  // ─── Pořadník / waitlist (sprint 10.5) ──────────────────────────────
+
+  /** Jádro zařazení do pořadníku. Běží uvnitř withRlsContext transakce. */
+  private async performWaitlistJoin(
+    tx: Database,
+    tenantId: string,
+    sessionId: string,
+    dto: JoinClassSessionDto,
+  ) {
+    const [session] = await tx
+      .select()
+      .from(schema.classSessions)
+      .where(
+        and(eq(schema.classSessions.id, sessionId), eq(schema.classSessions.tenantId, tenantId)),
+      )
+      .limit(1);
+    if (!session) return { ok: false as const, reason: 'not_found' as const };
+    if (session.status !== 'open') return { ok: false as const, reason: 'closed' as const };
+    if (session.bookedCount < session.capacity)
+      return { ok: false as const, reason: 'has_space' as const };
+
+    // Už je účastníkem? Pak nemá smysl pořadník.
+    const participant = await tx
+      .select({ id: schema.bookings.id })
+      .from(schema.bookings)
+      .where(
+        and(
+          eq(schema.bookings.tenantId, tenantId),
+          eq(schema.bookings.sessionId, sessionId),
+          sql`lower(${schema.bookings.customerEmail}) = lower(${dto.customerEmail})`,
+          sql`${schema.bookings.status} NOT IN ('cancelled', 'no_show')`,
+        ),
+      )
+      .limit(1);
+    if (participant.length > 0) return { ok: false as const, reason: 'already_joined' as const };
+
+    const nameParts = dto.customerName.trim().split(/\s+/);
+    const firstName = nameParts[0] ?? dto.customerName;
+    const lastName = nameParts.slice(1).join(' ') || firstName;
+    const { id: customerId } = await this.customers.findOrCreate(tx, tenantId, {
+      firstName,
+      lastName,
+      email: dto.customerEmail,
+      phone: dto.customerPhone ?? null,
+    });
+
+    const posRows = await tx
+      .select({
+        maxPos: sql<number>`COALESCE(MAX(${schema.classSessionWaitlist.position}), 0)`,
+      })
+      .from(schema.classSessionWaitlist)
+      .where(
+        and(
+          eq(schema.classSessionWaitlist.sessionId, sessionId),
+          eq(schema.classSessionWaitlist.status, 'waiting'),
+        ),
+      );
+    const nextPos = Number(posRows[0]?.maxPos ?? 0) + 1;
+
+    try {
+      const [entry] = await tx
+        .insert(schema.classSessionWaitlist)
+        .values({
+          tenantId,
+          sessionId,
+          customerId,
+          customerName: dto.customerName,
+          customerEmail: dto.customerEmail,
+          customerPhone: dto.customerPhone ?? null,
+          position: nextPos,
+          status: 'waiting',
+        })
+        .returning();
+      return { ok: true as const, entry: entry! };
+    } catch (err) {
+      const e = err as { code?: string; cause?: { code?: string } };
+      if ((e.code ?? e.cause?.code) === '23505') {
+        return { ok: false as const, reason: 'already_waitlisted' as const };
+      }
+      throw err;
+    }
+  }
+
+  private unwrapWaitlist(
+    outcome:
+      | { ok: true; entry: typeof schema.classSessionWaitlist.$inferSelect }
+      | {
+          ok: false;
+          reason: 'not_found' | 'closed' | 'has_space' | 'already_joined' | 'already_waitlisted';
+        },
+  ) {
+    if (outcome.ok) return outcome.entry;
+    switch (outcome.reason) {
+      case 'not_found':
+        throw new NotFoundException({
+          error: { code: 'SESSION_NOT_FOUND', message: 'Lekce nenalezena.' },
+        });
+      case 'closed':
+        throw new BadRequestException({
+          error: { code: 'SESSION_CLOSED', message: 'Lekce není otevřená.' },
+        });
+      case 'has_space':
+        throw new BadRequestException({
+          error: {
+            code: 'SESSION_HAS_SPACE',
+            message: 'Lekce má volná místa — přihlas se přímo, pořadník není potřeba.',
+          },
+        });
+      case 'already_joined':
+        throw new BadRequestException({
+          error: { code: 'ALREADY_JOINED', message: 'Tento klient už je v lekci přihlášený.' },
+        });
+      default:
+        throw new BadRequestException({
+          error: { code: 'ALREADY_WAITLISTED', message: 'Tento klient už je v pořadníku.' },
+        });
+    }
+  }
+
+  /** Admin zařadí klienta do pořadníku. */
+  async joinWaitlist(
+    tenantId: string,
+    userId: string,
+    role: AppRole,
+    sessionId: string,
+    dto: JoinClassSessionDto,
+  ) {
+    assertCanManage(role);
+    const outcome = await this.dbService.withRlsContext(ctxFor(tenantId, userId, role), (tx) =>
+      this.performWaitlistJoin(tx, tenantId, sessionId, dto),
+    );
+    return this.unwrapWaitlist(outcome);
+  }
+
+  /** Veřejné self-service zařazení do pořadníku z widgetu. */
+  async joinWaitlistPublic(tenantId: string, sessionId: string, dto: JoinClassSessionDto) {
+    const outcome = await this.dbService.withRlsContext(serviceContext(tenantId), (tx) =>
+      this.performWaitlistJoin(tx, tenantId, sessionId, dto),
+    );
+    return this.unwrapWaitlist(outcome);
+  }
+
+  /** Seznam čekajících v pořadníku (admin). */
+  async listWaitlist(tenantId: string, userId: string, role: AppRole, sessionId: string) {
+    return this.dbService.withRlsContext(ctxFor(tenantId, userId, role), async (tx) => {
+      return tx
+        .select()
+        .from(schema.classSessionWaitlist)
+        .where(
+          and(
+            eq(schema.classSessionWaitlist.tenantId, tenantId),
+            eq(schema.classSessionWaitlist.sessionId, sessionId),
+            eq(schema.classSessionWaitlist.status, 'waiting'),
+          ),
+        )
+        .orderBy(asc(schema.classSessionWaitlist.position));
+    });
+  }
+
+  /** Odebrání z pořadníku (admin). */
+  async leaveWaitlist(
+    tenantId: string,
+    userId: string,
+    role: AppRole,
+    sessionId: string,
+    waitlistId: string,
+  ) {
+    assertCanManage(role);
+    return this.dbService.withRlsContext(ctxFor(tenantId, userId, role), async (tx) => {
+      const [updated] = await tx
+        .update(schema.classSessionWaitlist)
+        .set({ status: 'cancelled', updatedAt: new Date() })
+        .where(
+          and(
+            eq(schema.classSessionWaitlist.id, waitlistId),
+            eq(schema.classSessionWaitlist.sessionId, sessionId),
+            eq(schema.classSessionWaitlist.tenantId, tenantId),
+            eq(schema.classSessionWaitlist.status, 'waiting'),
+          ),
+        )
+        .returning();
+      if (!updated) {
+        throw new NotFoundException({
+          error: { code: 'WAITLIST_ENTRY_NOT_FOUND', message: 'Záznam v pořadníku nenalezen.' },
+        });
+      }
+      return updated;
+    });
+  }
+
+  /**
+   * Povýší prvního čekajícího z pořadníku na rezervaci, pokud je volné místo.
+   * Volá se uvnitř transakce po uvolnění místa (leave). Vrací true, pokud povýšil.
+   */
+  private async promoteFromWaitlist(
+    tx: Database,
+    tenantId: string,
+    session: typeof schema.classSessions.$inferSelect,
+  ): Promise<boolean> {
+    if (session.status !== 'open') return false;
+
+    const [entry] = await tx
+      .select()
+      .from(schema.classSessionWaitlist)
+      .where(
+        and(
+          eq(schema.classSessionWaitlist.tenantId, tenantId),
+          eq(schema.classSessionWaitlist.sessionId, session.id),
+          eq(schema.classSessionWaitlist.status, 'waiting'),
+        ),
+      )
+      .orderBy(asc(schema.classSessionWaitlist.position))
+      .limit(1);
+    if (!entry) return false;
+
+    // Atomicky zarezervuj uvolněné místo.
+    const reserved = await tx
+      .update(schema.classSessions)
+      .set({ bookedCount: sql`${schema.classSessions.bookedCount} + 1`, updatedAt: new Date() })
+      .where(
+        and(
+          eq(schema.classSessions.id, session.id),
+          eq(schema.classSessions.tenantId, tenantId),
+          eq(schema.classSessions.status, 'open'),
+          sql`${schema.classSessions.bookedCount} < ${schema.classSessions.capacity}`,
+        ),
+      )
+      .returning({ bookedCount: schema.classSessions.bookedCount });
+    if (reserved.length === 0) return false;
+
+    const nameParts = entry.customerName.trim().split(/\s+/);
+    const firstName = nameParts[0] ?? entry.customerName;
+    const lastName = nameParts.slice(1).join(' ') || firstName;
+    const { id: customerId } = await this.customers.findOrCreate(tx, tenantId, {
+      firstName,
+      lastName,
+      email: entry.customerEmail,
+      phone: entry.customerPhone ?? null,
+    });
+
+    const [service] = await tx
+      .select()
+      .from(schema.services)
+      .where(eq(schema.services.id, session.serviceId))
+      .limit(1);
+
+    try {
+      await tx.transaction(async (sp) => {
+        const [b] = await sp
+          .insert(schema.bookings)
+          .values({
+            tenantId,
+            branchId: session.branchId,
+            serviceId: session.serviceId,
+            employeeId: session.employeeId,
+            sessionId: session.id,
+            customerId,
+            customerName: entry.customerName,
+            customerEmail: entry.customerEmail,
+            customerPhone: entry.customerPhone ?? null,
+            startsAt: session.startsAt,
+            endsAt: session.endsAt,
+            bufferStartsAt: session.bufferStartsAt,
+            bufferEndsAt: session.bufferEndsAt,
+            status: 'confirmed',
+            pricePaidHellers: service?.priceHellers ?? 0,
+            currency: service?.currency ?? 'CZK',
+            referenceCode: generateReferenceCode(),
+            metadata: { source: 'waitlist_promote', kind: 'class_session' },
+          })
+          .returning();
+        await sp.insert(schema.bookingStatusHistory).values({
+          tenantId,
+          bookingId: b!.id,
+          fromStatus: null,
+          toStatus: 'confirmed',
+          changedBy: 'system',
+          metadata: { source: 'waitlist_promote', kind: 'class_session' },
+        });
+      });
+
+      await tx
+        .update(schema.classSessionWaitlist)
+        .set({ status: 'promoted', updatedAt: new Date() })
+        .where(eq(schema.classSessionWaitlist.id, entry.id));
+      return true;
+    } catch (err) {
+      const e = err as { code?: string; cause?: { code?: string } };
+      if ((e.code ?? e.cause?.code) === '23505') {
+        // Čekající je už účastníkem — vrať místo a vyřaď ho z pořadníku.
+        await tx
+          .update(schema.classSessions)
+          .set({
+            bookedCount: sql`GREATEST(${schema.classSessions.bookedCount} - 1, 0)`,
+            updatedAt: new Date(),
+          })
+          .where(eq(schema.classSessions.id, session.id));
+        await tx
+          .update(schema.classSessionWaitlist)
+          .set({ status: 'cancelled', updatedAt: new Date() })
+          .where(eq(schema.classSessionWaitlist.id, entry.id));
+        return false;
+      }
+      throw err;
+    }
   }
 }

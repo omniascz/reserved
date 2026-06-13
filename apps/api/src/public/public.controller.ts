@@ -401,6 +401,20 @@ export class PublicController {
     };
   }
 
+  /** POST /api/v1/public/:slug/class-sessions/:id/waitlist — pořadník na plnou lekci. */
+  @Public()
+  @Post('class-sessions/:id/waitlist')
+  @HttpCode(201)
+  async joinWaitlist(
+    @Param('slug') slug: string,
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(JoinClassSessionSchema)) dto: JoinClassSessionDto,
+  ) {
+    const tenant = await this.resolveTenant(slug);
+    const entry = await this.classSessions.joinWaitlistPublic(tenant.id, id, dto);
+    return { data: { id: entry.id, position: entry.position, status: entry.status } };
+  }
+
   // ─── Helpers ──────────────────────────────────────────────────────────
 
   private async resolveTenant(slug: string) {

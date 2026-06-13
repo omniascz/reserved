@@ -257,4 +257,100 @@ describe('Fitness flow E2E (10.0–10.2)', () => {
       expect(full).toMatch(/SESSION_FULL|400/);
     });
   });
+
+  // ─── 10.5 Pořadník / waitlist ─────────────────────────────────────────
+
+  describe('Pořadník / waitlist (10.5)', () => {
+    let wlSession: string;
+    let p1BookingId: string;
+
+    it('plná lekce → klient se zařadí do pořadníku (pozice 1)', async () => {
+      const s = await apiCall<{ data: { id: string } }>('/admin/class-sessions', {
+        method: 'POST',
+        token,
+        body: JSON.stringify({
+          serviceId: groupServiceId,
+          startsAt: '2031-11-01T10:00:00.000Z',
+          capacity: 2,
+        }),
+      });
+      wlSession = s.data.id;
+
+      const j1 = await apiCall<{ data: { id: string } }>(
+        `/public/${slug}/class-sessions/${wlSession}/join`,
+        {
+          method: 'POST',
+          body: JSON.stringify({ customerName: 'P1', customerEmail: 'p1@fit.local' }),
+        },
+      );
+      p1BookingId = j1.data.id;
+      await apiCall(`/public/${slug}/class-sessions/${wlSession}/join`, {
+        method: 'POST',
+        body: JSON.stringify({ customerName: 'P2', customerEmail: 'p2@fit.local' }),
+      });
+
+      // 3. přímé přihlášení → plno
+      const full = await expectFail(`/public/${slug}/class-sessions/${wlSession}/join`, {
+        method: 'POST',
+        body: JSON.stringify({ customerName: 'W3', customerEmail: 'w3@fit.local' }),
+      });
+      expect(full).toMatch(/SESSION_FULL|400/);
+
+      // pořadník → pozice 1
+      const wl = await apiCall<{ data: { position: number; status: string } }>(
+        `/public/${slug}/class-sessions/${wlSession}/waitlist`,
+        {
+          method: 'POST',
+          body: JSON.stringify({ customerName: 'W3', customerEmail: 'w3@fit.local' }),
+        },
+      );
+      expect(wl.data.position).toBe(1);
+      expect(wl.data.status).toBe('waiting');
+    });
+
+    it('pořadník na lekci s volným místem → SESSION_HAS_SPACE', async () => {
+      const s = await apiCall<{ data: { id: string } }>('/admin/class-sessions', {
+        method: 'POST',
+        token,
+        body: JSON.stringify({
+          serviceId: groupServiceId,
+          startsAt: '2031-11-02T10:00:00.000Z',
+          capacity: 2,
+        }),
+      });
+      const r = await expectFail(`/public/${slug}/class-sessions/${s.data.id}/waitlist`, {
+        method: 'POST',
+        body: JSON.stringify({ customerName: 'X', customerEmail: 'x@fit.local' }),
+      });
+      expect(r).toMatch(/SESSION_HAS_SPACE|400/);
+    });
+
+    it('odhlášení účastníka → auto-promote prvního z pořadníku', async () => {
+      // P1 odejde → uvolní se místo
+      await apiCall(`/admin/class-sessions/${wlSession}/participants/${p1BookingId}/leave`, {
+        method: 'POST',
+        token,
+      });
+
+      // W3 byl povýšen: pořadník je prázdný (status už není 'waiting')
+      const wlist = await apiCall<{ data: unknown[] }>(
+        `/admin/class-sessions/${wlSession}/waitlist`,
+        { token },
+      );
+      expect(wlist.data.length).toBe(0);
+
+      // lekce je zase plná (W3 zabral uvolněné místo) → není v seznamu volných
+      const open = await apiCall<{ data: Array<{ id: string }> }>(
+        `/public/${slug}/class-sessions?serviceId=${groupServiceId}`,
+      );
+      expect(open.data.some((x) => x.id === wlSession)).toBe(false);
+
+      // W3 je teď účastník → další přihlášení = ALREADY_JOINED
+      const dup = await expectFail(`/public/${slug}/class-sessions/${wlSession}/join`, {
+        method: 'POST',
+        body: JSON.stringify({ customerName: 'W3', customerEmail: 'w3@fit.local' }),
+      });
+      expect(dup).toMatch(/ALREADY_JOINED|400/);
+    });
+  });
 });
