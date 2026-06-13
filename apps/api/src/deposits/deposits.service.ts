@@ -23,7 +23,7 @@ import { PaymentsService } from '../payments/payments.service.js';
 import { extractBookingRules } from '../settings/settings.types.js';
 
 const MANAGE_ROLES: AppRole[] = ['owner', 'manager', 'receptionist'];
-type ProviderType = 'stripe' | 'gopay' | 'mock';
+type ProviderType = 'stripe' | 'gopay' | 'mock' | 'comgate' | 'thepay' | 'payu' | 'gpwebpay';
 
 function ctxFor(tenantId: string, userId: string, role: AppRole): TenantContext {
   return { tenantId, userId, role };

@@ -9,6 +9,10 @@ import { CheckoutController } from './checkout.controller.js';
 import { StripePaymentProvider } from './providers/stripe.provider.js';
 import { GoPayPaymentProvider } from './providers/gopay.provider.js';
 import { MockPaymentProvider } from './providers/mock.provider.js';
+import { ComgatePaymentProvider } from './providers/comgate.provider.js';
+import { ThePayPaymentProvider } from './providers/thepay.provider.js';
+import { PayUPaymentProvider } from './providers/payu.provider.js';
+import { GpWebpayPaymentProvider } from './providers/gpwebpay.provider.js';
 import { PaymentProviderRegistry } from './providers/provider.registry.js';
 
 @Module({
@@ -19,6 +23,10 @@ import { PaymentProviderRegistry } from './providers/provider.registry.js';
     StripePaymentProvider,
     GoPayPaymentProvider,
     MockPaymentProvider,
+    ComgatePaymentProvider,
+    ThePayPaymentProvider,
+    PayUPaymentProvider,
+    GpWebpayPaymentProvider,
     PaymentProviderRegistry,
   ],
   exports: [PaymentsService],

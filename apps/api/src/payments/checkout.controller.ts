@@ -12,7 +12,7 @@ import { ZodValidationPipe } from '../auth/zod-validation.pipe.js';
 import { PaymentsService } from './payments.service.js';
 
 const CreateCheckoutSchema = z.object({
-  methodType: z.enum(['stripe', 'gopay', 'mock']),
+  methodType: z.enum(['stripe', 'gopay', 'mock', 'comgate', 'thepay', 'payu', 'gpwebpay']),
   amountHellers: z.number().int().positive(),
   currency: z.string().length(3).default('CZK'),
   description: z.string().min(1).max(500),

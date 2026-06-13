@@ -5,10 +5,11 @@ import type { AccessTokenPayload } from '../auth/auth.types.js';
 import { ZodValidationPipe } from '../auth/zod-validation.pipe.js';
 import { DepositsService } from './deposits.service.js';
 
-const ProviderSchema = z.object({ provider: z.enum(['stripe', 'gopay', 'mock']) });
+const PROVIDERS = ['stripe', 'gopay', 'mock', 'comgate', 'thepay', 'payu', 'gpwebpay'] as const;
+const ProviderSchema = z.object({ provider: z.enum(PROVIDERS) });
 const CollectSchema = z.object({
   bookingId: z.string().uuid(),
-  methodType: z.enum(['stripe', 'gopay', 'mock']).default('stripe'),
+  methodType: z.enum(PROVIDERS).default('stripe'),
 });
 
 @Controller('admin/payments')

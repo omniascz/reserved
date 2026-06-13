@@ -2456,4 +2456,26 @@ describe('Fitness flow E2E (10.0–10.2)', () => {
       expect(r.data.checkoutUrl).toContain('mock-checkout');
     });
   });
+
+  // ─── 10.30 Konektory českých platebních bran ──────────────────────────
+  describe('Konektory platebních bran (10.30)', () => {
+    it('každá brána je vybíratelná (connect → pending, čeká na údaje)', async () => {
+      for (const provider of ['comgate', 'thepay', 'payu', 'gpwebpay']) {
+        const c = await apiCall<{ data: { status: string; chargesEnabled: boolean } }>(
+          '/admin/payments/connect/start',
+          { method: 'POST', token, body: JSON.stringify({ provider }) },
+        );
+        expect(c.data.status).toBe('pending'); // čeká na merchant údaje
+        expect(c.data.chargesEnabled).toBe(false);
+      }
+      const status = await apiCall<{ data: Array<{ provider: string }> }>(
+        '/admin/payments/connect/status',
+        { token },
+      );
+      const providers = status.data.map((x) => x.provider);
+      for (const p of ['comgate', 'thepay', 'payu', 'gpwebpay']) {
+        expect(providers).toContain(p);
+      }
+    });
+  });
 });

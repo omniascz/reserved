@@ -38,7 +38,14 @@ const MANAGE_ROLES: AppRole[] = ['owner', 'manager'];
 // Recepcni muze zaznamenavat manual platby (cash, terminal, qr)
 const RECORD_ROLES: AppRole[] = ['owner', 'manager', 'receptionist'];
 // Online brany vidi jen vyssi role
-const ONLINE_METHODS: PaymentMethodType[] = ['stripe', 'gopay'];
+const ONLINE_METHODS: PaymentMethodType[] = [
+  'stripe',
+  'gopay',
+  'comgate',
+  'thepay',
+  'payu',
+  'gpwebpay',
+];
 
 function ctxFor(tenantId: string, userId: string, role: AppRole): TenantContext {
   return { tenantId, userId, role };
@@ -108,7 +115,7 @@ export class PaymentsService {
     tenantId: string;
     /** Volajici role — pro permission check. */
     role: AppRole;
-    methodType: 'stripe' | 'gopay' | 'mock';
+    methodType: 'stripe' | 'gopay' | 'mock' | 'comgate' | 'thepay' | 'payu' | 'gpwebpay';
     amountHellers: number;
     currency: string;
     description: string;
@@ -220,7 +227,7 @@ export class PaymentsService {
    */
   async handleWebhook(
     tenantId: string,
-    providerType: 'stripe' | 'gopay' | 'mock',
+    providerType: 'stripe' | 'gopay' | 'mock' | 'comgate' | 'thepay' | 'payu' | 'gpwebpay',
     rawBody: string | Buffer,
     signatureHeader: string,
   ): Promise<{ paymentId: string | null; status: string }> {
