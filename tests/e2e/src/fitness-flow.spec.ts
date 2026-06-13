@@ -2040,4 +2040,126 @@ describe('Fitness flow E2E (10.0–10.2)', () => {
       expect(c.data.cancelledSessions).toBe(createdCount);
     });
   });
+
+  // ─── 10.26 Hloubka B: kurzy (zápis jednou) ────────────────────────────
+  describe('Kurzy (10.26)', () => {
+    let svc: string;
+    let trainer: string;
+    let courseId: string;
+    let enrollmentA: string;
+
+    it('příprava: skupinová služba + lektor', async () => {
+      svc = (
+        await apiCall<{ data: { id: string } }>('/admin/services', {
+          method: 'POST',
+          token,
+          body: JSON.stringify({
+            name: 'Kurz pro začátečníky',
+            durationMinutes: 60,
+            priceHellers: 0,
+            archetype: 'skupinova_lekce',
+          }),
+        })
+      ).data.id;
+      trainer = (
+        await apiCall<{ data: { id: string } }>('/admin/employees', {
+          method: 'POST',
+          token,
+          body: JSON.stringify({ firstName: 'Kurz', lastName: 'Lektor', branchIds: [branchId] }),
+        })
+      ).data.id;
+      expect(svc).toBeTruthy();
+    });
+
+    it('založí kurz se 3 lekcemi (kapacita 3)', async () => {
+      const r = await apiCall<{ data: { courseId: string; lessonsCreated: number } }>(
+        '/admin/courses',
+        {
+          method: 'POST',
+          token,
+          body: JSON.stringify({
+            serviceId: svc,
+            employeeId: trainer,
+            name: '3týdenní kurz',
+            capacity: 3,
+            lessons: [
+              '2036-02-03T18:00:00.000Z',
+              '2036-02-10T18:00:00.000Z',
+              '2036-02-17T18:00:00.000Z',
+            ],
+          }),
+        },
+      );
+      expect(r.data.lessonsCreated).toBe(3);
+      courseId = r.data.courseId;
+
+      const c = await apiCall<{ data: { lessons: unknown[]; freeSpots: number } }>(
+        `/admin/courses/${courseId}`,
+        { token },
+      );
+      expect(c.data.lessons).toHaveLength(3);
+      expect(c.data.freeSpots).toBe(3);
+    });
+
+    it('zápis jednou → booking ve všech 3 lekcích', async () => {
+      const r = await apiCall<{ data: { enrollmentId: string; lessonsBooked: number } }>(
+        `/admin/courses/${courseId}/enroll`,
+        {
+          method: 'POST',
+          token,
+          body: JSON.stringify({ customerName: 'Student A', customerEmail: 'a@kurz.local' }),
+        },
+      );
+      expect(r.data.lessonsBooked).toBe(3);
+      enrollmentA = r.data.enrollmentId;
+
+      const c = await apiCall<{ data: { enrolledCount: number; freeSpots: number } }>(
+        `/admin/courses/${courseId}`,
+        { token },
+      );
+      expect(c.data.enrolledCount).toBe(1);
+      expect(c.data.freeSpots).toBe(2);
+    });
+
+    it('dvojí zápis stejného e-mailu → ALREADY_ENROLLED', async () => {
+      const dup = await expectFail(`/admin/courses/${courseId}/enroll`, {
+        method: 'POST',
+        token,
+        body: JSON.stringify({ customerName: 'Student A', customerEmail: 'a@kurz.local' }),
+      });
+      expect(dup).toMatch(/ALREADY_ENROLLED|400/);
+    });
+
+    it('naplnění kurzu → COURSE_FULL', async () => {
+      await apiCall(`/admin/courses/${courseId}/enroll`, {
+        method: 'POST',
+        token,
+        body: JSON.stringify({ customerName: 'Student B', customerEmail: 'b@kurz.local' }),
+      });
+      await apiCall(`/admin/courses/${courseId}/enroll`, {
+        method: 'POST',
+        token,
+        body: JSON.stringify({ customerName: 'Student C', customerEmail: 'c@kurz.local' }),
+      });
+      const full = await expectFail(`/admin/courses/${courseId}/enroll`, {
+        method: 'POST',
+        token,
+        body: JSON.stringify({ customerName: 'Student D', customerEmail: 'd@kurz.local' }),
+      });
+      expect(full).toMatch(/COURSE_FULL|400/);
+    });
+
+    it('zrušení zápisu uvolní místo (zruší bookingy ve všech lekcích)', async () => {
+      const c = await apiCall<{ data: { cancelledBookings: number } }>(
+        `/admin/courses/${courseId}/enrollments/${enrollmentA}/cancel`,
+        { method: 'POST', token },
+      );
+      expect(c.data.cancelledBookings).toBe(3);
+
+      const course = await apiCall<{ data: { freeSpots: number } }>(`/admin/courses/${courseId}`, {
+        token,
+      });
+      expect(course.data.freeSpots).toBe(1); // B + C zůstali
+    });
+  });
 });

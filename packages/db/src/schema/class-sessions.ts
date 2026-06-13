@@ -55,6 +55,8 @@ export const classSessions = pgTable(
     status: varchar('status', { length: 32 }).notNull().default('open'),
     /** Opakovaný rozvrh (sprint 10.25) — NULL = jednorázová lekce. */
     recurrenceId: uuid('recurrence_id'),
+    /** Kurz (sprint 10.26) — NULL = samostatná lekce; jinak lekce patří do kurzu. */
+    courseId: uuid('course_id'),
     cancelledAt: timestamp('cancelled_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
