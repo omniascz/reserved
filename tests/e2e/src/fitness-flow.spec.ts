@@ -1089,4 +1089,92 @@ describe('Fitness flow E2E (10.0–10.2)', () => {
       expect(after.data.bookings.every((b) => b.status === 'cancelled')).toBe(true);
     });
   });
+
+  // ─── 10.15 Provize / výplaty zaměstnanců (payroll) ────────────────────
+  describe('Provize / výplaty (10.15)', () => {
+    let payServiceId: string;
+    let payEmployeeId: string;
+    const FROM = '2034-01-01T00:00:00.000Z';
+    const TO = '2034-02-01T00:00:00.000Z';
+
+    async function createCompletedBooking(startsAt: string): Promise<void> {
+      const b = await apiCall<{ data: { id: string } }>('/admin/bookings', {
+        method: 'POST',
+        token,
+        body: JSON.stringify({
+          serviceId: payServiceId,
+          employeeId: payEmployeeId,
+          customerName: 'Klient Masáž',
+          customerEmail: 'masaz@fit.local',
+          startsAt,
+          skipEmail: true,
+        }),
+      });
+      await apiCall(`/admin/bookings/${b.data.id}/mark-completed`, { method: 'POST', token });
+    }
+
+    it('příprava: 1:1 služba (1000 Kč) + zaměstnanec + výchozí provize 40 %', async () => {
+      const svc = await apiCall<{ data: { id: string } }>('/admin/services', {
+        method: 'POST',
+        token,
+        body: JSON.stringify({
+          name: 'Masáž 1:1',
+          durationMinutes: 60,
+          priceHellers: 100000, // 1000 Kč
+          archetype: 'osobni_1_1',
+        }),
+      });
+      payServiceId = svc.data.id;
+
+      const emp = await apiCall<{ data: { id: string } }>('/admin/employees', {
+        method: 'POST',
+        token,
+        body: JSON.stringify({ firstName: 'Pavla', lastName: 'Masérka' }),
+      });
+      payEmployeeId = emp.data.id;
+
+      const rule = await apiCall<{ data: { commissionPercent: number } }>(
+        `/admin/payroll/employees/${payEmployeeId}/commissions`,
+        { method: 'POST', token, body: JSON.stringify({ commissionPercent: 40 }) },
+      );
+      expect(rule.data.commissionPercent).toBe(40);
+    });
+
+    it('report sečte provizi z dokončených rezervací (2× 1000 Kč × 40 % = 800 Kč)', async () => {
+      await createCompletedBooking('2034-01-10T10:00:00.000Z');
+      await createCompletedBooking('2034-01-11T10:00:00.000Z');
+
+      const r = await apiCall<{
+        data: {
+          lines: Array<{
+            employeeId: string;
+            bookingsCount: number;
+            grossHellers: number;
+            commissionHellers: number;
+          }>;
+          totals: { commissionHellers: number; grossHellers: number };
+        };
+      }>(`/admin/payroll/report?from=${FROM}&to=${TO}&employeeId=${payEmployeeId}`, { token });
+
+      const line = r.data.lines.find((l) => l.employeeId === payEmployeeId);
+      expect(line?.bookingsCount).toBe(2);
+      expect(line?.grossHellers).toBe(200000);
+      expect(line?.commissionHellers).toBe(80000); // 40 % z 2000 Kč
+      expect(r.data.totals.commissionHellers).toBe(80000);
+    });
+
+    it('override provize pro službu má přednost (50 %)', async () => {
+      await apiCall(`/admin/payroll/employees/${payEmployeeId}/commissions`, {
+        method: 'POST',
+        token,
+        body: JSON.stringify({ serviceId: payServiceId, commissionPercent: 50 }),
+      });
+
+      const r = await apiCall<{
+        data: { lines: Array<{ employeeId: string; commissionHellers: number }> };
+      }>(`/admin/payroll/report?from=${FROM}&to=${TO}&employeeId=${payEmployeeId}`, { token });
+      const line = r.data.lines.find((l) => l.employeeId === payEmployeeId);
+      expect(line?.commissionHellers).toBe(100000); // 50 % z 2000 Kč
+    });
+  });
 });
