@@ -1389,4 +1389,161 @@ describe('Fitness flow E2E (10.0–10.2)', () => {
       expect(voucher?.totalHellers).toBe(150000);
     });
   });
+
+  // ─── 10.20 Ochrana proti překryvu lekcí (trenér + pobočka) ────────────
+  describe('Překryv lekcí (10.20)', () => {
+    let trA: string;
+    let trB: string;
+    let svc60: string;
+    let svc30: string;
+    let machineA: string;
+    let machineB: string;
+
+    async function mkSession(body: Record<string, unknown>): Promise<string> {
+      const s = await apiCall<{ data: { id: string } }>('/admin/class-sessions', {
+        method: 'POST',
+        token,
+        body: JSON.stringify(body),
+      });
+      return s.data.id;
+    }
+
+    it('příprava: 2 trenéři, 60/30min služby, 2 přístroje', async () => {
+      trA = (
+        await apiCall<{ data: { id: string } }>('/admin/employees', {
+          method: 'POST',
+          token,
+          body: JSON.stringify({ firstName: 'Trenér', lastName: 'Alfa', branchIds: [branchId] }),
+        })
+      ).data.id;
+      trB = (
+        await apiCall<{ data: { id: string } }>('/admin/employees', {
+          method: 'POST',
+          token,
+          body: JSON.stringify({ firstName: 'Trenér', lastName: 'Beta', branchIds: [branchId] }),
+        })
+      ).data.id;
+      svc60 = (
+        await apiCall<{ data: { id: string } }>('/admin/services', {
+          method: 'POST',
+          token,
+          body: JSON.stringify({
+            name: 'EMS 60 min',
+            durationMinutes: 60,
+            priceHellers: 70000,
+            archetype: 'skupinova_lekce',
+          }),
+        })
+      ).data.id;
+      svc30 = (
+        await apiCall<{ data: { id: string } }>('/admin/services', {
+          method: 'POST',
+          token,
+          body: JSON.stringify({
+            name: 'EMS 30 min',
+            durationMinutes: 30,
+            priceHellers: 50000,
+            archetype: 'skupinova_lekce',
+          }),
+        })
+      ).data.id;
+      machineA = (
+        await apiCall<{ data: { id: string } }>('/admin/resources', {
+          method: 'POST',
+          token,
+          body: JSON.stringify({ branchId, name: 'Stroj A', type: 'ems_machine' }),
+        })
+      ).data.id;
+      machineB = (
+        await apiCall<{ data: { id: string } }>('/admin/resources', {
+          method: 'POST',
+          token,
+          body: JSON.stringify({ branchId, name: 'Stroj B', type: 'ems_machine' }),
+        })
+      ).data.id;
+      expect(trA).toBeTruthy();
+    });
+
+    it('jeden trenér nemůže vést dvě překrývající se lekce (TRAINER_BUSY)', async () => {
+      await mkSession({
+        serviceId: svc60,
+        employeeId: trA,
+        capacity: 4,
+        startsAt: '2032-05-03T08:00:00.000Z',
+      });
+      const clash = await expectFail('/admin/class-sessions', {
+        method: 'POST',
+        token,
+        body: JSON.stringify({
+          serviceId: svc30,
+          employeeId: trA,
+          capacity: 4,
+          startsAt: '2032-05-03T08:30:00.000Z', // překrývá 08:00–09:00
+        }),
+      });
+      expect(clash).toMatch(/TRAINER_BUSY|400/);
+    });
+
+    it('jiný trenér smí jet souběžně (dokud není zapnut přepínač pobočky)', async () => {
+      const id = await mkSession({
+        serviceId: svc30,
+        employeeId: trB,
+        capacity: 4,
+        startsAt: '2032-05-03T08:30:00.000Z',
+      });
+      expect(id).toBeTruthy();
+    });
+
+    it('přepínač pobočky ON → ani jiný trenér nesmí souběžně (BRANCH_BUSY)', async () => {
+      await apiCall('/admin/settings/booking', {
+        method: 'PATCH',
+        token,
+        body: JSON.stringify({ oneTrainingPerBranch: true }),
+      });
+      await mkSession({
+        serviceId: svc60,
+        employeeId: trA,
+        capacity: 4,
+        startsAt: '2032-05-03T12:00:00.000Z',
+      });
+      const clash = await expectFail('/admin/class-sessions', {
+        method: 'POST',
+        token,
+        body: JSON.stringify({
+          serviceId: svc30,
+          employeeId: trB, // jiný trenér, ale stejná pobočka a překryv
+          capacity: 4,
+          startsAt: '2032-05-03T12:15:00.000Z',
+        }),
+      });
+      expect(clash).toMatch(/BRANCH_BUSY|400/);
+    });
+
+    it('regrese: per-přístroj lekce běží paralelně i s přepínačem ON', async () => {
+      // EMS na 2 různých strojích ve stejný čas = OK (stroje jedou paralelně).
+      const a = await mkSession({
+        serviceId: emsServiceId,
+        resourceId: machineA,
+        startsAt: '2032-05-03T14:00:00.000Z',
+      });
+      const b = await mkSession({
+        serviceId: emsServiceId,
+        resourceId: machineB,
+        startsAt: '2032-05-03T14:00:00.000Z',
+      });
+      expect(a).toBeTruthy();
+      expect(b).toBeTruthy();
+      // ...ale stejný stroj ve stejný čas znovu = MACHINE_TAKEN.
+      const clash = await expectFail('/admin/class-sessions', {
+        method: 'POST',
+        token,
+        body: JSON.stringify({
+          serviceId: emsServiceId,
+          resourceId: machineA,
+          startsAt: '2032-05-03T14:00:00.000Z',
+        }),
+      });
+      expect(clash).toMatch(/MACHINE_TAKEN|400/);
+    });
+  });
 });

@@ -27,6 +27,13 @@ export const BookingRulesSchema = z.object({
   perDayRescheduleRules: z.array(PerDayRescheduleRuleSchema).default([]),
   /** Slot interval v minutách (krok mezi nabízenými časy). Default 15. */
   slotIntervalMinutes: z.number().int().min(5).max(60).default(15),
+  /**
+   * Jeden trénink na celou pobočku v čase (sprint 10.20). Default false.
+   * Když true: skupinové lekce (bez konkrétního přístroje) se v rámci jedné
+   * pobočky nesmí časově překrývat. Vhodné pro EMS (sdílené stroje, 1 trénink
+   * v čase). Fitko s více sály paralelně nechá false.
+   */
+  oneTrainingPerBranch: z.boolean().default(false),
 });
 
 export type BookingRules = z.infer<typeof BookingRulesSchema>;

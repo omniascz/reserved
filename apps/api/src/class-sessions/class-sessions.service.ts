@@ -15,12 +15,13 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { and, asc, eq, gte, isNull, lte, sql } from 'drizzle-orm';
+import { and, asc, eq, gt, gte, isNull, lt, lte, sql } from 'drizzle-orm';
 import { schema } from '@reserved/db';
 import { type AppRole, type TenantContext, serviceContext } from '@reserved/rls-multitenancy';
 import type { Database } from '../db/db.service.js';
 import { randomBytes } from 'node:crypto';
 import { DbService } from '../db/db.service.js';
+import { extractBookingRules } from '../settings/settings.types.js';
 import { CustomersService } from '../customers/customers.service.js';
 import { TimePacksService } from '../time-packs/time-packs.service.js';
 import { BundlePacksService } from '../bundle-packs/bundle-packs.service.js';
@@ -205,6 +206,71 @@ export class ClassSessionsService {
       const bufferStartsAt = new Date(startsAt.getTime() - service.bufferBeforeMinutes * 60_000);
       const bufferEndsAt = new Date(endsAt.getTime() + service.bufferAfterMinutes * 60_000);
 
+      // Překryv trenéra — vždy (trenér nemůže vést dvě lekce naráz). Jen pro
+      // lekce bez přístroje; DB EXCLUDE class_sessions_employee_no_overlap je
+      // tvrdá pojistka proti souběhu, tohle dává hezkou hlášku.
+      if (dto.employeeId && !dto.resourceId) {
+        const clash = await tx
+          .select({ id: schema.classSessions.id })
+          .from(schema.classSessions)
+          .where(
+            and(
+              eq(schema.classSessions.tenantId, tenantId),
+              eq(schema.classSessions.employeeId, dto.employeeId),
+              eq(schema.classSessions.status, 'open'),
+              isNull(schema.classSessions.resourceId),
+              // překryv půlotevřených intervalů: existující.start < nový.konec && existující.konec > nový.start
+              lt(schema.classSessions.bufferStartsAt, bufferEndsAt),
+              gt(schema.classSessions.bufferEndsAt, bufferStartsAt),
+            ),
+          )
+          .limit(1);
+        if (clash.length > 0) {
+          throw new BadRequestException({
+            error: {
+              code: 'TRAINER_BUSY',
+              message: 'Tento trenér má v daném čase už vypsanou lekci. Vyber jiný čas.',
+            },
+          });
+        }
+      }
+
+      // Pobočková ochrana proti překryvu (přepínač oneTrainingPerBranch).
+      // Platí jen pro skupinové lekce bez konkrétního přístroje (EMS sdílené stroje).
+      // Per-přístrojový model (resourceId) běží paralelně → nehlídáme.
+      if (!dto.resourceId) {
+        const [t] = await tx
+          .select({ settings: schema.tenants.settings })
+          .from(schema.tenants)
+          .where(eq(schema.tenants.id, tenantId))
+          .limit(1);
+        const rules = extractBookingRules(t?.settings);
+        if (rules.oneTrainingPerBranch) {
+          const overlap = await tx
+            .select({ id: schema.classSessions.id })
+            .from(schema.classSessions)
+            .where(
+              and(
+                eq(schema.classSessions.tenantId, tenantId),
+                eq(schema.classSessions.branchId, branchId),
+                eq(schema.classSessions.status, 'open'),
+                isNull(schema.classSessions.resourceId),
+                lt(schema.classSessions.bufferStartsAt, bufferEndsAt),
+                gt(schema.classSessions.bufferEndsAt, bufferStartsAt),
+              ),
+            )
+            .limit(1);
+          if (overlap.length > 0) {
+            throw new BadRequestException({
+              error: {
+                code: 'BRANCH_BUSY',
+                message: 'Provozovna má v tomto čase už vypsaný jiný trénink.',
+              },
+            });
+          }
+        }
+      }
+
       try {
         const [session] = await tx
           .insert(schema.classSessions)
@@ -226,9 +292,23 @@ export class ClassSessionsService {
 
         return session!;
       } catch (err) {
-        const e = err as { code?: string; cause?: { code?: string } };
+        const e = err as {
+          code?: string;
+          constraint_name?: string;
+          cause?: { code?: string; constraint_name?: string };
+        };
         const pgCode = e.code ?? e.cause?.code;
         if (pgCode === '23P01') {
+          const constraint = e.constraint_name ?? e.cause?.constraint_name ?? '';
+          if (constraint.includes('employee')) {
+            // EXCLUDE class_sessions_employee_no_overlap — trenér už v tom čase lekci má.
+            throw new BadRequestException({
+              error: {
+                code: 'TRAINER_BUSY',
+                message: 'Tento trenér má v daném čase už vypsanou lekci. Vyber jiný čas.',
+              },
+            });
+          }
           // EXCLUDE class_sessions_resource_no_overlap — přístroj je v tom čase obsazený.
           throw new BadRequestException({
             error: {
