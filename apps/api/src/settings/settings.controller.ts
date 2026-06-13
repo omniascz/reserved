@@ -7,12 +7,14 @@ import { SettingsService } from './settings.service.js';
 import {
   BookingRulesSchema,
   LoyaltySettingsSchema,
+  MeetingSettingsSchema,
   NotificationSettingsSchema,
 } from './settings.types.js';
 
 const PartialRulesSchema = BookingRulesSchema.partial();
 const PartialNotificationsSchema = NotificationSettingsSchema.partial();
 const PartialLoyaltySchema = LoyaltySettingsSchema.partial();
+const PartialMeetingSchema = MeetingSettingsSchema.partial();
 
 @Controller('admin/settings')
 export class SettingsController {
@@ -61,6 +63,21 @@ export class SettingsController {
     @Body(new ZodValidationPipe(PartialLoyaltySchema)) dto: z.infer<typeof PartialLoyaltySchema>,
   ) {
     const data = await this.svc.updateLoyaltySettings(user.tenantId, user.sub, user.role, dto);
+    return { data };
+  }
+
+  @Get('meeting')
+  async getMeeting(@CurrentUser() user: AccessTokenPayload) {
+    const data = await this.svc.getMeetingSettings(user.tenantId, user.sub, user.role);
+    return { data };
+  }
+
+  @Patch('meeting')
+  async updateMeeting(
+    @CurrentUser() user: AccessTokenPayload,
+    @Body(new ZodValidationPipe(PartialMeetingSchema)) dto: z.infer<typeof PartialMeetingSchema>,
+  ) {
+    const data = await this.svc.updateMeetingSettings(user.tenantId, user.sub, user.role, dto);
     return { data };
   }
 }

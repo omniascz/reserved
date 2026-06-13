@@ -10,12 +10,15 @@ import {
   DEFAULT_BOOKING_RULES,
   DEFAULT_NOTIFICATION_SETTINGS,
   LoyaltySettingsSchema,
+  MeetingSettingsSchema,
   NotificationSettingsSchema,
   extractBookingRules,
   extractLoyaltySettings,
+  extractMeetingSettings,
   extractNotificationSettings,
   type BookingRules,
   type LoyaltySettings,
+  type MeetingSettings,
   type NotificationSettings,
 } from './settings.types.js';
 
@@ -155,6 +158,45 @@ export class SettingsService {
       const current = (rows[0]?.settings as Record<string, unknown> | null) ?? {};
       const merged = LoyaltySettingsSchema.parse({ ...extractLoyaltySettings(current), ...input });
       const newSettings = { ...current, loyalty: merged };
+      await tx
+        .update(schema.tenants)
+        .set({ settings: newSettings, updatedAt: new Date() })
+        .where(eq(schema.tenants.id, tenantId));
+      return merged;
+    });
+  }
+
+  async getMeetingSettings(
+    tenantId: string,
+    userId: string,
+    role: AppRole,
+  ): Promise<MeetingSettings> {
+    return this.dbService.withRlsContext(ctxFor(tenantId, userId, role), async (tx) => {
+      const rows = await tx
+        .select({ settings: schema.tenants.settings })
+        .from(schema.tenants)
+        .where(eq(schema.tenants.id, tenantId))
+        .limit(1);
+      return extractMeetingSettings(rows[0]?.settings);
+    });
+  }
+
+  async updateMeetingSettings(
+    tenantId: string,
+    userId: string,
+    role: AppRole,
+    input: Partial<MeetingSettings>,
+  ): Promise<MeetingSettings> {
+    assertCanManage(role);
+    return this.dbService.withRlsContext(ctxFor(tenantId, userId, role), async (tx) => {
+      const rows = await tx
+        .select({ settings: schema.tenants.settings })
+        .from(schema.tenants)
+        .where(eq(schema.tenants.id, tenantId))
+        .limit(1);
+      const current = (rows[0]?.settings as Record<string, unknown> | null) ?? {};
+      const merged = MeetingSettingsSchema.parse({ ...extractMeetingSettings(current), ...input });
+      const newSettings = { ...current, meeting: merged };
       await tx
         .update(schema.tenants)
         .set({ settings: newSettings, updatedAt: new Date() })

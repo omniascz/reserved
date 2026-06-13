@@ -92,3 +92,24 @@ export function extractLoyaltySettings(settings: unknown): LoyaltySettings {
   if (!result.success) return DEFAULT_LOYALTY_SETTINGS;
   return result.data;
 }
+
+// ─── Meeting / video odkaz (sprint 10.14) ──────────────────────────────
+// 'manual' = použij statické defaultOnlineMeetingUrl ze služby (beze změny).
+// 'jitsi'  = automaticky vygeneruj odkaz na meet.jit.si (bez API klíče).
+// 'zoom' / 'teams' = vyžadují propojení účtu (externí OAuth) — zatím placeholder.
+export const meetingProviders = ['manual', 'jitsi', 'zoom', 'teams'] as const;
+export const MeetingSettingsSchema = z.object({
+  provider: z.enum(meetingProviders).default('manual'),
+});
+export type MeetingSettings = z.infer<typeof MeetingSettingsSchema>;
+export const DEFAULT_MEETING_SETTINGS: MeetingSettings = MeetingSettingsSchema.parse({});
+
+export function extractMeetingSettings(settings: unknown): MeetingSettings {
+  if (!settings || typeof settings !== 'object') return DEFAULT_MEETING_SETTINGS;
+  const obj = settings as Record<string, unknown>;
+  const raw = obj.meeting;
+  if (!raw) return DEFAULT_MEETING_SETTINGS;
+  const result = MeetingSettingsSchema.safeParse(raw);
+  if (!result.success) return DEFAULT_MEETING_SETTINGS;
+  return result.data;
+}

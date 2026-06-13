@@ -955,4 +955,138 @@ describe('Fitness flow E2E (10.0–10.2)', () => {
       expect(bulk.data.requested).toBeGreaterThanOrEqual(1);
     });
   });
+
+  // ─── 10.14 Série opakovaných 1:1 + auto-video + iCal feed ─────────────
+  describe('Série + iCal (10.14)', () => {
+    let oneOnOneServiceId: string;
+    let employeeId: string;
+    let seriesAId: string;
+    // Blízká budoucnost (do 180denního okna iCal feedu), ať feed termíny obsahuje.
+    const SERIES_START = new Date(Date.now() + 3 * 86_400_000).toISOString();
+
+    it('příprava: online 1:1 služba + zaměstnanec + provider Jitsi', async () => {
+      const svc = await apiCall<{ data: { id: string; capacity: number } }>('/admin/services', {
+        method: 'POST',
+        token,
+        body: JSON.stringify({
+          name: 'Online konzultace 1:1',
+          durationMinutes: 50,
+          priceHellers: 80000,
+          archetype: 'osobni_1_1',
+          isOnline: true,
+        }),
+      });
+      expect(svc.data.capacity).toBe(1);
+      oneOnOneServiceId = svc.data.id;
+
+      const emp = await apiCall<{ data: { id: string } }>('/admin/employees', {
+        method: 'POST',
+        token,
+        body: JSON.stringify({ firstName: 'Tomáš', lastName: 'Trenér' }),
+      });
+      employeeId = emp.data.id;
+
+      const meeting = await apiCall<{ data: { provider: string } }>('/admin/settings/meeting', {
+        method: 'PATCH',
+        token,
+        body: JSON.stringify({ provider: 'jitsi' }),
+      });
+      expect(meeting.data.provider).toBe('jitsi');
+    });
+
+    it('vytvoří týdenní sérii 4 termínů s automatickým video odkazem (Jitsi)', async () => {
+      const r = await apiCall<{
+        data: {
+          seriesId: string;
+          created: number;
+          skipped: number;
+          bookings: Array<{ id: string; onlineMeetingUrl: string | null }>;
+        };
+      }>('/admin/booking-series', {
+        method: 'POST',
+        token,
+        body: JSON.stringify({
+          serviceId: oneOnOneServiceId,
+          employeeId,
+          customerName: 'Klient Série',
+          customerEmail: 'serie@fit.local',
+          startsAt: SERIES_START,
+          frequency: 'weekly',
+          occurrences: 4,
+        }),
+      });
+      expect(r.data.created).toBe(4);
+      expect(r.data.skipped).toBe(0);
+      seriesAId = r.data.seriesId;
+      // Každý termín online služby dostal vlastní Jitsi místnost.
+      for (const b of r.data.bookings) {
+        expect(b.onlineMeetingUrl).toMatch(/^https:\/\/meet\.jit\.si\//);
+      }
+    });
+
+    it('detail série vrátí všechny termíny', async () => {
+      const r = await apiCall<{ data: { bookings: Array<{ id: string; status: string }> } }>(
+        `/admin/booking-series/${seriesAId}`,
+        { token },
+      );
+      expect(r.data.bookings).toHaveLength(4);
+      expect(r.data.bookings.every((b) => b.status === 'confirmed')).toBe(true);
+    });
+
+    it('kolizní termíny stejného trenéra se přeskočí', async () => {
+      // Stejný trenér + stejné časy jako série A → všechny výskyty kolidují.
+      const r = await apiCall<{ data: { created: number; skipped: number } }>(
+        '/admin/booking-series',
+        {
+          method: 'POST',
+          token,
+          body: JSON.stringify({
+            serviceId: oneOnOneServiceId,
+            employeeId,
+            customerName: 'Klient Kolize',
+            customerEmail: 'kolize@fit.local',
+            startsAt: SERIES_START,
+            frequency: 'weekly',
+            occurrences: 3,
+          }),
+        },
+      );
+      expect(r.data.created).toBe(0);
+      expect(r.data.skipped).toBe(3);
+    });
+
+    it('iCal feed vrací termíny zaměstnance (Outlook/Apple/Google)', async () => {
+      const urlRes = await apiCall<{ data: { url: string; token: string } }>(
+        `/admin/ical/url?employeeId=${employeeId}`,
+        { token },
+      );
+      expect(urlRes.data.url).toContain('/ical/');
+
+      // Stáhni feed přímo (text/calendar, ne JSON).
+      const feed = await fetch(urlRes.data.url);
+      expect(feed.headers.get('content-type')).toMatch(/text\/calendar/);
+      const ics = await feed.text();
+      expect(ics).toContain('BEGIN:VCALENDAR');
+      expect(ics).toContain('BEGIN:VEVENT');
+      expect(ics).toMatch(/meet\.jit\.si/);
+
+      // Neplatný token → 404.
+      const bad = await fetch(`${API_URL}/public/${slug}/ical/invalid.token`);
+      expect(bad.status).toBe(404);
+    });
+
+    it('zrušení série zruší všechny budoucí termíny', async () => {
+      const cancel = await apiCall<{ data: { cancelledBookings: number } }>(
+        `/admin/booking-series/${seriesAId}/cancel`,
+        { method: 'POST', token },
+      );
+      expect(cancel.data.cancelledBookings).toBe(4);
+
+      const after = await apiCall<{
+        data: { status: string; bookings: Array<{ status: string }> };
+      }>(`/admin/booking-series/${seriesAId}`, { token });
+      expect(after.data.status).toBe('cancelled');
+      expect(after.data.bookings.every((b) => b.status === 'cancelled')).toBe(true);
+    });
+  });
 });

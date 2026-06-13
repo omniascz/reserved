@@ -15,6 +15,7 @@ import { employees } from './employees.js';
 import { services } from './services.js';
 import { users } from './users.js';
 import { classSessions } from './class-sessions.js';
+import { bookingSeries } from './booking-series.js';
 
 // Reference: reserved-docs/13d_db_schema_bookings_series_packages.md
 //            reserved-docs/15_concurrent_booking_marketplace.md
@@ -62,6 +63,10 @@ export const bookings = pgTable(
      * kapacitu hlídá class_sessions.booked_count, EXCLUDE se na tyto řádky nevztahuje.
      */
     sessionId: uuid('session_id').references(() => classSessions.id, {
+      onDelete: 'set null',
+    }),
+    /** Série opakovaných 1:1 rezervací (sprint 10.14). NULL = samostatná rezervace. */
+    seriesId: uuid('series_id').references(() => bookingSeries.id, {
       onDelete: 'set null',
     }),
     /** Volitelně přihlášený zákazník (link na users.id pokud měl účet). */
@@ -123,6 +128,7 @@ export const bookings = pgTable(
     branchIdx: index('bookings_branch_idx').on(table.branchId, table.startsAt),
     sessionIdx: index('bookings_session_idx').on(table.sessionId),
     confirmationTokenIdx: index('bookings_confirmation_token_idx').on(table.confirmationToken),
+    seriesIdx: index('bookings_series_idx').on(table.seriesId),
   }),
 );
 

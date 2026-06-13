@@ -22,6 +22,7 @@ export * from './marketing-campaigns.js';
 export * from './loyalty.js';
 export * from './gift-vouchers.js';
 export * from './intake-forms.js';
+export * from './booking-series.js';
 export * from './bookings.js';
 export * from './notifications.js';
 export * from './customers.js';
