@@ -1546,4 +1546,134 @@ describe('Fitness flow E2E (10.0–10.2)', () => {
       expect(clash).toMatch(/MACHINE_TAKEN|400/);
     });
   });
+
+  // ─── 10.21 Motor 1: více zdrojů na jednu rezervaci ────────────────────
+  describe('Více zdrojů na rezervaci (10.21)', () => {
+    let svc1: string;
+    let e1: string;
+    let e2: string;
+    let room: string;
+    let projector: string;
+    let room2: string;
+    let bookingA: string;
+    const T = '2033-07-01T09:00:00.000Z';
+    const T_OVERLAP = '2033-07-01T09:30:00.000Z';
+
+    async function mkEmployee(last: string): Promise<string> {
+      const r = await apiCall<{ data: { id: string } }>('/admin/employees', {
+        method: 'POST',
+        token,
+        body: JSON.stringify({ firstName: 'Os', lastName: last, branchIds: [branchId] }),
+      });
+      return r.data.id;
+    }
+    async function mkResource(name: string, type: string): Promise<string> {
+      const r = await apiCall<{ data: { id: string } }>('/admin/resources', {
+        method: 'POST',
+        token,
+        body: JSON.stringify({ branchId, name, type }),
+      });
+      return r.data.id;
+    }
+    async function book(
+      employeeId: string,
+      startsAt: string,
+      resourceIds: string[],
+    ): Promise<string> {
+      const r = await apiCall<{ data: { id: string } }>('/admin/bookings', {
+        method: 'POST',
+        token,
+        body: JSON.stringify({
+          serviceId: svc1,
+          employeeId,
+          customerName: 'Klient Jednání',
+          customerEmail: 'jednani@ems.local',
+          startsAt,
+          skipEmail: true,
+          resourceIds,
+        }),
+      });
+      return r.data.id;
+    }
+
+    it('příprava: služba, 2 pracovníci, místnost + projektor + 2. místnost', async () => {
+      svc1 = (
+        await apiCall<{ data: { id: string } }>('/admin/services', {
+          method: 'POST',
+          token,
+          body: JSON.stringify({
+            name: 'Jednání 60 min',
+            durationMinutes: 60,
+            priceHellers: 0,
+            archetype: 'osobni_1_1',
+          }),
+        })
+      ).data.id;
+      e1 = await mkEmployee('Jedna');
+      e2 = await mkEmployee('Dva');
+      room = await mkResource('Zasedačka A', 'room');
+      projector = await mkResource('Projektor', 'equipment');
+      room2 = await mkResource('Zasedačka B', 'room');
+      expect(room).toBeTruthy();
+    });
+
+    it('rezervace zamkne víc zdrojů naráz (místnost + projektor)', async () => {
+      bookingA = await book(e1, T, [room, projector]);
+      const res = await apiCall<{ data: Array<{ resourceId: string; status: string }> }>(
+        `/admin/bookings/${bookingA}/resources`,
+        { token },
+      );
+      expect(res.data.filter((r) => r.status === 'active')).toHaveLength(2);
+    });
+
+    it('jiná rezervace nemůže vzít obsazený zdroj (RESOURCE_BUSY)', async () => {
+      // jiný pracovník (žádná kolize osoby), ale stejná místnost v překryvu
+      const clashRoom = await expectFail('/admin/bookings', {
+        method: 'POST',
+        token,
+        body: JSON.stringify({
+          serviceId: svc1,
+          employeeId: e2,
+          customerName: 'X',
+          customerEmail: 'x@ems.local',
+          startsAt: T_OVERLAP,
+          skipEmail: true,
+          resourceIds: [room],
+        }),
+      });
+      expect(clashRoom).toMatch(/RESOURCE_BUSY|400/);
+
+      // i samotný projektor je obsazený
+      const clashProj = await expectFail('/admin/bookings', {
+        method: 'POST',
+        token,
+        body: JSON.stringify({
+          serviceId: svc1,
+          employeeId: e2,
+          customerName: 'X',
+          customerEmail: 'x@ems.local',
+          startsAt: T_OVERLAP,
+          skipEmail: true,
+          resourceIds: [projector],
+        }),
+      });
+      expect(clashProj).toMatch(/RESOURCE_BUSY|400/);
+    });
+
+    it('rezervace s jinými (volnými) zdroji ve stejný čas projde', async () => {
+      const id = await book(e2, T_OVERLAP, [room2]); // jiná místnost, jiný pracovník
+      expect(id).toBeTruthy();
+    });
+
+    it('zrušení rezervace uvolní zdroje → lze je zarezervovat znovu', async () => {
+      await apiCall(`/admin/bookings/${bookingA}/cancel`, {
+        method: 'POST',
+        token,
+        body: JSON.stringify({ reason: 'test' }),
+      });
+      // teď je místnost A i projektor volný → nová rezervace projde
+      const id = await book(e1, T, [room, projector]);
+      expect(id).toBeTruthy();
+    });
+  });
 });

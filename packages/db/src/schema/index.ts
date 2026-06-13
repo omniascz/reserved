@@ -23,6 +23,7 @@ export * from './loyalty.js';
 export * from './gift-vouchers.js';
 export * from './intake-forms.js';
 export * from './booking-series.js';
+export * from './booking-resources.js';
 export * from './commissions.js';
 export * from './content.js';
 export * from './pos.js';

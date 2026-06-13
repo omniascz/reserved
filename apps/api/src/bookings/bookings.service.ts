@@ -10,8 +10,9 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { and, asc, desc, eq, gte, inArray, lte } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, gte, inArray, isNull, lt, lte } from 'drizzle-orm';
 import { schema } from '@reserved/db';
+import type { Database } from '../db/db.service.js';
 import { type AppRole, type TenantContext, serviceContext } from '@reserved/rls-multitenancy';
 import { randomBytes } from 'node:crypto';
 import { BundlePacksService } from '../bundle-packs/bundle-packs.service.js';
@@ -598,6 +599,18 @@ export class BookingsService {
             metadata: { source: 'admin' },
           });
 
+          // Motor 1 (10.21): navázané zdroje (místnost, technika…) — zamkni je.
+          if (dto.resourceIds.length > 0) {
+            await this.attachResources(
+              tx,
+              tenantId,
+              booking!.id,
+              dto.resourceIds,
+              bufferStartsAt,
+              bufferEndsAt,
+            );
+          }
+
           return { booking: booking!, service, skipEmail: dto.skipEmail };
         } catch (err) {
           const e = err as { code?: string; message?: string; cause?: unknown };
@@ -726,6 +739,12 @@ export class BookingsService {
           reason: dto.reason ?? null,
         });
 
+        // Motor 1 (10.21): uvolni navázané zdroje.
+        await tx
+          .update(schema.bookingResources)
+          .set({ status: 'cancelled' })
+          .where(eq(schema.bookingResources.bookingId, bookingId));
+
         return updated!;
       },
     );
@@ -846,6 +865,18 @@ export class BookingsService {
               newStartsAt: newStartsAt.toISOString(),
             },
           });
+
+          // Motor 1 (10.21): posuň zámky navázaných zdrojů na nový čas
+          // (EXCLUDE odhalí kolizi → 23P01 → SLOT_TAKEN).
+          await tx
+            .update(schema.bookingResources)
+            .set({ bufferStartsAt: newBufferStartsAt, bufferEndsAt: newBufferEndsAt })
+            .where(
+              and(
+                eq(schema.bookingResources.bookingId, bookingId),
+                eq(schema.bookingResources.status, 'active'),
+              ),
+            );
 
           return { booking: updated!, oldStartsAt: existing.startsAt };
         } catch (err) {
@@ -1010,6 +1041,90 @@ export class BookingsService {
         reason: extraVars.reason ?? undefined,
         oldStartsAt: extraVars.oldStartsAt,
       },
+    });
+  }
+
+  // ─── Motor 1 (10.21): vícezdrojové navázání ──────────────────────────
+
+  /** Naváže zdroje na rezervaci s ochranou proti překryvu (pre-check + DB EXCLUDE). */
+  private async attachResources(
+    tx: Database,
+    tenantId: string,
+    bookingId: string,
+    resourceIds: string[],
+    bufferStartsAt: Date,
+    bufferEndsAt: Date,
+  ): Promise<void> {
+    const unique = [...new Set(resourceIds)];
+    for (const resourceId of unique) {
+      const [resource] = await tx
+        .select({ id: schema.resources.id, name: schema.resources.name })
+        .from(schema.resources)
+        .where(
+          and(
+            eq(schema.resources.id, resourceId),
+            eq(schema.resources.tenantId, tenantId),
+            isNull(schema.resources.deletedAt),
+          ),
+        )
+        .limit(1);
+      if (!resource) {
+        throw new NotFoundException({
+          error: { code: 'RESOURCE_NOT_FOUND', message: 'Zdroj nenalezen.' },
+        });
+      }
+      // Překryv: existující.start < nový.konec && existující.konec > nový.start.
+      const clash = await tx
+        .select({ id: schema.bookingResources.id })
+        .from(schema.bookingResources)
+        .where(
+          and(
+            eq(schema.bookingResources.tenantId, tenantId),
+            eq(schema.bookingResources.resourceId, resourceId),
+            eq(schema.bookingResources.status, 'active'),
+            lt(schema.bookingResources.bufferStartsAt, bufferEndsAt),
+            gt(schema.bookingResources.bufferEndsAt, bufferStartsAt),
+          ),
+        )
+        .limit(1);
+      if (clash.length > 0) {
+        throw new BadRequestException({
+          error: {
+            code: 'RESOURCE_BUSY',
+            message: `Zdroj „${resource.name}" je v daném čase obsazený.`,
+          },
+        });
+      }
+      await tx.insert(schema.bookingResources).values({
+        tenantId,
+        bookingId,
+        resourceId,
+        bufferStartsAt,
+        bufferEndsAt,
+        status: 'active',
+      });
+    }
+  }
+
+  /** Vrátí zdroje navázané na rezervaci. */
+  async listResources(tenantId: string, userId: string, role: AppRole, bookingId: string) {
+    assertCanManage(role);
+    return this.dbService.withRlsContext(ctxFor(tenantId, userId, role), async (tx) => {
+      return tx
+        .select({
+          id: schema.bookingResources.id,
+          resourceId: schema.bookingResources.resourceId,
+          resourceName: schema.resources.name,
+          status: schema.bookingResources.status,
+        })
+        .from(schema.bookingResources)
+        .leftJoin(schema.resources, eq(schema.resources.id, schema.bookingResources.resourceId))
+        .where(
+          and(
+            eq(schema.bookingResources.bookingId, bookingId),
+            eq(schema.bookingResources.tenantId, tenantId),
+          ),
+        );
     });
   }
 }
