@@ -447,7 +447,10 @@ export class CreditPacksService {
           sql`${schema.customerCreditPacks.corporateAccountId} ASC NULLS FIRST`,
           // Pak FIFO podle expirace.
           asc(schema.customerCreditPacks.validUntil),
-        );
+        )
+        // Row-lock: zabrání dvojímu odečtu stejného kreditu při souběžných
+        // rezervacích. Druhá transakce počká a přečte aktualizovaný zůstatek.
+        .for('update');
 
       // 2. Najdi prvni co matchne service+branch
       for (const alloc of candidates) {
@@ -535,12 +538,26 @@ export class CreditPacksService {
         .limit(1);
       if (existingRefund) return null;
 
+      // Načti balíček pod zámkem — rozhodneme, zda ho re-aktivovat.
+      const [alloc] = await tx
+        .select({
+          validUntil: schema.customerCreditPacks.validUntil,
+        })
+        .from(schema.customerCreditPacks)
+        .where(eq(schema.customerCreditPacks.id, originalUse.customerCreditPackId))
+        .limit(1)
+        .for('update');
+      // Expirovaný balíček NEoživujeme na 'active' — kredit vrátíme do evidence, ale
+      // nesmí se tvářit jako použitelný (deduct ho stejně filtruje dle validUntil).
+      const isExpired = alloc?.validUntil != null && alloc.validUntil.getTime() <= Date.now();
+
       // Add credits back
       await tx
         .update(schema.customerCreditPacks)
         .set({
           creditsRemaining: sql`${schema.customerCreditPacks.creditsRemaining} + ${originalUse.creditsDeducted}`,
-          status: 'active', // re-activate i kdyz byl used_up
+          // Re-aktivuj jen neexpirovaný (used_up → active); expirovaný necháme být.
+          ...(isExpired ? {} : { status: 'active' as const }),
           updatedAt: new Date(),
         })
         .where(eq(schema.customerCreditPacks.id, originalUse.customerCreditPackId));
@@ -582,7 +599,8 @@ export class CreditPacksService {
           ),
         )
         .orderBy(asc(schema.customerCreditPacks.validUntil))
-        .limit(1);
+        .limit(1)
+        .for('update'); // row-lock proti souběžnému odečtu
 
       if (!alloc) return null;
 

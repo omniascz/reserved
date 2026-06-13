@@ -23,6 +23,11 @@ import { DbService } from '../db/db.service.js';
 import { AvailabilityService } from '../availability/availability.service.js';
 import { BookingsService } from '../bookings/bookings.service.js';
 import { ConfirmBookingSchema, type ConfirmBookingDto } from '../bookings/dto/booking.dto.js';
+import { ClassSessionsService } from '../class-sessions/class-sessions.service.js';
+import {
+  JoinClassSessionSchema,
+  type JoinClassSessionDto,
+} from '../class-sessions/dto/class-session.dto.js';
 import { DrizzleTenantLookup } from '../tenant/tenant-lookup.service.js';
 import { randomBytes } from 'node:crypto';
 
@@ -39,6 +44,7 @@ export class PublicController {
     @Inject(DrizzleTenantLookup) private readonly tenantLookup: DrizzleTenantLookup,
     @Inject(AvailabilityService) private readonly availability: AvailabilityService,
     @Inject(BookingsService) private readonly bookings: BookingsService,
+    @Inject(ClassSessionsService) private readonly classSessions: ClassSessionsService,
   ) {}
 
   /** GET /api/v1/public/:slug — info o tenant (název + theme + currency, timezone). */
@@ -346,6 +352,44 @@ export class PublicController {
   ) {
     const tenant = await this.resolveTenant(slug);
     const booking = await this.bookings.confirmFromHold(tenant.id, dto);
+    return {
+      data: {
+        id: booking.id,
+        referenceCode: booking.referenceCode,
+        startsAt: booking.startsAt,
+        endsAt: booking.endsAt,
+        status: booking.status,
+      },
+    };
+  }
+
+  // ─── Skupinové lekce (sprint 10.0) ──────────────────────────────────
+
+  /** GET /api/v1/public/:slug/class-sessions?serviceId=&from=&to= — otevřené lekce s volnými místy. */
+  @Public()
+  @Get('class-sessions')
+  async listClassSessions(
+    @Param('slug') slug: string,
+    @Query('serviceId') serviceId?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ) {
+    const tenant = await this.resolveTenant(slug);
+    const data = await this.classSessions.listOpenPublic(tenant.id, { serviceId, from, to });
+    return { data };
+  }
+
+  /** POST /api/v1/public/:slug/class-sessions/:id/join — self-service přihlášení do lekce. */
+  @Public()
+  @Post('class-sessions/:id/join')
+  @HttpCode(201)
+  async joinClassSession(
+    @Param('slug') slug: string,
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(JoinClassSessionSchema)) dto: JoinClassSessionDto,
+  ) {
+    const tenant = await this.resolveTenant(slug);
+    const booking = await this.classSessions.joinPublic(tenant.id, id, dto);
     return {
       data: {
         id: booking.id,

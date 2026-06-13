@@ -14,6 +14,7 @@ import { branches } from './branches.js';
 import { employees } from './employees.js';
 import { services } from './services.js';
 import { users } from './users.js';
+import { classSessions } from './class-sessions.js';
 
 // Reference: reserved-docs/13d_db_schema_bookings_series_packages.md
 //            reserved-docs/15_concurrent_booking_marketplace.md
@@ -53,6 +54,14 @@ export const bookings = pgTable(
       .notNull()
       .references(() => services.id, { onDelete: 'restrict' }),
     employeeId: uuid('employee_id').references(() => employees.id, {
+      onDelete: 'set null',
+    }),
+    /**
+     * Skupinová lekce (sprint 10.0). NULL = klasická 1:1 rezervace (chování beze
+     * změny, chrání ji EXCLUDE constraint). Vyplněné = účastník skupinové lekce;
+     * kapacitu hlídá class_sessions.booked_count, EXCLUDE se na tyto řádky nevztahuje.
+     */
+    sessionId: uuid('session_id').references(() => classSessions.id, {
       onDelete: 'set null',
     }),
     /** Volitelně přihlášený zákazník (link na users.id pokud měl účet). */
@@ -102,6 +111,7 @@ export const bookings = pgTable(
     customerIdx: index('bookings_customer_idx').on(table.tenantId, table.customerUserId),
     refCodeIdx: index('bookings_ref_code_idx').on(table.referenceCode),
     branchIdx: index('bookings_branch_idx').on(table.branchId, table.startsAt),
+    sessionIdx: index('bookings_session_idx').on(table.sessionId),
   }),
 );
 

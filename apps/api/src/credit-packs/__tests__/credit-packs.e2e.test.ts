@@ -501,6 +501,83 @@ describe('CreditPacks deduct/refund (e2e)', () => {
     });
   });
 
+  describe('Souběh a expirace (sprint 10.3)', () => {
+    /** Mirror NOVÉ deductForBooking — se SELECT ... FOR UPDATE (row-lock). */
+    async function deductLocked(bookingId: string): Promise<boolean> {
+      return await sql.begin(async (tx) => {
+        await setCtx(tx, 'service', tenant1);
+        const rows = await tx<Array<{ id: string; credits_remaining: number }>>`
+          SELECT id, credits_remaining FROM customer_credit_packs
+          WHERE tenant_id = ${tenant1} AND customer_id = ${customer1}
+            AND status = 'active' AND credits_remaining > 0
+          ORDER BY valid_until ASC NULLS LAST
+          FOR UPDATE`;
+        const c = rows[0];
+        if (!c || c.credits_remaining < 1) return false;
+        const newRemaining = c.credits_remaining - 1;
+        await tx`UPDATE customer_credit_packs
+          SET credits_remaining = ${newRemaining},
+              status = ${newRemaining === 0 ? 'used_up' : 'active'}
+          WHERE id = ${c.id}`;
+        await tx`INSERT INTO credit_uses (tenant_id, customer_credit_pack_id, booking_id, credits_deducted, action)
+          VALUES (${tenant1}, ${c.id}, ${bookingId}, 1, 'consumed')`;
+        return true;
+      });
+    }
+
+    it('row-lock zabrání dvojímu odečtu při souběhu (1 kredit, 2 rezervace naráz)', async () => {
+      const packId = await createPack({ name: '1× EMS', mode: 'per_visit', totalCredits: 1 });
+      const allocId = await allocatePack({ packId, customerId: customer1 });
+
+      const [r1, r2] = await Promise.all([deductLocked(booking1), deductLocked(booking1)]);
+      const successes = [r1, r2].filter(Boolean).length;
+
+      expect(successes).toBe(1); // jen jedna rezervace strhla kredit
+      expect(await getRemaining(tenant1, allocId)).toBe(0); // nikdy -1 (žádný double-spend)
+    });
+
+    it('refund NEoživí expirovaný balíček (status zůstane used_up)', async () => {
+      const packId = await createPack({ name: 'Expired', mode: 'per_visit', totalCredits: 1 });
+      // Balíček expirovaný (validUntil v minulosti), 0 kreditů, used_up + předchozí consumed use.
+      const allocId = await allocatePack({
+        packId,
+        customerId: customer1,
+        validUntil: new Date(Date.now() - 24 * 60 * 60 * 1000),
+        initialCredits: 0,
+      });
+      await sql.begin(async (tx) => {
+        await setCtx(tx, 'service', tenant1);
+        await tx`UPDATE customer_credit_packs SET status = 'used_up' WHERE id = ${allocId}`;
+        await tx`INSERT INTO credit_uses (tenant_id, customer_credit_pack_id, booking_id, credits_deducted, action)
+          VALUES (${tenant1}, ${allocId}, ${booking1}, 1, 'consumed')`;
+      });
+
+      // Mirror NOVÉ refundForBooking — expirovaný se neaktivuje.
+      await sql.begin(async (tx) => {
+        await setCtx(tx, 'service', tenant1);
+        const [use] = await tx<Array<{ pid: string; cd: number }>>`
+          SELECT customer_credit_pack_id AS pid, credits_deducted AS cd FROM credit_uses
+          WHERE tenant_id = ${tenant1} AND booking_id = ${booking1} AND action = 'consumed' LIMIT 1`;
+        const [a] = await tx<Array<{ vu: string | null }>>`
+          SELECT valid_until AS vu FROM customer_credit_packs WHERE id = ${use!.pid} FOR UPDATE`;
+        const isExpired = a!.vu != null && new Date(a!.vu).getTime() <= Date.now();
+        if (isExpired) {
+          await tx`UPDATE customer_credit_packs SET credits_remaining = credits_remaining + ${use!.cd} WHERE id = ${use!.pid}`;
+        } else {
+          await tx`UPDATE customer_credit_packs SET credits_remaining = credits_remaining + ${use!.cd}, status = 'active' WHERE id = ${use!.pid}`;
+        }
+      });
+
+      const rows = await sql.begin(async (tx) => {
+        await setCtx(tx, 'service', tenant1);
+        return tx<Array<{ status: string; credits_remaining: number }>>`
+          SELECT status, credits_remaining FROM customer_credit_packs WHERE id = ${allocId}`;
+      });
+      expect(rows[0]?.status).toBe('used_up'); // NEoživeno na 'active'
+      expect(rows[0]?.credits_remaining).toBe(1); // kredit se do evidence vrátil
+    });
+  });
+
   describe('Multi-tenant isolation', () => {
     it('jiny customer nedostane cizi balicky', async () => {
       const packId = await createPack({ name: 'C1 only', mode: 'per_visit', totalCredits: 10 });

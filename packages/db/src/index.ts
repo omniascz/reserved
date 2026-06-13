@@ -11,3 +11,6 @@ export type { PlatformActionType } from './schema/platform-admins.js';
 
 export { API_KEY_SCOPES } from './schema/api-keys.js';
 export type { ApiKeyScope } from './schema/api-keys.js';
+
+export { resourceTypes } from './schema/resources.js';
+export type { ResourceType } from './schema/resources.js';

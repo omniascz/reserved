@@ -9,7 +9,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { and, asc, desc, eq } from 'drizzle-orm';
+import { and, asc, desc, eq, sql } from 'drizzle-orm';
 import { schema } from '@reserved/db';
 import type { TenantContext } from '@reserved/rls-multitenancy';
 import { BundlePacksService } from '../bundle-packs/bundle-packs.service.js';
@@ -322,6 +322,28 @@ export class PortalMeService {
               message: `Přesun je možný nejpozději ${rules.presunLimitHours}h před začátkem. Kontaktujte prosím salon.`,
             },
           });
+        }
+
+        // Max. počet přesunů (sprint 10.3). 0 = bez limitu. Počítáme předchozí
+        // přesuny z historie stavů (metadata.action = 'rescheduled').
+        if (rules.maxReschedules > 0) {
+          const priorReschedules = await tx
+            .select({ id: schema.bookingStatusHistory.id })
+            .from(schema.bookingStatusHistory)
+            .where(
+              and(
+                eq(schema.bookingStatusHistory.bookingId, bookingId),
+                sql`${schema.bookingStatusHistory.metadata}->>'action' = 'rescheduled'`,
+              ),
+            );
+          if (priorReschedules.length >= rules.maxReschedules) {
+            throw new ForbiddenException({
+              error: {
+                code: 'RESCHEDULE_LIMIT_REACHED',
+                message: `Rezervaci už nelze přesunout — byl dosažen limit ${rules.maxReschedules} přesunů. Kontaktujte prosím salon.`,
+              },
+            });
+          }
         }
 
         // Load service for buffer recalculation

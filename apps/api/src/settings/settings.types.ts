@@ -21,6 +21,8 @@ export const BookingRulesSchema = z.object({
   stornoLimitHours: z.number().min(0).max(168).default(24),
   /** Přesun lekce — kolik hodin předem. Default 2h. */
   presunLimitHours: z.number().min(0).max(168).default(2),
+  /** Max. počet přesunů jedné rezervace zákazníkem. 0 = bez limitu (default). */
+  maxReschedules: z.number().int().min(0).max(20).default(0),
   /** Per-day omezení přesunu (např. z pondělí jen do pátku). */
   perDayRescheduleRules: z.array(PerDayRescheduleRuleSchema).default([]),
   /** Slot interval v minutách (krok mezi nabízenými časy). Default 15. */

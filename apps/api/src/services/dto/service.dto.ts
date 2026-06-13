@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { serviceArchetypes } from '../archetypes.js';
 
 const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;
 
@@ -34,7 +35,10 @@ export const CreateServiceSchema = z.object({
   isPublic: z.boolean().default(true),
   /** 0–100, NULL = bez zálohy. */
   depositPercent: z.number().int().min(0).max(100).optional().nullable(),
-  capacity: z.number().int().min(1).max(500).default(1),
+  /** Max. počet účastníků. Když není zadáno, odvodí se z archetypu (jinak 1). */
+  capacity: z.number().int().min(1).max(500).optional(),
+  /** Archetyp služby (sprint 10.1) — nastaví defaulty (kapacitu) a typ flow. */
+  archetype: z.enum(serviceArchetypes).optional().nullable(),
   sortOrder: z.number().int().nonnegative().default(0),
   /** Online služba (videohovor) — bookings dostane meeting URL. */
   isOnline: z.boolean().default(false),

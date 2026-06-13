@@ -198,3 +198,49 @@ export async function confirmBooking(
   });
   return data;
 }
+
+// ─── Skupinové lekce (sprint 10.0) ────────────────────────────────────
+
+export interface PublicClassSession {
+  id: string;
+  serviceId: string;
+  branchId: string;
+  employeeId: string | null;
+  employeeName: string | null;
+  startsAt: string;
+  endsAt: string;
+  capacity: number;
+  bookedCount: number;
+  freeSpots: number;
+}
+
+export async function listClassSessions(
+  slug: string,
+  serviceId: string,
+  range?: { from?: string; to?: string },
+): Promise<PublicClassSession[]> {
+  const params = new URLSearchParams({ serviceId });
+  if (range?.from) params.append('from', range.from);
+  if (range?.to) params.append('to', range.to);
+  const { data } = await fetchApi<{ data: PublicClassSession[] }>(
+    `/public/${slug}/class-sessions?${params.toString()}`,
+  );
+  return data;
+}
+
+export async function joinClassSession(
+  slug: string,
+  sessionId: string,
+  input: {
+    customerName: string;
+    customerEmail: string;
+    customerPhone?: string | null;
+    customerNote?: string | null;
+  },
+): Promise<BookingConfirmation> {
+  const { data } = await fetchApi<{ data: BookingConfirmation }>(
+    `/public/${slug}/class-sessions/${sessionId}/join`,
+    { method: 'POST', body: JSON.stringify(input) },
+  );
+  return data;
+}
