@@ -9,6 +9,7 @@ import { BookingsModule } from './bookings/bookings.module.js';
 import { BranchesModule } from './branches/branches.module.js';
 import { BundlePacksModule } from './bundle-packs/bundle-packs.module.js';
 import { CatalogModule } from './catalog/catalog.module.js';
+import { ClassSessionsModule } from './class-sessions/class-sessions.module.js';
 import { CorporateAccountsModule } from './corporate-accounts/corporate-accounts.module.js';
 import { CreditPacksModule } from './credit-packs/credit-packs.module.js';
 import { CustomDomainsModule } from './custom-domains/custom-domains.module.js';
@@ -30,6 +31,7 @@ import { PlatformModule } from './platform/platform.module.js';
 import { PortalModule } from './portal/portal.module.js';
 import { PublicModule } from './public/public.module.js';
 import { ReportsModule } from './reports/reports.module.js';
+import { ResourcesModule } from './resources/resources.module.js';
 import { RulesModule } from './rules/rules.module.js';
 import { ServicesModule } from './services/services.module.js';
 import { SettingsModule } from './settings/settings.module.js';
@@ -68,6 +70,7 @@ import { TenantMiddleware } from './tenant/tenant.middleware.js';
     EmailModule,
     CustomersModule,
     BookingsModule,
+    ClassSessionsModule,
     CreditPacksModule,
     BundlePacksModule,
     CatalogModule,
@@ -85,6 +88,7 @@ import { TenantMiddleware } from './tenant/tenant.middleware.js';
     PortalModule,
     PublicModule,
     ReportsModule,
+    ResourcesModule,
     RulesModule,
     TenantSiteModule,
     ThemeModule,

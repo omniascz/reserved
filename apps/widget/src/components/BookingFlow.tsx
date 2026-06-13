@@ -17,6 +17,7 @@ import { ServiceStep } from './steps/ServiceStep';
 import { EmployeeStep } from './steps/EmployeeStep';
 import { DateTimeStep } from './steps/DateTimeStep';
 import { ContactStep } from './steps/ContactStep';
+import { ClassSessionStep } from './steps/ClassSessionStep';
 import { ConfirmationStep } from './steps/ConfirmationStep';
 
 export type BookingStep =
@@ -24,6 +25,7 @@ export type BookingStep =
   | 'service'
   | 'employee'
   | 'datetime'
+  | 'classSession'
   | 'contact'
   | 'confirmation';
 
@@ -74,14 +76,24 @@ export function BookingFlow({ slug, tenantName }: { slug: string; tenantName: st
   }
 
   const hasMultipleBranches = (branches?.length ?? 0) > 1;
-  const STEPS: Array<{ id: BookingStep; label: string }> = [
-    ...(hasMultipleBranches ? [{ id: 'branch' as const, label: t('step.branch') }] : []),
-    { id: 'service', label: t('step.service') },
-    { id: 'employee', label: t('step.employee') },
-    { id: 'datetime', label: t('step.datetime') },
-    { id: 'contact', label: t('step.contact') },
-    { id: 'confirmation', label: t('step.confirmation') },
-  ];
+  // Skupinová lekce (capacity > 1) má jiný flow: výběr termínu lekce místo
+  // zaměstnance + volného slotu (sprint 10.0).
+  const isGroup = (state.service?.capacity ?? 1) > 1;
+  const STEPS: Array<{ id: BookingStep; label: string }> = isGroup
+    ? [
+        ...(hasMultipleBranches ? [{ id: 'branch' as const, label: t('step.branch') }] : []),
+        { id: 'service', label: t('step.service') },
+        { id: 'classSession', label: t('step.datetime') },
+        { id: 'confirmation', label: t('step.confirmation') },
+      ]
+    : [
+        ...(hasMultipleBranches ? [{ id: 'branch' as const, label: t('step.branch') }] : []),
+        { id: 'service', label: t('step.service') },
+        { id: 'employee', label: t('step.employee') },
+        { id: 'datetime', label: t('step.datetime') },
+        { id: 'contact', label: t('step.contact') },
+        { id: 'confirmation', label: t('step.confirmation') },
+      ];
 
   if (branches === null) {
     return <div className="text-slate-400">{t('loading')}</div>;
@@ -107,8 +119,22 @@ export function BookingFlow({ slug, tenantName }: { slug: string; tenantName: st
             slug={slug}
             onPick={(service) => {
               update({ service, employee: null, slot: null });
-              goTo('employee');
+              // Skupinová lekce → výběr termínu lekce; jinak klasický 1:1 flow.
+              goTo(service.capacity > 1 ? 'classSession' : 'employee');
             }}
+          />
+        )}
+
+        {step === 'classSession' && state.service && (
+          <ClassSessionStep
+            slug={slug}
+            service={state.service}
+            tenantName={tenantName}
+            onConfirm={(confirmation) => {
+              update({ confirmation });
+              goTo('confirmation');
+            }}
+            onBack={() => goTo('service')}
           />
         )}
 
