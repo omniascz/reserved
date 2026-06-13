@@ -1177,4 +1177,82 @@ describe('Fitness flow E2E (10.0–10.2)', () => {
       expect(line?.commissionHellers).toBe(100000); // 50 % z 2000 Kč
     });
   });
+
+  // ─── 10.16 On-demand video / knihovna obsahu ──────────────────────────
+  describe('Knihovna obsahu (10.16)', () => {
+    let publicItemId: string;
+    let subItemId: string;
+
+    it('admin založí obsah s různou úrovní přístupu', async () => {
+      const pub = await apiCall<{ data: { id: string } }>('/admin/content', {
+        method: 'POST',
+        token,
+        body: JSON.stringify({
+          title: 'Ukázková lekce zdarma',
+          videoUrl: 'https://example.com/free.mp4',
+          accessLevel: 'public',
+        }),
+      });
+      publicItemId = pub.data.id;
+
+      await apiCall('/admin/content', {
+        method: 'POST',
+        token,
+        body: JSON.stringify({
+          title: 'Lekce pro registrované',
+          videoUrl: 'https://example.com/members.mp4',
+          accessLevel: 'members',
+        }),
+      });
+
+      const sub = await apiCall<{ data: { id: string } }>('/admin/content', {
+        method: 'POST',
+        token,
+        body: JSON.stringify({
+          title: 'Prémiová série',
+          videoUrl: 'https://example.com/premium.mp4',
+          accessLevel: 'subscription',
+        }),
+      });
+      subItemId = sub.data.id;
+
+      const list = await apiCall<{ data: unknown[] }>('/admin/content', { token });
+      expect(list.data.length).toBe(3);
+    });
+
+    it('veřejný výpis odemkne jen public, ostatní zamkne (skryje URL)', async () => {
+      const r = await apiCall<{
+        data: Array<{ id: string; accessLevel: string; locked: boolean; videoUrl: string | null }>;
+      }>(`/public/${slug}/content`);
+      expect(r.data.length).toBe(3);
+
+      const pub = r.data.find((x) => x.id === publicItemId);
+      expect(pub?.locked).toBe(false);
+      expect(pub?.videoUrl).toBe('https://example.com/free.mp4');
+
+      const sub = r.data.find((x) => x.id === subItemId);
+      expect(sub?.locked).toBe(true);
+      expect(sub?.videoUrl).toBeNull(); // odkaz skrytý pro neoprávněné
+
+      // members je taky zamčený pro anonymního návštěvníka
+      expect(r.data.filter((x) => x.locked).length).toBe(2);
+    });
+
+    it('nepublikovaný obsah zmizí z veřejného výpisu', async () => {
+      await apiCall(`/admin/content/${subItemId}`, {
+        method: 'PATCH',
+        token,
+        body: JSON.stringify({ isPublished: false }),
+      });
+      const r = await apiCall<{ data: Array<{ id: string }> }>(`/public/${slug}/content`);
+      expect(r.data.some((x) => x.id === subItemId)).toBe(false);
+      expect(r.data.length).toBe(2);
+    });
+
+    it('smazaný obsah zmizí i z admin výpisu', async () => {
+      await apiCall(`/admin/content/${publicItemId}`, { method: 'DELETE', token });
+      const list = await apiCall<{ data: Array<{ id: string }> }>('/admin/content', { token });
+      expect(list.data.some((x) => x.id === publicItemId)).toBe(false);
+    });
+  });
 });

@@ -14,3 +14,6 @@ export type { ApiKeyScope } from './schema/api-keys.js';
 
 export { resourceTypes } from './schema/resources.js';
 export type { ResourceType } from './schema/resources.js';
+
+export { contentAccessLevels } from './schema/content.js';
+export type { ContentAccessLevel } from './schema/content.js';

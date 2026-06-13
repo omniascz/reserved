@@ -16,6 +16,7 @@ import { Public } from '../auth/decorators/public.decorator.js';
 import { ZodValidationPipe } from '../auth/zod-validation.pipe.js';
 import { PortalGuard } from './portal.guard.js';
 import { PortalMeService } from './portal-me.service.js';
+import { ContentService } from '../content/content.service.js';
 import {
   CancelMyBookingSchema,
   RescheduleMyBookingSchema,
@@ -31,7 +32,10 @@ import {
 @UseGuards(PortalGuard)
 @Controller('portal/me')
 export class PortalMeController {
-  constructor(@Inject(PortalMeService) private readonly me: PortalMeService) {}
+  constructor(
+    @Inject(PortalMeService) private readonly me: PortalMeService,
+    @Inject(ContentService) private readonly content: ContentService,
+  ) {}
 
   private requireAuth(req: Request): { tenantId: string; customerId: string } {
     if (!req.portalAuth) {
@@ -46,6 +50,13 @@ export class PortalMeController {
   async getProfile(@Req() req: Request): Promise<{ data: unknown }> {
     const { tenantId, customerId } = this.requireAuth(req);
     return { data: await this.me.getProfile(tenantId, customerId) };
+  }
+
+  /** Knihovna obsahu pro přihlášeného klienta — odemkne dle členství/předplatného. */
+  @Get('content')
+  async content_(@Req() req: Request): Promise<{ data: unknown }> {
+    const { tenantId, customerId } = this.requireAuth(req);
+    return { data: await this.content.listForCustomer(tenantId, customerId) };
   }
 
   @Patch()

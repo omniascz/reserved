@@ -6,6 +6,7 @@ import { BundlePacksModule } from '../bundle-packs/bundle-packs.module.js';
 import { CreditPacksModule } from '../credit-packs/credit-packs.module.js';
 import { SubscriptionsModule } from '../subscriptions/subscriptions.module.js';
 import { TimePacksModule } from '../time-packs/time-packs.module.js';
+import { ContentModule } from '../content/content.module.js';
 import { PortalAuthController } from './portal-auth.controller.js';
 import { PortalAuthService } from './portal-auth.service.js';
 import { PortalMeController } from './portal-me.controller.js';
@@ -22,6 +23,7 @@ import { PortalGuard } from './portal.guard.js';
     BundlePacksModule,
     TimePacksModule,
     SubscriptionsModule,
+    ContentModule,
   ],
   controllers: [PortalAuthController, PortalMeController],
   providers: [PortalAuthService, PortalMeService, PortalJwtService, PortalGuard],
