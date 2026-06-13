@@ -37,6 +37,7 @@ import { ReportsModule } from './reports/reports.module.js';
 import { ResourcesModule } from './resources/resources.module.js';
 import { ReviewsModule } from './reviews/reviews.module.js';
 import { RulesModule } from './rules/rules.module.js';
+import { ChainedBookingsModule } from './chained-bookings/chained-bookings.module.js';
 import { ContentModule } from './content/content.module.js';
 import { PayrollModule } from './payroll/payroll.module.js';
 import { PosModule } from './pos/pos.module.js';
@@ -119,6 +120,7 @@ import { TenantMiddleware } from './tenant/tenant.middleware.js';
     ContentModule,
     PosModule,
     StaysModule,
+    ChainedBookingsModule,
   ],
 })
 export class AppModule implements NestModule {

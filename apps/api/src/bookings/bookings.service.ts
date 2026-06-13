@@ -1115,6 +1115,9 @@ export class BookingsService {
           id: schema.bookingResources.id,
           resourceId: schema.bookingResources.resourceId,
           resourceName: schema.resources.name,
+          role: schema.bookingResources.role,
+          startsAt: schema.bookingResources.bufferStartsAt,
+          endsAt: schema.bookingResources.bufferEndsAt,
           status: schema.bookingResources.status,
         })
         .from(schema.bookingResources)

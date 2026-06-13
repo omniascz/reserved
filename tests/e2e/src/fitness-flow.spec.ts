@@ -1782,4 +1782,89 @@ describe('Fitness flow E2E (10.0–10.2)', () => {
       expect(av.data.some((u) => u.id === r1)).toBe(true); // zase volný
     });
   });
+
+  // ─── 10.23 Motor 3: řetězená rezervace s uvolnitelnou pauzou ──────────
+  describe('Řetězená rezervace (10.23)', () => {
+    let svc: string;
+    let chair: string;
+    let washbasin: string;
+
+    async function mkRes(name: string): Promise<string> {
+      const r = await apiCall<{ data: { id: string } }>('/admin/resources', {
+        method: 'POST',
+        token,
+        body: JSON.stringify({ branchId, name, type: 'equipment' }),
+      });
+      return r.data.id;
+    }
+    function chained(startsAt: string, segments: unknown[]) {
+      return apiCall<{ data: { id: string } }>('/admin/chained-bookings', {
+        method: 'POST',
+        token,
+        body: JSON.stringify({
+          serviceId: svc,
+          customerName: 'Klient Barva',
+          customerEmail: 'barva@salon.local',
+          startsAt,
+          segments,
+        }),
+      });
+    }
+
+    it('příprava: služba barvení + křeslo + umyvadlo', async () => {
+      svc = (
+        await apiCall<{ data: { id: string } }>('/admin/services', {
+          method: 'POST',
+          token,
+          body: JSON.stringify({
+            name: 'Barvení vlasů',
+            durationMinutes: 90,
+            priceHellers: 120000,
+            archetype: 'osobni_1_1',
+          }),
+        })
+      ).data.id;
+      chair = await mkRes('Křeslo 1');
+      washbasin = await mkRes('Umyvadlo 1');
+      expect(chair).toBeTruthy();
+    });
+
+    it('barvení: křeslo 9:00–9:30, pauza, umyvadlo 9:50–10:05 (každý zdroj jen svůj čas)', async () => {
+      const r = await chained('2034-09-01T09:00:00.000Z', [
+        { label: 'Aplikace barvy', resourceId: chair, startOffsetMinutes: 0, durationMinutes: 30 },
+        { label: 'Mytí', resourceId: washbasin, startOffsetMinutes: 50, durationMinutes: 15 },
+      ]);
+      const res = await apiCall<{
+        data: Array<{ role: string; resourceId: string; startsAt: string; endsAt: string }>;
+      }>(`/admin/bookings/${r.data.id}/resources`, { token });
+      expect(res.data).toHaveLength(2);
+      const chairSeg = res.data.find((x) => x.resourceId === chair)!;
+      expect(chairSeg.startsAt).toContain('09:00');
+      expect(chairSeg.endsAt).toContain('09:30');
+    });
+
+    it('jiný klient vezme křeslo BĚHEM pauzy (9:35) — pauza zdroj uvolnila', async () => {
+      const r = await chained('2034-09-01T09:35:00.000Z', [
+        { label: 'Aplikace barvy', resourceId: chair, startOffsetMinutes: 0, durationMinutes: 30 },
+      ]);
+      expect(r.data.id).toBeTruthy(); // křeslo bylo po 9:30 volné → projde
+    });
+
+    it('křeslo během 1. fáze (9:15) je obsazené → SEGMENT_CONFLICT', async () => {
+      const clash = await expectFail('/admin/chained-bookings', {
+        method: 'POST',
+        token,
+        body: JSON.stringify({
+          serviceId: svc,
+          customerName: 'X',
+          customerEmail: 'x@salon.local',
+          startsAt: '2034-09-01T09:15:00.000Z',
+          segments: [
+            { label: 'Aplikace', resourceId: chair, startOffsetMinutes: 0, durationMinutes: 30 },
+          ],
+        }),
+      });
+      expect(clash).toMatch(/SEGMENT_CONFLICT|400/);
+    });
+  });
 });
