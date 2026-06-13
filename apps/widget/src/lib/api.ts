@@ -137,6 +137,26 @@ export interface AvailabilityForEmployee {
   slots: AvailableSlot[];
 }
 
+/** Měsíční přehled dostupnosti (sprint 10.18) — počet volných slotů per den. */
+export interface AvailableDay {
+  date: string; // YYYY-MM-DD
+  slotCount: number;
+}
+
+export async function getAvailableDays(
+  slug: string,
+  serviceId: string,
+  month: string, // YYYY-MM
+  employeeId?: string,
+): Promise<AvailableDay[]> {
+  const params = new URLSearchParams({ serviceId, month });
+  if (employeeId) params.append('employeeId', employeeId);
+  const { data } = await fetchApi<{ data: AvailableDay[] }>(
+    `/public/${slug}/availability-days?${params.toString()}`,
+  );
+  return data;
+}
+
 export async function getAvailability(
   slug: string,
   serviceId: string,

@@ -10,7 +10,8 @@
  * Atributy:
  *   data-slug          tenant slug (povinné)
  *   data-lang          'cs' | 'en' (default 'cs')
- *   data-view          'booking' (default, průvodce) | 'timetable' (rozvrh lekcí)
+ *   data-view          'booking' (default) | 'timetable' (rozvrh) | 'calendar' (měsíční kalendář)
+ *   data-service       volitelně předvybraná služba (UUID) pro data-view="calendar"
  *   data-mode          'inline' (default) | 'button' | 'modal'
  *   data-button-text   text tlačítka pro mode=button/modal (default 'Rezervovat')
  *   data-button-color  barva tlačítka (default tenant theme nebo #3b82f6)
@@ -58,11 +59,16 @@
   var containerSelector = thisScript.getAttribute('data-container');
   var maxWidth = parseInt(thisScript.getAttribute('data-max-width') || '600', 10);
   var initialHeight = parseInt(thisScript.getAttribute('data-height') || '600', 10);
-  // data-view: 'booking' (default, průvodce rezervací) | 'timetable' (rozvrh lekcí)
+  // data-view: 'booking' (default) | 'timetable' (rozvrh lekcí) | 'calendar' (měsíční kalendář)
   var view = thisScript.getAttribute('data-view') || 'booking';
+  var service = thisScript.getAttribute('data-service'); // volitelné: předvybraná služba (calendar)
 
-  var path = '/' + encodeURIComponent(slug) + (view === 'timetable' ? '/timetable' : '');
-  var widgetUrl = WIDGET_BASE + path + (lang === 'en' ? '?lang=en' : '');
+  var sub = view === 'timetable' ? '/timetable' : view === 'calendar' ? '/calendar' : '';
+  var query = [];
+  if (lang === 'en') query.push('lang=en');
+  if (view === 'calendar' && service) query.push('service=' + encodeURIComponent(service));
+  var widgetUrl =
+    WIDGET_BASE + '/' + encodeURIComponent(slug) + sub + (query.length ? '?' + query.join('&') : '');
 
   // Unikátní ID pro tento embed (umožní více widgetů na jedné stránce)
   var widgetId = 'rw-' + Math.random().toString(36).slice(2, 9);

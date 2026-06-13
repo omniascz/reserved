@@ -87,6 +87,21 @@ export const messages = {
     'timetable.waitlisted': 'Jsi v pořadníku. Dáme vědět, až se uvolní místo.',
     'timetable.cancel': 'Zrušit',
     'timetable.error': 'Něco se nepovedlo. Zkus to prosím znovu.',
+
+    // Calendar (měsíční kalendář dostupnosti)
+    'calendar.title': 'Objednat termín',
+    'calendar.service': 'Služba',
+    'calendar.pickService': '— vyber službu —',
+    'calendar.noService': 'Tento podnik zatím nemá veřejné služby.',
+    'calendar.prevMonth': '‹',
+    'calendar.nextMonth': '›',
+    'calendar.loading': 'Načítám dostupnost…',
+    'calendar.pickDay': 'Vyber volný den v kalendáři.',
+    'calendar.noSlots': 'V tento den už není volno.',
+    'calendar.times': 'Volné časy',
+    'calendar.booked': 'Hotovo! Rezervace je potvrzená.',
+    'calendar.back': 'Zpět',
+    'calendar.error': 'Něco se nepovedlo. Zkus to prosím znovu.',
   },
   en: {
     onlineBooking: 'Online booking',
@@ -163,6 +178,21 @@ export const messages = {
     'timetable.waitlisted': "You're on the waitlist. We'll notify you when a spot opens.",
     'timetable.cancel': 'Cancel',
     'timetable.error': 'Something went wrong. Please try again.',
+
+    // Calendar
+    'calendar.title': 'Book an appointment',
+    'calendar.service': 'Service',
+    'calendar.pickService': '— choose a service —',
+    'calendar.noService': 'This business has no public services yet.',
+    'calendar.prevMonth': '‹',
+    'calendar.nextMonth': '›',
+    'calendar.loading': 'Loading availability…',
+    'calendar.pickDay': 'Pick an available day in the calendar.',
+    'calendar.noSlots': 'No availability left on this day.',
+    'calendar.times': 'Available times',
+    'calendar.booked': 'Done! Your booking is confirmed.',
+    'calendar.back': 'Back',
+    'calendar.error': 'Something went wrong. Please try again.',
   },
 } as const;
 

@@ -241,6 +241,45 @@ export class PublicController {
 
   // (availability query nyní volitelně přijímá branchId — viz availability.service.ts)
 
+  /** GET /api/v1/public/:slug/availability-days?serviceId=...&month=YYYY-MM&employeeId=...
+   *  Měsíční přehled dostupnosti pro vkládací kalendář (sprint 10.18). */
+  @Public()
+  @Get('availability-days')
+  async availabilityDays(
+    @Param('slug') slug: string,
+    @Query('serviceId') serviceId: string,
+    @Query('month') month: string,
+    @Query('employeeId') employeeId?: string,
+  ) {
+    const tenant = await this.resolveTenant(slug);
+    if (!serviceId || !/^[0-9a-f-]{36}$/i.test(serviceId)) {
+      throw new BadRequestException({
+        error: { code: 'INVALID_SERVICE_ID', message: 'serviceId je povinné a musí být UUID.' },
+      });
+    }
+    if (!month || !/^\d{4}-\d{2}$/.test(month)) {
+      throw new BadRequestException({
+        error: { code: 'INVALID_MONTH', message: 'month musí být ve formátu YYYY-MM.' },
+      });
+    }
+    const tenantTz = await this.dbService.withRlsContext(serviceContext(tenant.id), async (tx) => {
+      const rows = await tx
+        .select({ timezone: schema.tenants.timezone })
+        .from(schema.tenants)
+        .where(eq(schema.tenants.id, tenant.id))
+        .limit(1);
+      return rows[0]?.timezone ?? 'Europe/Prague';
+    });
+    const data = await this.availability.availableDays({
+      tenantId: tenant.id,
+      serviceId,
+      employeeId: employeeId ?? null,
+      month,
+      timezone: tenantTz,
+    });
+    return { data };
+  }
+
   /** POST /api/v1/public/:slug/holds — zamkne slot na 10 min. */
   @Public()
   @Post('holds')

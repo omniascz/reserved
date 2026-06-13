@@ -14,7 +14,14 @@ import { clearAuth, getAccessToken, getTenantSlug, AdminApiError } from '@/lib/a
 
 const WIDGET_URL = process.env.NEXT_PUBLIC_WIDGET_URL ?? 'http://localhost:4004';
 
-type EmbedKind = 'sdk' | 'sdk-modal' | 'timetable' | 'iframe-resize' | 'iframe' | 'button';
+type EmbedKind =
+  | 'sdk'
+  | 'sdk-modal'
+  | 'timetable'
+  | 'calendar'
+  | 'iframe-resize'
+  | 'iframe'
+  | 'button';
 
 export default function EmbedSettingsPage() {
   const router = useRouter();
@@ -61,6 +68,14 @@ export default function EmbedSettingsPage() {
       code: `<script src="${WIDGET_URL}/embed.js" data-slug="${slug}"${
         lang === 'en' ? ' data-lang="en"' : ''
       } data-view="timetable" data-max-width="1000" defer></script>`,
+    },
+    calendar: {
+      label: '🗓️ Měsíční kalendář (objednání 1:1)',
+      description:
+        'Měsíční kalendář dostupnosti — návštěvník vybere den, čas a objedná se. Pro 1:1 služby (barber, ordinace, konzultace). Klient si vybere službu v rozbalovátku.',
+      code: `<script src="${WIDGET_URL}/embed.js" data-slug="${slug}"${
+        lang === 'en' ? ' data-lang="en"' : ''
+      } data-view="calendar" defer></script>`,
     },
     iframe: {
       label: 'Jednoduchý iframe (pokročilé)',
