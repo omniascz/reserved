@@ -25,6 +25,7 @@ export * from './intake-forms.js';
 export * from './booking-series.js';
 export * from './commissions.js';
 export * from './content.js';
+export * from './pos.js';
 export * from './bookings.js';
 export * from './notifications.js';
 export * from './customers.js';

@@ -1255,4 +1255,138 @@ describe('Fitness flow E2E (10.0–10.2)', () => {
       expect(list.data.some((x) => x.id === publicItemId)).toBe(false);
     });
   });
+
+  // ─── 10.19 Lehký POS (pultový prodej) ─────────────────────────────────
+  describe('Lehký POS (10.19)', () => {
+    let productId: string;
+    let packTemplateId: string;
+    let custId: string;
+
+    it('admin založí produkt se skladem', async () => {
+      const p = await apiCall<{ data: { id: string; stock: number } }>('/admin/pos/products', {
+        method: 'POST',
+        token,
+        body: JSON.stringify({
+          name: 'Šampon',
+          priceHellers: 25000,
+          vatRate: 21,
+          tracksStock: true,
+          stock: 10,
+        }),
+      });
+      productId = p.data.id;
+      expect(p.data.stock).toBe(10);
+    });
+
+    it('prodej 2 ks za hotovost → účtenka, součet, odečet skladu', async () => {
+      const sale = await apiCall<{
+        data: { receiptNumber: string; totalHellers: number; paymentMethod: string };
+      }>('/admin/pos/sales', {
+        method: 'POST',
+        token,
+        body: JSON.stringify({
+          paymentMethod: 'cash',
+          items: [{ itemType: 'product', refId: productId, quantity: 2 }],
+        }),
+      });
+      expect(sale.data.receiptNumber).toMatch(/^R-\d{4}-\d{4}$/);
+      expect(sale.data.totalHellers).toBe(50000);
+      expect(sale.data.paymentMethod).toBe('cash');
+
+      const list = await apiCall<{ data: Array<{ id: string; stock: number }> }>(
+        '/admin/pos/products',
+        { token },
+      );
+      expect(list.data.find((x) => x.id === productId)?.stock).toBe(8);
+    });
+
+    it('ruční položka (karta ručně)', async () => {
+      const sale = await apiCall<{ data: { totalHellers: number } }>('/admin/pos/sales', {
+        method: 'POST',
+        token,
+        body: JSON.stringify({
+          paymentMethod: 'card_manual',
+          items: [
+            {
+              itemType: 'manual',
+              name: 'Konzultace na míru',
+              unitPriceHellers: 30000,
+              vatRate: 21,
+              quantity: 1,
+            },
+          ],
+        }),
+      });
+      expect(sale.data.totalHellers).toBe(30000);
+    });
+
+    it('prodej nad sklad selže (atomicky, sklad se nemění)', async () => {
+      const fail = await expectFail('/admin/pos/sales', {
+        method: 'POST',
+        token,
+        body: JSON.stringify({
+          paymentMethod: 'cash',
+          items: [{ itemType: 'product', refId: productId, quantity: 100 }],
+        }),
+      });
+      expect(fail).toMatch(/INSUFFICIENT_STOCK|400/);
+      const list = await apiCall<{ data: Array<{ id: string; stock: number }> }>(
+        '/admin/pos/products',
+        { token },
+      );
+      expect(list.data.find((x) => x.id === productId)?.stock).toBe(8); // beze změny
+    });
+
+    it('prodej permanentky → alokace zákazníkovi', async () => {
+      const pack = await apiCall<{ data: { id: string } }>('/admin/credit-packs', {
+        method: 'POST',
+        token,
+        body: JSON.stringify({
+          name: 'POS permanentka 5×',
+          mode: 'per_visit',
+          totalCredits: 5,
+          priceHellers: 150000,
+        }),
+      });
+      packTemplateId = pack.data.id;
+
+      const custs = await apiCall<{ data: Array<{ id: string }> }>('/admin/customers', { token });
+      custId = custs.data[0]!.id;
+
+      const sale = await apiCall<{
+        data: { totalHellers: number; packAllocationIds: string[] };
+      }>('/admin/pos/sales', {
+        method: 'POST',
+        token,
+        body: JSON.stringify({
+          paymentMethod: 'voucher',
+          customerId: custId,
+          items: [{ itemType: 'pack', refId: packTemplateId, quantity: 1 }],
+        }),
+      });
+      expect(sale.data.totalHellers).toBe(150000);
+      expect(sale.data.packAllocationIds).toHaveLength(1);
+
+      // Zákazník má novou permanentku.
+      const allocs = await apiCall<{ data: Array<{ id: string; creditsRemaining: number }> }>(
+        `/admin/customers/${custId}/credit-packs`,
+        { token },
+      );
+      expect(allocs.data.some((a) => a.id === sale.data.packAllocationIds[0])).toBe(true);
+    });
+
+    it('uzávěrka sečte tržby dle způsobu platby', async () => {
+      const r = await apiCall<{
+        data: {
+          byMethod: Array<{ paymentMethod: string; count: number; totalHellers: number }>;
+          totals: { count: number; totalHellers: number };
+        };
+      }>('/admin/pos/report?from=2020-01-01T00:00:00.000Z&to=2030-01-01T00:00:00.000Z', { token });
+      expect(r.data.totals.count).toBeGreaterThanOrEqual(3);
+      const cash = r.data.byMethod.find((m) => m.paymentMethod === 'cash');
+      expect(cash?.totalHellers).toBe(50000);
+      const voucher = r.data.byMethod.find((m) => m.paymentMethod === 'voucher');
+      expect(voucher?.totalHellers).toBe(150000);
+    });
+  });
 });

@@ -17,3 +17,6 @@ export type { ResourceType } from './schema/resources.js';
 
 export { contentAccessLevels } from './schema/content.js';
 export type { ContentAccessLevel } from './schema/content.js';
+
+export { posPaymentMethods, posSaleItemTypes } from './schema/pos.js';
+export type { PosPaymentMethod, PosSaleItemType } from './schema/pos.js';

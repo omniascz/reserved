@@ -39,6 +39,7 @@ import { ReviewsModule } from './reviews/reviews.module.js';
 import { RulesModule } from './rules/rules.module.js';
 import { ContentModule } from './content/content.module.js';
 import { PayrollModule } from './payroll/payroll.module.js';
+import { PosModule } from './pos/pos.module.js';
 import { SeriesModule } from './series/series.module.js';
 import { ServicesModule } from './services/services.module.js';
 import { SettingsModule } from './settings/settings.module.js';
@@ -115,6 +116,7 @@ import { TenantMiddleware } from './tenant/tenant.middleware.js';
     IcalModule,
     PayrollModule,
     ContentModule,
+    PosModule,
   ],
 })
 export class AppModule implements NestModule {
