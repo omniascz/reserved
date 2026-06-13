@@ -16,9 +16,11 @@ import {
   CreateClassSessionSchema,
   CreateRecurrenceSchema,
   JoinClassSessionSchema,
+  MarkAttendanceSchema,
   type CreateClassSessionDto,
   type CreateRecurrenceDto,
   type JoinClassSessionDto,
+  type MarkAttendanceDto,
 } from './dto/class-session.dto.js';
 import { ClassSessionsService } from './class-sessions.service.js';
 
@@ -137,5 +139,42 @@ export class ClassSessionsController {
   async cancel(@CurrentUser() user: AccessTokenPayload, @Param('id', ParseUUIDPipe) id: string) {
     const data = await this.svc.cancelSession(user.tenantId, user.sub, user.role, id);
     return { data };
+  }
+
+  // ─── Docházka (sprint 10.27) ─────────────────────────────────────────
+
+  @Get(':id/participants')
+  async participants(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return { data: await this.svc.listParticipants(user.tenantId, user.sub, user.role, id) };
+  }
+
+  @Get(':id/attendance')
+  async attendance(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return { data: await this.svc.sessionAttendance(user.tenantId, user.sub, user.role, id) };
+  }
+
+  @Post(':id/participants/:bookingId/attendance')
+  async markAttendance(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('bookingId', ParseUUIDPipe) bookingId: string,
+    @Body(new ZodValidationPipe(MarkAttendanceSchema)) dto: MarkAttendanceDto,
+  ) {
+    return {
+      data: await this.svc.markAttendance(
+        user.tenantId,
+        user.sub,
+        user.role,
+        id,
+        bookingId,
+        dto.attended,
+      ),
+    };
   }
 }

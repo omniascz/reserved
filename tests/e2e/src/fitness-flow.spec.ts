@@ -2162,4 +2162,68 @@ describe('Fitness flow E2E (10.0–10.2)', () => {
       expect(course.data.freeSpots).toBe(1); // B + C zůstali
     });
   });
+
+  // ─── 10.27 Hloubka C: docházka / check-in ─────────────────────────────
+  describe('Docházka (10.27)', () => {
+    let sessionId: string;
+    let p1: string;
+    let p2: string;
+
+    it('příprava: lekce + 2 účastníci', async () => {
+      const s = await apiCall<{ data: { id: string } }>('/admin/class-sessions', {
+        method: 'POST',
+        token,
+        body: JSON.stringify({
+          serviceId: groupServiceId,
+          startsAt: '2037-03-03T18:00:00.000Z',
+          capacity: 3,
+        }),
+      });
+      sessionId = s.data.id;
+      p1 = (
+        await apiCall<{ data: { id: string } }>(
+          `/public/${slug}/class-sessions/${sessionId}/join`,
+          {
+            method: 'POST',
+            body: JSON.stringify({ customerName: 'Docházka Jedna', customerEmail: 'dj@att.local' }),
+          },
+        )
+      ).data.id;
+      p2 = (
+        await apiCall<{ data: { id: string } }>(
+          `/public/${slug}/class-sessions/${sessionId}/join`,
+          {
+            method: 'POST',
+            body: JSON.stringify({ customerName: 'Docházka Dva', customerEmail: 'dd@att.local' }),
+          },
+        )
+      ).data.id;
+      const parts = await apiCall<{ data: Array<{ status: string }> }>(
+        `/admin/class-sessions/${sessionId}/participants`,
+        { token },
+      );
+      expect(parts.data).toHaveLength(2);
+      expect(parts.data.every((p) => p.status === 'confirmed')).toBe(true);
+    });
+
+    it('check-in: jeden přítomen, druhý nepřišel', async () => {
+      await apiCall(`/admin/class-sessions/${sessionId}/participants/${p1}/attendance`, {
+        method: 'POST',
+        token,
+        body: JSON.stringify({ attended: true }),
+      });
+      await apiCall(`/admin/class-sessions/${sessionId}/participants/${p2}/attendance`, {
+        method: 'POST',
+        token,
+        body: JSON.stringify({ attended: false }),
+      });
+      const att = await apiCall<{ data: { present: number; noShow: number; pending: number } }>(
+        `/admin/class-sessions/${sessionId}/attendance`,
+        { token },
+      );
+      expect(att.data.present).toBe(1);
+      expect(att.data.noShow).toBe(1);
+      expect(att.data.pending).toBe(0);
+    });
+  });
 });

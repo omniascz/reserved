@@ -40,3 +40,9 @@ export const CreateRecurrenceSchema = z.object({
   endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
 });
 export type CreateRecurrenceDto = z.infer<typeof CreateRecurrenceSchema>;
+
+// Docházka (sprint 10.27).
+export const MarkAttendanceSchema = z.object({
+  attended: z.boolean(),
+});
+export type MarkAttendanceDto = z.infer<typeof MarkAttendanceSchema>;

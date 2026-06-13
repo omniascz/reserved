@@ -327,6 +327,99 @@ export class ClassSessionsService {
     });
   }
 
+  // ─── Docházka / check-in (sprint 10.27) ─────────────────────────────
+
+  /** Účastníci lekce + jejich stav docházky. */
+  async listParticipants(tenantId: string, userId: string, role: AppRole, sessionId: string) {
+    assertCanManage(role);
+    return this.dbService.withRlsContext(ctxFor(tenantId, userId, role), async (tx) => {
+      return tx
+        .select({
+          bookingId: schema.bookings.id,
+          customerName: schema.bookings.customerName,
+          customerEmail: schema.bookings.customerEmail,
+          status: schema.bookings.status,
+        })
+        .from(schema.bookings)
+        .where(
+          and(
+            eq(schema.bookings.tenantId, tenantId),
+            eq(schema.bookings.sessionId, sessionId),
+            sql`${schema.bookings.status} <> 'cancelled'`,
+          ),
+        )
+        .orderBy(asc(schema.bookings.customerName));
+    });
+  }
+
+  /** Check-in: označí účastníka jako přítomen (completed) / nepřišel (no_show). */
+  async markAttendance(
+    tenantId: string,
+    userId: string,
+    role: AppRole,
+    sessionId: string,
+    bookingId: string,
+    attended: boolean,
+  ) {
+    assertCanManage(role);
+    const newStatus = attended ? 'completed' : 'no_show';
+    return this.dbService.withRlsContext(ctxFor(tenantId, userId, role), async (tx) => {
+      const [updated] = await tx
+        .update(schema.bookings)
+        .set({
+          status: newStatus,
+          completedAt: attended ? new Date() : null,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(schema.bookings.id, bookingId),
+            eq(schema.bookings.tenantId, tenantId),
+            eq(schema.bookings.sessionId, sessionId),
+            sql`${schema.bookings.status} NOT IN ('cancelled')`,
+          ),
+        )
+        .returning();
+      if (!updated) {
+        throw new NotFoundException({
+          error: { code: 'PARTICIPANT_NOT_FOUND', message: 'Účastník nenalezen.' },
+        });
+      }
+      await tx.insert(schema.bookingStatusHistory).values({
+        tenantId,
+        bookingId,
+        fromStatus: 'confirmed',
+        toStatus: newStatus,
+        changedBy: userId,
+        reason: 'attendance',
+      });
+      return updated;
+    });
+  }
+
+  /** Souhrn docházky lekce. */
+  async sessionAttendance(tenantId: string, userId: string, role: AppRole, sessionId: string) {
+    assertCanManage(role);
+    return this.dbService.withRlsContext(ctxFor(tenantId, userId, role), async (tx) => {
+      const rows = await tx
+        .select({ status: schema.bookings.status })
+        .from(schema.bookings)
+        .where(
+          and(
+            eq(schema.bookings.tenantId, tenantId),
+            eq(schema.bookings.sessionId, sessionId),
+            sql`${schema.bookings.status} <> 'cancelled'`,
+          ),
+        );
+      return {
+        total: rows.length,
+        present: rows.filter((r) => r.status === 'completed').length,
+        noShow: rows.filter((r) => r.status === 'no_show').length,
+        pending: rows.filter((r) => r.status === 'confirmed' || r.status === 'pending').length,
+      };
+    });
+  }
+
   // ─── Opakovaný rozvrh (sprint 10.25) ─────────────────────────────────
 
   /** Vygeneruje opakovaný rozvrh lekcí. Kolizní výskyty přeskočí a nahlásí. */
