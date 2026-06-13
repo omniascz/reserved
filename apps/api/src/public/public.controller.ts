@@ -31,6 +31,8 @@ import {
 import { ReviewsService } from '../reviews/reviews.service.js';
 import { SubmitReviewSchema, type SubmitReviewDto } from '../reviews/dto/review.dto.js';
 import { VouchersService } from '../vouchers/vouchers.service.js';
+import { IntakeService } from '../intake/intake.service.js';
+import { SubmitFormSchema, type SubmitFormDto } from '../intake/dto/intake.dto.js';
 import { DrizzleTenantLookup } from '../tenant/tenant-lookup.service.js';
 import { randomBytes } from 'node:crypto';
 
@@ -50,6 +52,7 @@ export class PublicController {
     @Inject(ClassSessionsService) private readonly classSessions: ClassSessionsService,
     @Inject(ReviewsService) private readonly reviews: ReviewsService,
     @Inject(VouchersService) private readonly vouchers: VouchersService,
+    @Inject(IntakeService) private readonly intake: IntakeService,
   ) {}
 
   /** GET /api/v1/public/:slug — info o tenant (název + theme + currency, timezone). */
@@ -455,6 +458,31 @@ export class PublicController {
   async getVoucher(@Param('slug') slug: string, @Param('code') code: string) {
     const tenant = await this.resolveTenant(slug);
     const data = await this.vouchers.getByCode(tenant.id, code);
+    return { data };
+  }
+
+  // ─── Intake formuláře (sprint 10.10) ────────────────────────────────
+
+  /** GET /api/v1/public/:slug/intake-forms?serviceId=… — aktivní formuláře. */
+  @Public()
+  @Get('intake-forms')
+  async listIntakeForms(@Param('slug') slug: string, @Query('serviceId') serviceId?: string) {
+    const tenant = await this.resolveTenant(slug);
+    const data = await this.intake.publicForms(tenant.id, serviceId);
+    return { data };
+  }
+
+  /** POST /api/v1/public/:slug/intake-forms/:id/submit — vyplnění formuláře. */
+  @Public()
+  @Post('intake-forms/:id/submit')
+  @HttpCode(201)
+  async submitIntakeForm(
+    @Param('slug') slug: string,
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(SubmitFormSchema)) dto: SubmitFormDto,
+  ) {
+    const tenant = await this.resolveTenant(slug);
+    const data = await this.intake.submitPublic(tenant.id, id, dto);
     return { data };
   }
 

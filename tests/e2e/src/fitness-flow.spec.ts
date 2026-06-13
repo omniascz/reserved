@@ -645,4 +645,55 @@ describe('Fitness flow E2E (10.0–10.2)', () => {
       expect(fail).toMatch(/VOUCHER_EXPIRED|400/);
     });
   });
+
+  // ─── 10.10 Intake / consent formuláře ─────────────────────────────────
+
+  describe('Intake formuláře (10.10)', () => {
+    let formId: string;
+
+    it('vytvoření formuláře + veřejný výpis pro službu', async () => {
+      const f = await apiCall<{ data: { id: string } }>('/admin/intake-forms', {
+        method: 'POST',
+        token,
+        body: JSON.stringify({
+          name: 'Zdravotní dotazník',
+          serviceId: groupServiceId,
+          fields: [
+            { key: 'health', label: 'Zdravotní stav', type: 'textarea', required: true },
+            { key: 'consent', label: 'Souhlas s podmínkami', type: 'checkbox', required: true },
+          ],
+        }),
+      });
+      formId = f.data.id;
+
+      const list = await apiCall<{ data: Array<{ id: string; fields: unknown[] }> }>(
+        `/public/${slug}/intake-forms?serviceId=${groupServiceId}`,
+      );
+      const form = list.data.find((x) => x.id === formId);
+      expect(form).toBeDefined();
+      expect(form?.fields.length).toBe(2);
+    });
+
+    it('chybějící povinné pole → VALIDATION_ERROR', async () => {
+      const fail = await expectFail(`/public/${slug}/intake-forms/${formId}/submit`, {
+        method: 'POST',
+        body: JSON.stringify({ customerEmail: 'i@fit.local', answers: { health: 'ok' } }),
+      });
+      expect(fail).toMatch(/VALIDATION_ERROR|400/);
+    });
+
+    it('kompletní vyplnění → uloženo a admin vidí odpověď', async () => {
+      await apiCall(`/public/${slug}/intake-forms/${formId}/submit`, {
+        method: 'POST',
+        body: JSON.stringify({
+          customerEmail: 'i@fit.local',
+          answers: { health: 'v pořádku', consent: true },
+        }),
+      });
+      const subs = await apiCall<{ data: unknown[] }>(`/admin/intake-forms/${formId}/submissions`, {
+        token,
+      });
+      expect(subs.data.length).toBe(1);
+    });
+  });
 });

@@ -4,6 +4,7 @@ import { BookingsModule } from '../bookings/bookings.module.js';
 import { ClassSessionsModule } from '../class-sessions/class-sessions.module.js';
 import { ReviewsModule } from '../reviews/reviews.module.js';
 import { VouchersModule } from '../vouchers/vouchers.module.js';
+import { IntakeModule } from '../intake/intake.module.js';
 import { DbModule } from '../db/db.module.js';
 import { TenantModule } from '../tenant/tenant.module.js';
 import { PublicController } from './public.controller.js';
@@ -17,6 +18,7 @@ import { PublicController } from './public.controller.js';
     ClassSessionsModule,
     ReviewsModule,
     VouchersModule,
+    IntakeModule,
   ],
   controllers: [PublicController],
 })
