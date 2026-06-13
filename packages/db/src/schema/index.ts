@@ -18,6 +18,7 @@ export * from './resources.js';
 export * from './class-sessions.js';
 export * from './class-session-waitlist.js';
 export * from './reviews.js';
+export * from './marketing-campaigns.js';
 export * from './bookings.js';
 export * from './notifications.js';
 export * from './customers.js';

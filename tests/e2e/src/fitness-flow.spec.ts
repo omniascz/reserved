@@ -435,4 +435,79 @@ describe('Fitness flow E2E (10.0–10.2)', () => {
       expect(res.data.items.length).toBe(0);
     });
   });
+
+  // ─── 10.7 Marketingové kampaně + win-back ─────────────────────────────
+
+  describe('Marketingové kampaně (10.7)', () => {
+    async function customerIdByEmail(emailAddr: string): Promise<string> {
+      const res = await apiCall<{ data: Array<{ id: string; email: string }> }>(
+        '/admin/customers',
+        { token },
+      );
+      const c = res.data.find((x) => x.email.toLowerCase() === emailAddr.toLowerCase());
+      if (!c) throw new Error(`zákazník ${emailAddr} nenalezen`);
+      return c.id;
+    }
+
+    it('cílí jen na zákazníky s marketingovým souhlasem (GDPR)', async () => {
+      // Souhlas dáme 2 zákazníkům: Anna (má aktivní rezervaci) + P1 (jen zrušenou → neaktivní).
+      const annaId = await customerIdByEmail('anna@fit.local');
+      const p1Id = await customerIdByEmail('p1@fit.local');
+      await apiCall(`/admin/customers/${annaId}`, {
+        method: 'PATCH',
+        token,
+        body: JSON.stringify({ marketingOptIn: true }),
+      });
+      await apiCall(`/admin/customers/${p1Id}`, {
+        method: 'PATCH',
+        token,
+        body: JSON.stringify({ marketingOptIn: true }),
+      });
+
+      const camp = await apiCall<{ data: { id: string } }>('/admin/campaigns', {
+        method: 'POST',
+        token,
+        body: JSON.stringify({
+          name: 'Jarní akce',
+          channel: 'email',
+          subject: 'Sleva 20 %',
+          body: 'Přijď na lekci se slevou!',
+          audience: { type: 'all_optin' },
+        }),
+      });
+
+      const aud = await apiCall<{ data: { count: number } }>(
+        `/admin/campaigns/${camp.data.id}/audience`,
+        { token },
+      );
+      expect(aud.data.count).toBe(2); // jen 2 s opt-in (ne ostatní zákazníci)
+
+      const sent = await apiCall<{ data: { sentCount: number } }>(
+        `/admin/campaigns/${camp.data.id}/send`,
+        { method: 'POST', token },
+      );
+      expect(sent.data.sentCount).toBe(2);
+    });
+
+    it('win-back (inactive_days) cílí jen na klienty bez aktivní rezervace', async () => {
+      // P1 má jen zrušenou rezervaci → je „neaktivní"; Anna má aktivní → vynechána.
+      const camp = await apiCall<{ data: { id: string } }>('/admin/campaigns', {
+        method: 'POST',
+        token,
+        body: JSON.stringify({
+          name: 'Chybíš nám',
+          channel: 'email',
+          subject: 'Dlouho jsme tě neviděli',
+          body: 'Vrať se k nám :)',
+          audience: { type: 'inactive_days', days: 3650 },
+        }),
+      });
+      const aud = await apiCall<{ data: { count: number; sample: Array<{ contact: string }> } }>(
+        `/admin/campaigns/${camp.data.id}/audience`,
+        { token },
+      );
+      expect(aud.data.count).toBe(1);
+      expect(aud.data.sample[0]?.contact).toBe('p1@fit.local');
+    });
+  });
 });
