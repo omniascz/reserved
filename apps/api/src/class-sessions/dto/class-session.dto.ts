@@ -24,3 +24,19 @@ export const JoinClassSessionSchema = z.object({
   customerNote: z.string().max(2000).optional().nullable(),
 });
 export type JoinClassSessionDto = z.infer<typeof JoinClassSessionSchema>;
+
+// Opakovaný rozvrh (sprint 10.25) — generátor lekcí.
+export const CreateRecurrenceSchema = z.object({
+  serviceId: z.string().uuid(),
+  employeeId: z.string().uuid().optional().nullable(),
+  resourceId: z.string().uuid().optional().nullable(),
+  branchId: z.string().uuid().optional().nullable(),
+  capacity: z.number().int().min(1).max(1000).optional(),
+  /** Dny v týdnu ISO (1=Po..7=Ne). */
+  daysOfWeek: z.array(z.number().int().min(1).max(7)).min(1),
+  /** Čas začátku 'HH:MM'. */
+  time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
+  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+});
+export type CreateRecurrenceDto = z.infer<typeof CreateRecurrenceSchema>;

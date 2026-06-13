@@ -14,8 +14,10 @@ import type { AccessTokenPayload } from '../auth/auth.types.js';
 import { ZodValidationPipe } from '../auth/zod-validation.pipe.js';
 import {
   CreateClassSessionSchema,
+  CreateRecurrenceSchema,
   JoinClassSessionSchema,
   type CreateClassSessionDto,
+  type CreateRecurrenceDto,
   type JoinClassSessionDto,
 } from './dto/class-session.dto.js';
 import { ClassSessionsService } from './class-sessions.service.js';
@@ -54,6 +56,28 @@ export class ClassSessionsController {
   ) {
     const data = await this.svc.create(user.tenantId, user.sub, user.role, dto);
     return { data };
+  }
+
+  /** Opakovaný rozvrh — vygeneruje sérii lekcí (sprint 10.25). */
+  @Post('recurrences')
+  @HttpCode(201)
+  async createRecurrence(
+    @CurrentUser() user: AccessTokenPayload,
+    @Body(new ZodValidationPipe(CreateRecurrenceSchema)) dto: CreateRecurrenceDto,
+  ) {
+    return {
+      data: await this.svc.createRecurrence(user.tenantId, user.sub, user.role, dto),
+    };
+  }
+
+  @Post('recurrences/:id/cancel')
+  async cancelRecurrence(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return {
+      data: await this.svc.cancelRecurrence(user.tenantId, user.sub, user.role, id),
+    };
   }
 
   @Post(':id/join')

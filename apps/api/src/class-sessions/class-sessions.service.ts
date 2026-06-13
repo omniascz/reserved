@@ -26,7 +26,11 @@ import { CustomersService } from '../customers/customers.service.js';
 import { TimePacksService } from '../time-packs/time-packs.service.js';
 import { BundlePacksService } from '../bundle-packs/bundle-packs.service.js';
 import { CreditPacksService } from '../credit-packs/credit-packs.service.js';
-import type { CreateClassSessionDto, JoinClassSessionDto } from './dto/class-session.dto.js';
+import type {
+  CreateClassSessionDto,
+  CreateRecurrenceDto,
+  JoinClassSessionDto,
+} from './dto/class-session.dto.js';
 
 const MANAGE_ROLES: AppRole[] = ['owner', 'manager', 'employee', 'receptionist'];
 
@@ -321,6 +325,155 @@ export class ClassSessionsService {
         throw err;
       }
     });
+  }
+
+  // ─── Opakovaný rozvrh (sprint 10.25) ─────────────────────────────────
+
+  /** Vygeneruje opakovaný rozvrh lekcí. Kolizní výskyty přeskočí a nahlásí. */
+  async createRecurrence(
+    tenantId: string,
+    userId: string,
+    role: AppRole,
+    dto: CreateRecurrenceDto,
+  ) {
+    assertCanManage(role);
+
+    // 1. Záznam pravidla.
+    const recurrence = await this.dbService.withRlsContext(
+      ctxFor(tenantId, userId, role),
+      async (tx) => {
+        const [r] = await tx
+          .insert(schema.classRecurrences)
+          .values({
+            tenantId,
+            serviceId: dto.serviceId,
+            employeeId: dto.employeeId ?? null,
+            resourceId: dto.resourceId ?? null,
+            branchId: dto.branchId ?? null,
+            capacity: dto.capacity ?? null,
+            daysOfWeek: dto.daysOfWeek,
+            time: dto.time,
+            startDate: dto.startDate,
+            endDate: dto.endDate,
+            status: 'active',
+          })
+          .returning();
+        return r!;
+      },
+    );
+
+    // 2. Vygeneruj výskyty (max 366 dní).
+    const days = new Set(dto.daysOfWeek);
+    const occurrences: string[] = [];
+    let cursor = new Date(`${dto.startDate}T00:00:00Z`);
+    const end = new Date(`${dto.endDate}T00:00:00Z`);
+    let guard = 0;
+    while (cursor.getTime() <= end.getTime() && guard < 366) {
+      const iso = ((cursor.getUTCDay() + 6) % 7) + 1; // 1=Po..7=Ne
+      if (days.has(iso)) {
+        const dateStr = cursor.toISOString().slice(0, 10);
+        occurrences.push(`${dateStr}T${dto.time}:00.000Z`);
+      }
+      cursor = new Date(cursor.getTime() + 86_400_000);
+      guard++;
+    }
+
+    // 3. Vytvoř lekce (reuse create() vč. všech kontrol překryvu); kolize přeskoč.
+    const createdIds: string[] = [];
+    const skipped: Array<{ startsAt: string; reason: string }> = [];
+    for (const startsAt of occurrences) {
+      try {
+        const session = await this.create(tenantId, userId, role, {
+          serviceId: dto.serviceId,
+          employeeId: dto.employeeId ?? null,
+          resourceId: dto.resourceId ?? null,
+          branchId: dto.branchId ?? undefined,
+          capacity: dto.capacity,
+          startsAt,
+        });
+        createdIds.push(session.id);
+      } catch (err) {
+        const code =
+          (err as { response?: { error?: { code?: string } } })?.response?.error?.code ??
+          'CONFLICT';
+        skipped.push({ startsAt, reason: code });
+      }
+    }
+
+    // 4. Označ vygenerované lekce recurrence_id.
+    if (createdIds.length > 0) {
+      await this.dbService.withRlsContext(ctxFor(tenantId, userId, role), async (tx) => {
+        await tx
+          .update(schema.classSessions)
+          .set({ recurrenceId: recurrence.id })
+          .where(
+            and(
+              eq(schema.classSessions.tenantId, tenantId),
+              sql`${schema.classSessions.id} IN (${sql.join(
+                createdIds.map((id) => sql`${id}`),
+                sql`, `,
+              )})`,
+            ),
+          );
+      });
+    }
+
+    return {
+      recurrenceId: recurrence.id,
+      requested: occurrences.length,
+      created: createdIds.length,
+      skipped,
+    };
+  }
+
+  /** Zruší opakovaný rozvrh — všechny budoucí lekce dané řady. */
+  async cancelRecurrence(tenantId: string, userId: string, role: AppRole, recurrenceId: string) {
+    assertCanManage(role);
+    const now = new Date();
+
+    const futureIds = await this.dbService.withRlsContext(
+      ctxFor(tenantId, userId, role),
+      async (tx) => {
+        const [rec] = await tx
+          .select({ id: schema.classRecurrences.id })
+          .from(schema.classRecurrences)
+          .where(
+            and(
+              eq(schema.classRecurrences.id, recurrenceId),
+              eq(schema.classRecurrences.tenantId, tenantId),
+            ),
+          )
+          .limit(1);
+        if (!rec) {
+          throw new NotFoundException({
+            error: { code: 'RECURRENCE_NOT_FOUND', message: 'Rozvrh nenalezen.' },
+          });
+        }
+        await tx
+          .update(schema.classRecurrences)
+          .set({ status: 'cancelled', updatedAt: now })
+          .where(eq(schema.classRecurrences.id, recurrenceId));
+
+        const rows = await tx
+          .select({ id: schema.classSessions.id })
+          .from(schema.classSessions)
+          .where(
+            and(
+              eq(schema.classSessions.tenantId, tenantId),
+              eq(schema.classSessions.recurrenceId, recurrenceId),
+              eq(schema.classSessions.status, 'open'),
+              gte(schema.classSessions.startsAt, now),
+            ),
+          );
+        return rows.map((r) => r.id);
+      },
+    );
+
+    // Zruš každou budoucí lekci (uvolní účastníky + vrátí permanentky).
+    for (const id of futureIds) {
+      await this.cancelSession(tenantId, userId, role, id);
+    }
+    return { cancelledSessions: futureIds.length };
   }
 
   // ─── Čtení ──────────────────────────────────────────────────────────

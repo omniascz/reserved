@@ -53,6 +53,8 @@ export const classSessions = pgTable(
     /** Kolik míst je obsazeno. Udržováno atomicky při přihlášení/odhlášení. */
     bookedCount: integer('booked_count').notNull().default(0),
     status: varchar('status', { length: 32 }).notNull().default('open'),
+    /** Opakovaný rozvrh (sprint 10.25) — NULL = jednorázová lekce. */
+    recurrenceId: uuid('recurrence_id'),
     cancelledAt: timestamp('cancelled_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),

@@ -1957,4 +1957,87 @@ describe('Fitness flow E2E (10.0–10.2)', () => {
       expect(reuse.data.id).toBeTruthy();
     });
   });
+
+  // ─── 10.25 Hloubka A: opakovaný rozvrh lekcí ──────────────────────────
+  describe('Opakovaný rozvrh lekcí (10.25)', () => {
+    let svc: string;
+    let trainer: string;
+    let recId: string;
+    let createdCount = 0;
+
+    it('příprava: skupinová služba + trenér', async () => {
+      svc = (
+        await apiCall<{ data: { id: string } }>('/admin/services', {
+          method: 'POST',
+          token,
+          body: JSON.stringify({
+            name: 'Spinning',
+            durationMinutes: 45,
+            priceHellers: 20000,
+            archetype: 'skupinova_lekce',
+          }),
+        })
+      ).data.id;
+      trainer = (
+        await apiCall<{ data: { id: string } }>('/admin/employees', {
+          method: 'POST',
+          token,
+          body: JSON.stringify({ firstName: 'Lekt', lastName: 'Or', branchIds: [branchId] }),
+        })
+      ).data.id;
+      expect(svc).toBeTruthy();
+    });
+
+    it('vygeneruje rozvrh Po+St 18:00 na 3 týdny jedním krokem', async () => {
+      const r = await apiCall<{
+        data: { recurrenceId: string; requested: number; created: number; skipped: unknown[] };
+      }>('/admin/class-sessions/recurrences', {
+        method: 'POST',
+        token,
+        body: JSON.stringify({
+          serviceId: svc,
+          employeeId: trainer,
+          capacity: 10,
+          daysOfWeek: [1, 3], // Po + St
+          time: '18:00',
+          startDate: '2035-01-06',
+          endDate: '2035-01-26',
+        }),
+      });
+      expect(r.data.created).toBeGreaterThanOrEqual(4);
+      expect(r.data.created).toBe(r.data.requested); // žádné kolize
+      expect(r.data.skipped).toHaveLength(0);
+      recId = r.data.recurrenceId;
+      createdCount = r.data.created;
+    });
+
+    it('druhý rozvrh stejného trenéra ve stejných časech se celý přeskočí (kolize)', async () => {
+      const r = await apiCall<{ data: { created: number; requested: number; skipped: unknown[] } }>(
+        '/admin/class-sessions/recurrences',
+        {
+          method: 'POST',
+          token,
+          body: JSON.stringify({
+            serviceId: svc,
+            employeeId: trainer,
+            capacity: 10,
+            daysOfWeek: [1, 3],
+            time: '18:00',
+            startDate: '2035-01-06',
+            endDate: '2035-01-26',
+          }),
+        },
+      );
+      expect(r.data.created).toBe(0);
+      expect(r.data.skipped.length).toBe(r.data.requested);
+    });
+
+    it('zrušení rozvrhu zruší všechny budoucí lekce řady', async () => {
+      const c = await apiCall<{ data: { cancelledSessions: number } }>(
+        `/admin/class-sessions/recurrences/${recId}/cancel`,
+        { method: 'POST', token },
+      );
+      expect(c.data.cancelledSessions).toBe(createdCount);
+    });
+  });
 });
