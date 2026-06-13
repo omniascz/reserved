@@ -696,4 +696,51 @@ describe('Fitness flow E2E (10.0–10.2)', () => {
       expect(subs.data.length).toBe(1);
     });
   });
+
+  // ─── 10.11 Vertikálové presety ────────────────────────────────────────
+
+  describe('Vertikálové presety (10.11)', () => {
+    it('katalog presetů obsahuje obory', async () => {
+      const res = await apiCall<{ data: Array<{ id: string }> }>('/admin/vertical-presets', {
+        token,
+      });
+      const ids = res.data.map((p) => p.id);
+      expect(res.data.length).toBe(5);
+      expect(ids).toContain('tennis_courts');
+      expect(ids).toContain('medical_clinic');
+    });
+
+    it('aplikace presetu vytvoří služby + zdroje, podruhé je přeskočí (idempotence)', async () => {
+      const r1 = await apiCall<{ data: { servicesCreated: number; resourcesCreated: number } }>(
+        '/admin/vertical-presets/tennis_courts/apply',
+        { method: 'POST', token },
+      );
+      expect(r1.data.servicesCreated).toBe(1);
+      expect(r1.data.resourcesCreated).toBe(3);
+
+      const svcs = await apiCall<{ data: Array<{ name: string }> }>('/admin/services', { token });
+      expect(svcs.data.some((s) => s.name === 'Rezervace kurtu')).toBe(true);
+      const res = await apiCall<{ data: Array<{ name: string }> }>('/admin/resources', { token });
+      expect(res.data.some((r) => r.name === 'Kurt 1')).toBe(true);
+
+      const r2 = await apiCall<{
+        data: { servicesCreated: number; servicesSkipped: number; resourcesCreated: number };
+      }>('/admin/vertical-presets/tennis_courts/apply', { method: 'POST', token });
+      expect(r2.data.servicesCreated).toBe(0);
+      expect(r2.data.servicesSkipped).toBe(1);
+      expect(r2.data.resourcesCreated).toBe(0);
+    });
+
+    it('medical preset vytvoří i intake formulář', async () => {
+      const r = await apiCall<{ data: { formsCreated: number } }>(
+        '/admin/vertical-presets/medical_clinic/apply',
+        { method: 'POST', token },
+      );
+      expect(r.data.formsCreated).toBe(1);
+      const forms = await apiCall<{ data: Array<{ name: string }> }>('/admin/intake-forms', {
+        token,
+      });
+      expect(forms.data.some((f) => f.name === 'Vstupní zdravotní dotazník')).toBe(true);
+    });
+  });
 });
