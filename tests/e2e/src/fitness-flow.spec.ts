@@ -1,0 +1,260 @@
+// Sprint 10.0–10.2: E2E full-stack test fitness flow proti běžícímu API.
+//
+// Ověří kompletní cestu nového tenanta přes reálné HTTP API:
+//   1. Registrace tenanta + owner (JWT)
+//   2. Archetypy služeb (10.1) — katalog + odvození kapacity
+//   3. Skupinová lekce (10.0): vytvoření class_session, veřejný výpis, self-service
+//      přihlášení, kapacita, dvojí přihlášení
+//   4. EMS (10.2): služba na přístroj, zdroj, EMS lekce, kapacita 1, zámek přístroje
+//
+// Run: pnpm --filter @reserved/e2e test   (API musí běžet na :4000 + DB)
+
+import { describe, it, expect, beforeAll } from 'vitest';
+
+const API_URL = process.env.API_URL ?? 'http://localhost:4000/api/v1';
+
+function uniqueSlug(): string {
+  const ts = Date.now().toString(36);
+  const rand = Math.random().toString(36).slice(2, 6);
+  return `fit-${ts}-${rand}`.slice(0, 32);
+}
+
+async function apiCall<T>(
+  path: string,
+  init?: RequestInit & { token?: string; tenantHeader?: string },
+): Promise<T> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...((init?.headers as Record<string, string>) ?? {}),
+  };
+  if (init?.token) headers['Authorization'] = `Bearer ${init.token}`;
+  if (init?.tenantHeader) headers['X-Tenant-ID'] = init.tenantHeader;
+
+  const res = await fetch(`${API_URL}${path}`, { ...init, headers });
+  const text = await res.text();
+  const body = text ? JSON.parse(text) : undefined;
+  if (!res.ok) {
+    throw new Error(`[${res.status}] ${path}: ${text}`);
+  }
+  return body as T;
+}
+
+/** Očekává, že volání selže; vrátí (status + tělo) chyby pro asserci kódu. */
+async function expectFail(
+  path: string,
+  init?: RequestInit & { token?: string; tenantHeader?: string },
+): Promise<string> {
+  try {
+    await apiCall(path, init);
+    throw new Error(`Očekáváno selhání pro ${path}, ale prošlo`);
+  } catch (err) {
+    return err instanceof Error ? err.message : String(err);
+  }
+}
+
+describe('Fitness flow E2E (10.0–10.2)', () => {
+  const slug = uniqueSlug();
+  const email = `${slug}@e2e.local`;
+  const password = 'SecureTestPwd123!';
+
+  let token: string;
+  let tenantId: string;
+  let branchId: string;
+  let groupServiceId: string;
+  let groupSessionId: string;
+  let emsServiceId: string;
+  let resourceId: string;
+  let emsSessionId: string;
+
+  beforeAll(async () => {
+    const reg = await apiCall<{ tenantId: string; tokens: { accessToken: string } }>(
+      '/auth/register',
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          tenantSlug: slug,
+          tenantName: `Fit Studio ${slug}`,
+          email,
+          password,
+          firstName: 'Fit',
+          lastName: 'Owner',
+          currency: 'CZK',
+          locale: 'cs-CZ',
+        }),
+      },
+    );
+    token = reg.tokens.accessToken;
+    tenantId = reg.tenantId;
+
+    // Default pobočka (vytvořená při registraci) — pro EMS přístroj.
+    const branches = await apiCall<{ data: Array<{ id: string }> }>(`/public/${slug}/branches`);
+    branchId = branches.data[0]!.id;
+  });
+
+  // ─── 10.1 Archetypy ──────────────────────────────────────────────────
+
+  describe('Archetypy služeb (10.1)', () => {
+    it('katalog vrací 5 archetypů', async () => {
+      const res = await apiCall<{ data: Array<{ id: string; defaultCapacity: number }> }>(
+        '/admin/services/archetypes',
+        { token },
+      );
+      expect(res.data).toHaveLength(5);
+      const ids = res.data.map((a) => a.id);
+      expect(ids).toContain('skupinova_lekce');
+      expect(ids).toContain('ems_pristrojovy');
+    });
+
+    it('skupinová služba bez kapacity → odvodí kapacitu z archetypu (>1)', async () => {
+      const res = await apiCall<{ data: { id: string; capacity: number; archetype: string } }>(
+        '/admin/services',
+        {
+          method: 'POST',
+          token,
+          body: JSON.stringify({
+            name: 'Jóga (skupina)',
+            durationMinutes: 60,
+            priceHellers: 25000,
+            archetype: 'skupinova_lekce',
+          }),
+        },
+      );
+      expect(res.data.archetype).toBe('skupinova_lekce');
+      expect(res.data.capacity).toBeGreaterThan(1);
+      groupServiceId = res.data.id;
+    });
+  });
+
+  // ─── 10.0 Skupinové lekce ────────────────────────────────────────────
+
+  describe('Skupinové lekce (10.0)', () => {
+    it('admin vypíše lekci s kapacitou', async () => {
+      const res = await apiCall<{ data: { id: string; capacity: number } }>(
+        '/admin/class-sessions',
+        {
+          method: 'POST',
+          token,
+          body: JSON.stringify({
+            serviceId: groupServiceId,
+            startsAt: '2031-09-01T10:00:00.000Z',
+            capacity: 2, // malá kapacita kvůli testu plnosti
+          }),
+        },
+      );
+      expect(res.data.capacity).toBe(2);
+      groupSessionId = res.data.id;
+    });
+
+    it('veřejný výpis vrací otevřenou lekci s volnými místy', async () => {
+      const res = await apiCall<{ data: Array<{ id: string; freeSpots: number }> }>(
+        `/public/${slug}/class-sessions?serviceId=${groupServiceId}`,
+      );
+      const s = res.data.find((x) => x.id === groupSessionId);
+      expect(s).toBeDefined();
+      expect(s?.freeSpots).toBe(2);
+    });
+
+    it('self-service přihlášení (public) funguje a hlídá kapacitu i duplicitu', async () => {
+      // 1. místo
+      await apiCall(`/public/${slug}/class-sessions/${groupSessionId}/join`, {
+        method: 'POST',
+        body: JSON.stringify({ customerName: 'Anna N', customerEmail: 'anna@fit.local' }),
+      });
+      // duplicita (i jiná velikost písmen) → ALREADY_JOINED
+      const dup = await expectFail(`/public/${slug}/class-sessions/${groupSessionId}/join`, {
+        method: 'POST',
+        body: JSON.stringify({ customerName: 'Anna N', customerEmail: 'ANNA@fit.local' }),
+      });
+      expect(dup).toMatch(/ALREADY_JOINED|400/);
+      // 2. místo
+      await apiCall(`/public/${slug}/class-sessions/${groupSessionId}/join`, {
+        method: 'POST',
+        body: JSON.stringify({ customerName: 'Bára D', customerEmail: 'bara@fit.local' }),
+      });
+      // 3. nad kapacitu → SESSION_FULL
+      const full = await expectFail(`/public/${slug}/class-sessions/${groupSessionId}/join`, {
+        method: 'POST',
+        body: JSON.stringify({ customerName: 'Cyril T', customerEmail: 'cyril@fit.local' }),
+      });
+      expect(full).toMatch(/SESSION_FULL|400/);
+    });
+
+    it('plná lekce zmizí z veřejného výpisu', async () => {
+      const res = await apiCall<{ data: Array<{ id: string }> }>(
+        `/public/${slug}/class-sessions?serviceId=${groupServiceId}`,
+      );
+      expect(res.data.some((x) => x.id === groupSessionId)).toBe(false);
+    });
+  });
+
+  // ─── 10.2 EMS ────────────────────────────────────────────────────────
+
+  describe('EMS režim (10.2)', () => {
+    it('EMS služba (archetyp ems_pristrojovy) → kapacita 1', async () => {
+      const res = await apiCall<{ data: { id: string; capacity: number } }>('/admin/services', {
+        method: 'POST',
+        token,
+        body: JSON.stringify({
+          name: 'EMS trénink',
+          durationMinutes: 20,
+          priceHellers: 50000,
+          archetype: 'ems_pristrojovy',
+        }),
+      });
+      expect(res.data.capacity).toBe(1);
+      emsServiceId = res.data.id;
+    });
+
+    it('vytvoření přístroje (resource)', async () => {
+      const res = await apiCall<{ data: { id: string } }>('/admin/resources', {
+        method: 'POST',
+        token,
+        body: JSON.stringify({ name: 'EMS přístroj #1', branchId, type: 'ems_machine' }),
+      });
+      expect(res.data.id).toBeTruthy();
+      resourceId = res.data.id;
+    });
+
+    it('EMS lekce na přístroji (capacity 1) + zámek přístroje', async () => {
+      const res = await apiCall<{ data: { id: string; capacity: number; resourceId: string } }>(
+        '/admin/class-sessions',
+        {
+          method: 'POST',
+          token,
+          body: JSON.stringify({
+            serviceId: emsServiceId,
+            resourceId,
+            startsAt: '2031-09-02T10:00:00.000Z',
+          }),
+        },
+      );
+      expect(res.data.capacity).toBe(1);
+      expect(res.data.resourceId).toBe(resourceId);
+      emsSessionId = res.data.id;
+
+      // Druhá lekce na STEJNÝ přístroj/čas → MACHINE_TAKEN
+      const taken = await expectFail('/admin/class-sessions', {
+        method: 'POST',
+        token,
+        body: JSON.stringify({
+          serviceId: emsServiceId,
+          resourceId,
+          startsAt: '2031-09-02T10:00:00.000Z',
+        }),
+      });
+      expect(taken).toMatch(/MACHINE_TAKEN|400/);
+    });
+
+    it('EMS lekce: 1 klient se vejde, druhý ne (kapacita 1)', async () => {
+      await apiCall(`/public/${slug}/class-sessions/${emsSessionId}/join`, {
+        method: 'POST',
+        body: JSON.stringify({ customerName: 'EMS Klient', customerEmail: 'ems@fit.local' }),
+      });
+      const full = await expectFail(`/public/${slug}/class-sessions/${emsSessionId}/join`, {
+        method: 'POST',
+        body: JSON.stringify({ customerName: 'EMS Druhý', customerEmail: 'ems2@fit.local' }),
+      });
+      expect(full).toMatch(/SESSION_FULL|400/);
+    });
+  });
+});
