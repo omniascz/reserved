@@ -17,6 +17,7 @@ import { randomBytes } from 'node:crypto';
 import { BundlePacksService } from '../bundle-packs/bundle-packs.service.js';
 import { CreditPacksService } from '../credit-packs/credit-packs.service.js';
 import { GoogleCalendarService } from '../google-calendar/google-calendar.service.js';
+import { LoyaltyService } from '../loyalty/loyalty.service.js';
 import { SubscriptionsService } from '../subscriptions/subscriptions.service.js';
 import { TimePacksService } from '../time-packs/time-packs.service.js';
 import { CustomersService } from '../customers/customers.service.js';
@@ -75,6 +76,7 @@ export class BookingsService {
     @Inject(GoogleCalendarService) private readonly googleCal: GoogleCalendarService,
     @Inject(NotificationsScheduler) private readonly scheduler: NotificationsScheduler,
     @Inject(OnboardingService) private readonly onboarding: OnboardingService,
+    @Inject(LoyaltyService) private readonly loyalty: LoyaltyService,
   ) {}
 
   /**
@@ -943,6 +945,11 @@ export class BookingsService {
           changedBy: userId,
           reason: newStatus === 'no_show' ? 'admin_marked_no_show' : 'admin_marked_completed',
         });
+
+        // Věrnostní body za dokončenou rezervaci (sprint 10.8) — idempotentní.
+        if (newStatus === 'completed' && existing.customerId) {
+          await this.loyalty.awardForBooking(tx, tenantId, existing.customerId, bookingId);
+        }
 
         return updated!;
       },

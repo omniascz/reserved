@@ -24,6 +24,7 @@ import { EmployeesModule } from './employees/employees.module.js';
 import { ExternalModule } from './external/external.module.js';
 import { HealthModule } from './health/health.module.js';
 import { HolidaysModule } from './holidays/holidays.module.js';
+import { LoyaltyModule } from './loyalty/loyalty.module.js';
 import { MarketingModule } from './marketing/marketing.module.js';
 import { OnboardingModule } from './onboarding/onboarding.module.js';
 import { PaymentsModule } from './payments/payments.module.js';
@@ -84,6 +85,7 @@ import { TenantMiddleware } from './tenant/tenant.middleware.js';
     PaymentsModule,
     BlocksModule,
     HolidaysModule,
+    LoyaltyModule,
     MarketingModule,
     OnboardingModule,
     PlatformModule,

@@ -4,10 +4,15 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator.js';
 import type { AccessTokenPayload } from '../auth/auth.types.js';
 import { ZodValidationPipe } from '../auth/zod-validation.pipe.js';
 import { SettingsService } from './settings.service.js';
-import { BookingRulesSchema, NotificationSettingsSchema } from './settings.types.js';
+import {
+  BookingRulesSchema,
+  LoyaltySettingsSchema,
+  NotificationSettingsSchema,
+} from './settings.types.js';
 
 const PartialRulesSchema = BookingRulesSchema.partial();
 const PartialNotificationsSchema = NotificationSettingsSchema.partial();
+const PartialLoyaltySchema = LoyaltySettingsSchema.partial();
 
 @Controller('admin/settings')
 export class SettingsController {
@@ -41,6 +46,21 @@ export class SettingsController {
     dto: z.infer<typeof PartialNotificationsSchema>,
   ) {
     const data = await this.svc.updateNotificationSettings(user.tenantId, user.sub, user.role, dto);
+    return { data };
+  }
+
+  @Get('loyalty')
+  async getLoyalty(@CurrentUser() user: AccessTokenPayload) {
+    const data = await this.svc.getLoyaltySettings(user.tenantId, user.sub, user.role);
+    return { data };
+  }
+
+  @Patch('loyalty')
+  async updateLoyalty(
+    @CurrentUser() user: AccessTokenPayload,
+    @Body(new ZodValidationPipe(PartialLoyaltySchema)) dto: z.infer<typeof PartialLoyaltySchema>,
+  ) {
+    const data = await this.svc.updateLoyaltySettings(user.tenantId, user.sub, user.role, dto);
     return { data };
   }
 }

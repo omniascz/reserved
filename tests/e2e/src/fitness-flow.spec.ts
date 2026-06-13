@@ -510,4 +510,74 @@ describe('Fitness flow E2E (10.0–10.2)', () => {
       expect(aud.data.sample[0]?.contact).toBe('p1@fit.local');
     });
   });
+
+  // ─── 10.8 Věrnostní body ──────────────────────────────────────────────
+
+  describe('Věrnostní body (10.8)', () => {
+    let loyCustomerId: string;
+    let loyBookingId: string;
+
+    it('body se připíšou za dokončenou rezervaci dle nastavení', async () => {
+      await apiCall('/admin/settings/loyalty', {
+        method: 'PATCH',
+        token,
+        body: JSON.stringify({ enabled: true, pointsPerCompletedBooking: 10 }),
+      });
+
+      const s = await apiCall<{ data: { id: string } }>('/admin/class-sessions', {
+        method: 'POST',
+        token,
+        body: JSON.stringify({
+          serviceId: groupServiceId,
+          startsAt: '2032-01-01T10:00:00.000Z',
+          capacity: 5,
+        }),
+      });
+      const j = await apiCall<{ data: { id: string } }>(
+        `/public/${slug}/class-sessions/${s.data.id}/join`,
+        {
+          method: 'POST',
+          body: JSON.stringify({ customerName: 'Loy Klient', customerEmail: 'loy@fit.local' }),
+        },
+      );
+      loyBookingId = j.data.id;
+
+      const custs = await apiCall<{ data: Array<{ id: string; email: string }> }>(
+        '/admin/customers',
+        { token },
+      );
+      loyCustomerId = custs.data.find((c) => c.email.toLowerCase() === 'loy@fit.local')!.id;
+
+      await apiCall(`/admin/bookings/${loyBookingId}/mark-completed`, { method: 'POST', token });
+
+      const loy = await apiCall<{ data: { balance: number } }>(
+        `/admin/customers/${loyCustomerId}/loyalty`,
+        { token },
+      );
+      expect(loy.data.balance).toBe(10);
+    });
+
+    it('uplatnění bodů + kontrola nedostatku', async () => {
+      const r = await apiCall<{ data: { balance: number } }>(
+        `/admin/customers/${loyCustomerId}/loyalty/redeem`,
+        { method: 'POST', token, body: JSON.stringify({ points: 5 }) },
+      );
+      expect(r.data.balance).toBe(5);
+
+      const fail = await expectFail(`/admin/customers/${loyCustomerId}/loyalty/redeem`, {
+        method: 'POST',
+        token,
+        body: JSON.stringify({ points: 100 }),
+      });
+      expect(fail).toMatch(/INSUFFICIENT_POINTS|400/);
+    });
+
+    it('ruční korekce bodů adminem', async () => {
+      const r = await apiCall<{ data: { balance: number } }>(
+        `/admin/customers/${loyCustomerId}/loyalty/adjust`,
+        { method: 'POST', token, body: JSON.stringify({ points: 20, note: 'bonus' }) },
+      );
+      expect(r.data.balance).toBe(25);
+    });
+  });
 });

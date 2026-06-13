@@ -9,10 +9,13 @@ import {
   BookingRulesSchema,
   DEFAULT_BOOKING_RULES,
   DEFAULT_NOTIFICATION_SETTINGS,
+  LoyaltySettingsSchema,
   NotificationSettingsSchema,
   extractBookingRules,
+  extractLoyaltySettings,
   extractNotificationSettings,
   type BookingRules,
+  type LoyaltySettings,
   type NotificationSettings,
 } from './settings.types.js';
 
@@ -115,6 +118,47 @@ export class SettingsService {
         .set({ settings: newSettings, updatedAt: new Date() })
         .where(eq(schema.tenants.id, tenantId));
 
+      return merged;
+    });
+  }
+
+  // ─── Loyalty (sprint 10.8) ──────────────────────────────────────────
+
+  async getLoyaltySettings(
+    tenantId: string,
+    userId: string,
+    role: AppRole,
+  ): Promise<LoyaltySettings> {
+    return this.dbService.withRlsContext(ctxFor(tenantId, userId, role), async (tx) => {
+      const rows = await tx
+        .select({ settings: schema.tenants.settings })
+        .from(schema.tenants)
+        .where(eq(schema.tenants.id, tenantId))
+        .limit(1);
+      return extractLoyaltySettings(rows[0]?.settings);
+    });
+  }
+
+  async updateLoyaltySettings(
+    tenantId: string,
+    userId: string,
+    role: AppRole,
+    input: Partial<LoyaltySettings>,
+  ): Promise<LoyaltySettings> {
+    assertCanManage(role);
+    return this.dbService.withRlsContext(ctxFor(tenantId, userId, role), async (tx) => {
+      const rows = await tx
+        .select({ settings: schema.tenants.settings })
+        .from(schema.tenants)
+        .where(eq(schema.tenants.id, tenantId))
+        .limit(1);
+      const current = (rows[0]?.settings as Record<string, unknown> | null) ?? {};
+      const merged = LoyaltySettingsSchema.parse({ ...extractLoyaltySettings(current), ...input });
+      const newSettings = { ...current, loyalty: merged };
+      await tx
+        .update(schema.tenants)
+        .set({ settings: newSettings, updatedAt: new Date() })
+        .where(eq(schema.tenants.id, tenantId));
       return merged;
     });
   }

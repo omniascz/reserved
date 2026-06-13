@@ -71,3 +71,24 @@ export function extractNotificationSettings(settings: unknown): NotificationSett
   if (!result.success) return DEFAULT_NOTIFICATION_SETTINGS;
   return result.data;
 }
+
+// ─── Loyalty settings (sprint 10.8) ────────────────────────────────────
+
+export const LoyaltySettingsSchema = z.object({
+  /** Zapnutý věrnostní program. Default vypnuto. */
+  enabled: z.boolean().default(false),
+  /** Kolik bodů klient získá za dokončenou rezervaci. 0 = nic. */
+  pointsPerCompletedBooking: z.number().int().min(0).max(100000).default(0),
+});
+export type LoyaltySettings = z.infer<typeof LoyaltySettingsSchema>;
+export const DEFAULT_LOYALTY_SETTINGS: LoyaltySettings = LoyaltySettingsSchema.parse({});
+
+export function extractLoyaltySettings(settings: unknown): LoyaltySettings {
+  if (!settings || typeof settings !== 'object') return DEFAULT_LOYALTY_SETTINGS;
+  const obj = settings as Record<string, unknown>;
+  const raw = obj.loyalty;
+  if (!raw) return DEFAULT_LOYALTY_SETTINGS;
+  const result = LoyaltySettingsSchema.safeParse(raw);
+  if (!result.success) return DEFAULT_LOYALTY_SETTINGS;
+  return result.data;
+}
