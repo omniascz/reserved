@@ -5,6 +5,7 @@ import {
   PlatformDashboardService,
   type AtRiskTenant,
   type DashboardOverview,
+  type PlatformAdoption,
   type RegistrationsPerDay,
 } from './platform-dashboard.service.js';
 import { PlatformAuditService } from './platform-audit.service.js';
@@ -34,6 +35,12 @@ export class PlatformDashboardController {
   @Get('at-risk-tenants')
   async atRiskTenants(): Promise<{ data: AtRiskTenant[] }> {
     return { data: await this.dashboard.atRiskTenants() };
+  }
+
+  /** Adopce featur napříč platformou — napojené platby, MRR, moduly. */
+  @Get('adoption')
+  async adoption(): Promise<{ data: PlatformAdoption }> {
+    return { data: await this.dashboard.adoption() };
   }
 }
 

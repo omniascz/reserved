@@ -24,6 +24,19 @@ export interface RegistrationsPerDay {
   count: number;
 }
 
+export interface PlatformAdoption {
+  tenantsWithPaymentsConnected: number;
+  activeCustomerSubscriptions: number;
+  platformMrrHellers: number;
+  platformArrHellers: number;
+  modules: {
+    posSales: number;
+    stays: number;
+    courses: number;
+    logisticsJobs: number;
+  };
+}
+
 export interface AtRiskTenant {
   id: string;
   slug: string;
@@ -209,6 +222,50 @@ export class PlatformDashboardService {
       }
 
       return result;
+    });
+  }
+
+  /** Adopce featur napříč platformou — napojené platby, MRR, moduly. */
+  async adoption(): Promise<PlatformAdoption> {
+    return this.dbService.withRlsContext(serviceContext(), async (tx) => {
+      const [pay] = await tx
+        .select({ value: sql<number>`COUNT(DISTINCT tenant_id)::int` })
+        .from(schema.paymentConnections)
+        .where(eq(schema.paymentConnections.status, 'active'));
+
+      // Platformní MRR — všechna aktivní/trialing předplatná, normalizováno měsíčně.
+      const [mrr] = await tx
+        .select({
+          subs: sql<number>`COUNT(*)::int`,
+          mrr: sql<number>`COALESCE(SUM(
+            CASE snapshot_billing_interval
+              WHEN 'yearly' THEN snapshot_price_hellers / 12
+              WHEN 'quarterly' THEN snapshot_price_hellers / 3
+              ELSE snapshot_price_hellers
+            END
+          ), 0)::int`,
+        })
+        .from(schema.customerSubscriptions)
+        .where(sql`${schema.customerSubscriptions.status} IN ('active', 'trialing')`);
+
+      const cnt = sql<number>`COUNT(DISTINCT tenant_id)::int`;
+      const [posT] = await tx.select({ value: cnt }).from(schema.posSales);
+      const [stayT] = await tx.select({ value: cnt }).from(schema.stays);
+      const [courseT] = await tx.select({ value: cnt }).from(schema.courses);
+      const [logiT] = await tx.select({ value: cnt }).from(schema.logisticsJobs);
+
+      return {
+        tenantsWithPaymentsConnected: Number(pay?.value ?? 0),
+        activeCustomerSubscriptions: Number(mrr?.subs ?? 0),
+        platformMrrHellers: Number(mrr?.mrr ?? 0),
+        platformArrHellers: Number(mrr?.mrr ?? 0) * 12,
+        modules: {
+          posSales: Number(posT?.value ?? 0),
+          stays: Number(stayT?.value ?? 0),
+          courses: Number(courseT?.value ?? 0),
+          logisticsJobs: Number(logiT?.value ?? 0),
+        },
+      };
     });
   }
 }

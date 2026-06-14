@@ -65,6 +65,8 @@ export interface TenantActivity {
   employeesCount: number;
   branchesCount: number;
   lastBookingCreatedAt: Date | null;
+  /** Reálné napojení platební brány (payment_connections active), ne onboarding flag. */
+  paymentsConnected: boolean;
 }
 
 export interface TenantOnboarding {
@@ -231,6 +233,17 @@ export class PlatformTenantsService {
         .from(schema.branches)
         .where(eq(schema.branches.tenantId, tenantId));
 
+      // Reálné napojení platební brány (aktivní payment_connection).
+      const [payConn] = await tx
+        .select({ value: count() })
+        .from(schema.paymentConnections)
+        .where(
+          and(
+            eq(schema.paymentConnections.tenantId, tenantId),
+            eq(schema.paymentConnections.status, 'active'),
+          ),
+        );
+
       return {
         ownerLastLoginAt: ownerRow?.lastLoginAt ?? null,
         bookingsLast7Days: Number(bookingTotals?.last7 ?? 0),
@@ -242,6 +255,7 @@ export class PlatformTenantsService {
         employeesCount: Number(employeesTotal?.value ?? 0),
         branchesCount: Number(branchesTotal?.value ?? 0),
         lastBookingCreatedAt: bookingTotals?.lastCreatedAt ?? null,
+        paymentsConnected: Number(payConn?.value ?? 0) > 0,
       };
     });
   }
