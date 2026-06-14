@@ -18,6 +18,7 @@ export * from './resources.js';
 export * from './class-sessions.js';
 export * from './class-recurrences.js';
 export * from './courses.js';
+export * from './access-grants.js';
 export * from './class-session-waitlist.js';
 export * from './reviews.js';
 export * from './marketing-campaigns.js';

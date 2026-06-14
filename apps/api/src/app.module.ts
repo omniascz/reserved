@@ -41,6 +41,7 @@ import { ChainedBookingsModule } from './chained-bookings/chained-bookings.modul
 import { ContentModule } from './content/content.module.js';
 import { CoursesModule } from './courses/courses.module.js';
 import { DepositsModule } from './deposits/deposits.module.js';
+import { AccessModule } from './access/access.module.js';
 import { DispatchModule } from './dispatch/dispatch.module.js';
 import { PayrollModule } from './payroll/payroll.module.js';
 import { PosModule } from './pos/pos.module.js';
@@ -127,6 +128,7 @@ import { TenantMiddleware } from './tenant/tenant.middleware.js';
     DispatchModule,
     CoursesModule,
     DepositsModule,
+    AccessModule,
   ],
 })
 export class AppModule implements NestModule {

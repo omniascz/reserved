@@ -20,3 +20,6 @@ export type { ContentAccessLevel } from './schema/content.js';
 
 export { posPaymentMethods, posSaleItemTypes } from './schema/pos.js';
 export type { PosPaymentMethod, PosSaleItemType } from './schema/pos.js';
+
+export { accessGrantKinds } from './schema/access-grants.js';
+export type { AccessGrantKind } from './schema/access-grants.js';
