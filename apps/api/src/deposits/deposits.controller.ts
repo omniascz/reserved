@@ -55,4 +55,18 @@ export class DepositsController {
       }),
     };
   }
+
+  /** Pay-per-slot: vybere plnou cenu služby předem. */
+  @Post('collect-full')
+  async collectFull(
+    @CurrentUser() user: AccessTokenPayload,
+    @Body(new ZodValidationPipe(CollectSchema)) dto: z.infer<typeof CollectSchema>,
+  ) {
+    return {
+      data: await this.svc.collectFullPayment(user.tenantId, user.sub, user.role, {
+        bookingId: dto.bookingId,
+        methodType: dto.methodType,
+      }),
+    };
+  }
 }

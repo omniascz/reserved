@@ -286,4 +286,98 @@ export class DepositsService {
       checkoutUrl: checkout.checkoutUrl,
     };
   }
+
+  // ─── Pay-per-slot: plná platba za rezervaci předem ───────────────────
+
+  /**
+   * Vybere PLNOU cenu služby předem (privátní posilovna na sloty apod.).
+   * Na rozdíl od zálohy účtuje 100 % ceny služby. Provider musí být propojený.
+   */
+  async collectFullPayment(
+    tenantId: string,
+    userId: string,
+    role: AppRole,
+    input: { bookingId: string; methodType: ProviderType },
+  ) {
+    assertCanManage(role);
+    const data = await this.dbService.withRlsContext(ctxFor(tenantId, userId, role), async (tx) => {
+      const [b] = await tx
+        .select({
+          id: schema.bookings.id,
+          serviceId: schema.bookings.serviceId,
+          customerId: schema.bookings.customerId,
+          customerEmail: schema.bookings.customerEmail,
+          referenceCode: schema.bookings.referenceCode,
+          currency: schema.bookings.currency,
+        })
+        .from(schema.bookings)
+        .where(and(eq(schema.bookings.id, input.bookingId), eq(schema.bookings.tenantId, tenantId)))
+        .limit(1);
+      if (!b) return null;
+      const [s] = await tx
+        .select({ priceHellers: schema.services.priceHellers })
+        .from(schema.services)
+        .where(and(eq(schema.services.id, b.serviceId), eq(schema.services.tenantId, tenantId)))
+        .limit(1);
+      return { booking: b, priceHellers: s?.priceHellers ?? 0 };
+    });
+    if (!data) {
+      throw new NotFoundException({
+        error: { code: 'BOOKING_NOT_FOUND', message: 'Rezervace nenalezena.' },
+      });
+    }
+    if (data.priceHellers <= 0) {
+      throw new BadRequestException({
+        error: { code: 'ZERO_PRICE', message: 'Služba nemá cenu k úhradě.' },
+      });
+    }
+
+    // Gate: provider musí být propojený (Connect aktivní).
+    const connected = await this.dbService.withRlsContext(
+      ctxFor(tenantId, userId, role),
+      async (tx) => {
+        const [c] = await tx
+          .select({ chargesEnabled: schema.paymentConnections.chargesEnabled })
+          .from(schema.paymentConnections)
+          .where(
+            and(
+              eq(schema.paymentConnections.tenantId, tenantId),
+              eq(schema.paymentConnections.provider, input.methodType),
+              eq(schema.paymentConnections.status, 'active'),
+            ),
+          )
+          .limit(1);
+        return c?.chargesEnabled ?? false;
+      },
+    );
+    if (!connected) {
+      throw new BadRequestException({
+        error: {
+          code: 'PAYMENTS_NOT_CONNECTED',
+          message: 'Pro platbu nejdřív propojte platební účet.',
+        },
+      });
+    }
+
+    const base = process.env.APP_URL ?? 'http://localhost:4002';
+    const checkout = await this.payments.createCheckout({
+      tenantId,
+      role,
+      methodType: input.methodType,
+      amountHellers: data.priceHellers,
+      currency: data.booking.currency,
+      description: `Platba za rezervaci ${data.booking.referenceCode}`,
+      customerId: data.booking.customerId ?? undefined,
+      customerEmail: data.booking.customerEmail,
+      bookingId: data.booking.id,
+      successUrl: `${base}/payment/success`,
+      cancelUrl: `${base}/payment/cancel`,
+    });
+
+    return {
+      amountHellers: data.priceHellers,
+      paymentId: checkout.paymentId,
+      checkoutUrl: checkout.checkoutUrl,
+    };
+  }
 }

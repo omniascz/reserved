@@ -128,7 +128,26 @@ export class PaymentsService {
   }): Promise<{ paymentId: string; checkoutUrl: string }> {
     // Online checkout muze spustit jen kdo umi zaznamenavat platby
     assertCanRecord(input.role);
+    return this.runCheckout(input);
+  }
 
+  /**
+   * Interní checkout bez role-gate — pro systémové/automatické platby
+   * (např. strh storno poplatku z pravidla). NEVOLAT z controlleru přímo.
+   */
+  private async runCheckout(input: {
+    tenantId: string;
+    methodType: 'stripe' | 'gopay' | 'mock' | 'comgate' | 'thepay' | 'payu' | 'gpwebpay';
+    amountHellers: number;
+    currency: string;
+    description: string;
+    customerId?: string;
+    customerEmail?: string;
+    bookingId?: string;
+    creditPackAllocationId?: string;
+    successUrl: string;
+    cancelUrl: string;
+  }): Promise<{ paymentId: string; checkoutUrl: string }> {
     return this.dbService.withRlsContext(
       { tenantId: input.tenantId, role: 'service' },
       async (tx) => {
@@ -216,6 +235,104 @@ export class PaymentsService {
         }
       },
     );
+  }
+
+  // ─── Storno / no-show fee charge (P4) ──────────────────────────
+
+  /**
+   * Strhne storno/no-show poplatek za rezervaci přes napojenou bránu.
+   * Najde aktivní payment_connection tenanta a vytvoří na poplatek checkout
+   * (pending platba + odkaz k úhradě). Bez napojené brány vrací charged:false.
+   * Pozn.: bez uložené karty (off-session) zatím generujeme odkaz k zaplacení,
+   * ne tichý strh — reálné off-session účtování doplní saved-card tokenizace.
+   */
+  async chargeStornoFee(input: {
+    tenantId: string;
+    bookingId: string;
+    feeHellers: number;
+    reason?: string | null;
+  }): Promise<
+    | { charged: false; reason: 'zero_fee' | 'booking_not_found' | 'payments_not_connected' }
+    | {
+        charged: true;
+        paymentId: string;
+        checkoutUrl: string;
+        provider: string;
+        feeHellers: number;
+      }
+  > {
+    if (!input.feeHellers || input.feeHellers <= 0) {
+      return { charged: false, reason: 'zero_fee' };
+    }
+    const ctx = { tenantId: input.tenantId, role: 'service' as const };
+
+    const booking = await this.dbService.withRlsContext(ctx, async (tx) => {
+      const [b] = await tx
+        .select({
+          id: schema.bookings.id,
+          customerId: schema.bookings.customerId,
+          customerEmail: schema.bookings.customerEmail,
+          referenceCode: schema.bookings.referenceCode,
+          currency: schema.bookings.currency,
+        })
+        .from(schema.bookings)
+        .where(
+          and(
+            eq(schema.bookings.id, input.bookingId),
+            eq(schema.bookings.tenantId, input.tenantId),
+          ),
+        )
+        .limit(1);
+      return b;
+    });
+    if (!booking) return { charged: false, reason: 'booking_not_found' };
+
+    // Najdi aktivní napojenou bránu (chargesEnabled).
+    const provider = await this.dbService.withRlsContext(ctx, async (tx) => {
+      const [c] = await tx
+        .select({ provider: schema.paymentConnections.provider })
+        .from(schema.paymentConnections)
+        .where(
+          and(
+            eq(schema.paymentConnections.tenantId, input.tenantId),
+            eq(schema.paymentConnections.status, 'active'),
+            eq(schema.paymentConnections.chargesEnabled, true),
+          ),
+        )
+        .limit(1);
+      return c?.provider as
+        | 'stripe'
+        | 'gopay'
+        | 'mock'
+        | 'comgate'
+        | 'thepay'
+        | 'payu'
+        | 'gpwebpay'
+        | undefined;
+    });
+    if (!provider) return { charged: false, reason: 'payments_not_connected' };
+
+    const base = process.env.APP_URL ?? 'http://localhost:4002';
+    const checkout = await this.runCheckout({
+      tenantId: input.tenantId,
+      methodType: provider,
+      amountHellers: input.feeHellers,
+      currency: booking.currency,
+      description: `Storno/no-show poplatek — rezervace ${booking.referenceCode}`,
+      customerId: booking.customerId ?? undefined,
+      customerEmail: booking.customerEmail,
+      bookingId: booking.id,
+      successUrl: `${base}/payment/success`,
+      cancelUrl: `${base}/payment/cancel`,
+    });
+
+    return {
+      charged: true,
+      paymentId: checkout.paymentId,
+      checkoutUrl: checkout.checkoutUrl,
+      provider,
+      feeHellers: input.feeHellers,
+    };
   }
 
   // ─── Webhook handling ──────────────────────────────────────────

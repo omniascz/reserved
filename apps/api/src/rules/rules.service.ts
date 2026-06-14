@@ -28,6 +28,7 @@ import {
 import { CreditPacksService } from '../credit-packs/credit-packs.service.js';
 import { DbService } from '../db/db.service.js';
 import { EmailService } from '../email/email.service.js';
+import { PaymentsService } from '../payments/payments.service.js';
 import { EventBus, type DomainEvent } from './events.bus.js';
 import { ActionRegistry, type ActionContext, type ActionResult } from './action-handlers.js';
 
@@ -58,6 +59,7 @@ export class RulesService implements OnModuleInit {
     @Inject(EventBus) private readonly bus: EventBus,
     @Inject(EmailService) private readonly email: EmailService,
     @Inject(CreditPacksService) private readonly creditPacks: CreditPacksService,
+    @Inject(PaymentsService) private readonly payments: PaymentsService,
   ) {}
 
   onModuleInit(): void {
@@ -156,16 +158,61 @@ export class RulesService implements OnModuleInit {
     });
 
     this.registry.register('charge_storno_fee', async (ctx, config) => {
-      // V Phase 1 jen log — payment integration je v sprintu 3.x.
       const percent = Number(config.percent ?? 0);
       const feeHellers = Math.round((ctx.payload.pricePaidHellers * percent) / 100);
+
+      // Reálný strh přes napojenou bránu (P4). Bez napojení → skipped.
+      const result = await this.payments.chargeStornoFee({
+        tenantId: ctx.tenantId,
+        bookingId: ctx.payload.bookingId,
+        feeHellers,
+        reason: ctx.payload.reason ?? null,
+      });
+
+      if (!result.charged) {
+        this.logger.log(
+          `[charge_storno_fee] neúčtováno (${result.reason}) booking=${ctx.payload.bookingId} fee=${feeHellers / 100}`,
+        );
+        return {
+          action: 'charge_storno_fee',
+          // Bez napojené brány to není chyba pravidla — jen se neúčtuje.
+          status: result.reason === 'payments_not_connected' ? 'skipped' : 'ok',
+          data: { percent, feeHellers, charged: false, reason: result.reason },
+        };
+      }
+
+      // Pošli klientovi odkaz k úhradě poplatku.
+      try {
+        await this.email.enqueue({
+          tenantId: ctx.tenantId,
+          templateCode: 'custom',
+          recipient: ctx.payload.customerEmail,
+          relatedBookingId: ctx.payload.bookingId,
+          vars: {
+            __customSubject: 'Storno / no-show poplatek k úhradě',
+            __customBody: `Za zrušení nebo nedostavení účtujeme poplatek ${feeHellers / 100}. Uhradit jej můžete zde: ${result.checkoutUrl}`,
+          },
+        });
+      } catch (err) {
+        this.logger.warn(
+          `[charge_storno_fee] e-mail s odkazem selhal: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+
       this.logger.log(
-        `[Rule action] would charge storno fee: ${feeHellers / 100} Kč (${percent}%) for booking ${ctx.payload.bookingId}`,
+        `[charge_storno_fee] účtováno ${feeHellers / 100} přes ${result.provider}, payment=${result.paymentId}`,
       );
       return {
         action: 'charge_storno_fee',
         status: 'ok',
-        data: { percent, feeHellers },
+        data: {
+          percent,
+          feeHellers,
+          charged: true,
+          paymentId: result.paymentId,
+          provider: result.provider,
+          checkoutUrl: result.checkoutUrl,
+        },
       };
     });
 
