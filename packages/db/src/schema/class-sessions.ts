@@ -57,6 +57,13 @@ export const classSessions = pgTable(
     recurrenceId: uuid('recurrence_id'),
     /** Kurz (sprint 10.26) — NULL = samostatná lekce; jinak lekce patří do kurzu. */
     courseId: uuid('course_id'),
+    /** Spot booking (10.33): počet pojmenovaných míst v sále. 0 = bez výběru místa. */
+    spotCount: integer('spot_count').notNull().default(0),
+    /** Tvrdé podmínky (10.33): věkové omezení účastníka (k datu lekce). */
+    minAge: integer('min_age'),
+    maxAge: integer('max_age'),
+    /** Prerekvizita: účastník musí mít dokončenou rezervaci této služby. */
+    prerequisiteServiceId: uuid('prerequisite_service_id'),
     cancelledAt: timestamp('cancelled_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),

@@ -69,6 +69,8 @@ export const bookings = pgTable(
     seriesId: uuid('series_id').references(() => bookingSeries.id, {
       onDelete: 'set null',
     }),
+    /** Spot booking (10.33): konkrétní místo v sále (kolo/podložka/stanice). */
+    spotLabel: varchar('spot_label', { length: 16 }),
     /** Volitelně přihlášený zákazník (link na users.id pokud měl účet). */
     customerUserId: uuid('customer_user_id').references(() => users.id),
     /** Customer entity (sprint 1.7). Nullable pro backward compat. */

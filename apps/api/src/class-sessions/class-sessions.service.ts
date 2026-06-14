@@ -15,7 +15,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { and, asc, eq, gt, gte, isNull, lt, lte, sql } from 'drizzle-orm';
+import { and, asc, eq, gt, gte, isNull, isNotNull, lt, lte, sql } from 'drizzle-orm';
 import { schema } from '@reserved/db';
 import { type AppRole, type TenantContext, serviceContext } from '@reserved/rls-multitenancy';
 import type { Database } from '../db/db.service.js';
@@ -291,6 +291,10 @@ export class ClassSessionsService {
             capacity,
             bookedCount: 0,
             status: 'open',
+            spotCount: dto.spotCount ?? 0,
+            minAge: dto.minAge ?? null,
+            maxAge: dto.maxAge ?? null,
+            prerequisiteServiceId: dto.prerequisiteServiceId ?? null,
           })
           .returning();
 
@@ -569,6 +573,40 @@ export class ClassSessionsService {
     return { cancelledSessions: futureIds.length };
   }
 
+  // ─── Spot booking (10.33) — mapa míst v sále ────────────────────────
+
+  /** Která místa jsou obsazená / volná (pro výběr místa). Veřejné (widget). */
+  async sessionSpots(tenantId: string, sessionId: string) {
+    return this.dbService.withRlsContext(serviceContext(tenantId), async (tx) => {
+      const [s] = await tx
+        .select({ spotCount: schema.classSessions.spotCount })
+        .from(schema.classSessions)
+        .where(
+          and(eq(schema.classSessions.id, sessionId), eq(schema.classSessions.tenantId, tenantId)),
+        )
+        .limit(1);
+      if (!s) {
+        throw new NotFoundException({
+          error: { code: 'SESSION_NOT_FOUND', message: 'Lekce nenalezena.' },
+        });
+      }
+      const takenRows = await tx
+        .select({ spotLabel: schema.bookings.spotLabel })
+        .from(schema.bookings)
+        .where(
+          and(
+            eq(schema.bookings.tenantId, tenantId),
+            eq(schema.bookings.sessionId, sessionId),
+            isNotNull(schema.bookings.spotLabel),
+            sql`${schema.bookings.status} NOT IN ('cancelled', 'no_show')`,
+          ),
+        );
+      const taken = takenRows.map((t) => t.spotLabel).filter((l): l is string => !!l);
+      const all = Array.from({ length: s.spotCount }, (_, i) => String(i + 1));
+      return { spotCount: s.spotCount, taken, free: all.filter((l) => !taken.includes(l)) };
+    });
+  }
+
   // ─── Čtení ──────────────────────────────────────────────────────────
 
   async get(tenantId: string, userId: string, role: AppRole, sessionId: string) {
@@ -663,6 +701,68 @@ export class ClassSessionsService {
       return { ok: false as const, reason: 'already' as const };
     }
 
+    // Tvrdé podmínky lekce (10.33): věk + prerekvizita. Kontrola PŘED rezervací
+    // místa, aby neúspěch nenechal obsazené místo.
+    if (session.minAge != null || session.maxAge != null || session.prerequisiteServiceId) {
+      const [cust] = await tx
+        .select({ id: schema.customers.id, dob: schema.customers.dateOfBirth })
+        .from(schema.customers)
+        .where(
+          and(
+            eq(schema.customers.tenantId, tenantId),
+            sql`lower(${schema.customers.email}) = lower(${dto.customerEmail})`,
+          ),
+        )
+        .limit(1);
+
+      if (session.minAge != null || session.maxAge != null) {
+        if (!cust?.dob) {
+          // Tvrdá brána: bez data narození nelze ověřit věk.
+          return { ok: false as const, reason: 'age_unknown' as const };
+        }
+        const ref = session.startsAt;
+        let age = ref.getFullYear() - cust.dob.getFullYear();
+        const m = ref.getMonth() - cust.dob.getMonth();
+        if (m < 0 || (m === 0 && ref.getDate() < cust.dob.getDate())) age--;
+        if (
+          (session.minAge != null && age < session.minAge) ||
+          (session.maxAge != null && age > session.maxAge)
+        ) {
+          return { ok: false as const, reason: 'age_restricted' as const };
+        }
+      }
+
+      if (session.prerequisiteServiceId) {
+        // Párujeme přes e-mail (stabilní identifikátor — admin rezervace nemusí
+        // mít vyplněný customer_id), stejně jako kontrola „už je v lekci".
+        const done = await tx
+          .select({ id: schema.bookings.id })
+          .from(schema.bookings)
+          .where(
+            and(
+              eq(schema.bookings.tenantId, tenantId),
+              eq(schema.bookings.serviceId, session.prerequisiteServiceId),
+              eq(schema.bookings.status, 'completed'),
+              sql`lower(${schema.bookings.customerEmail}) = lower(${dto.customerEmail})`,
+            ),
+          )
+          .limit(1);
+        if (done.length === 0) {
+          return { ok: false as const, reason: 'prerequisite_missing' as const };
+        }
+      }
+    }
+
+    // Spot booking (10.33): ověř rozsah zvoleného místa (1..spotCount).
+    let spotLabel: string | null = null;
+    if (session.spotCount > 0 && dto.spotLabel != null && dto.spotLabel !== '') {
+      const n = Number(dto.spotLabel);
+      if (!Number.isInteger(n) || n < 1 || n > session.spotCount) {
+        return { ok: false as const, reason: 'invalid_spot' as const };
+      }
+      spotLabel = dto.spotLabel;
+    }
+
     // Atomická rezervace místa: projde jen pokud je lekce otevřená a má volno.
     const reserved = await tx
       .update(schema.classSessions)
@@ -724,6 +824,7 @@ export class ClassSessionsService {
             currency: service.currency,
             customerNote: dto.customerNote ?? null,
             referenceCode: generateReferenceCode(),
+            spotLabel,
             metadata: { source: opts.source, kind: 'class_session' },
           })
           .returning();
@@ -742,10 +843,14 @@ export class ClassSessionsService {
 
       return { ok: true as const, booking };
     } catch (err) {
-      const e = err as { code?: string; cause?: { code?: string } };
+      const e = err as {
+        code?: string;
+        constraint_name?: string;
+        cause?: { code?: string; constraint_name?: string };
+      };
       const pgCode = e.code ?? e.cause?.code;
       if (pgCode === '23505') {
-        // partial unique (session_id, customer_id): klient už v lekci je → vrať místo.
+        // Kolize unique indexu → vrať obsazené místo zpět.
         await tx
           .update(schema.classSessions)
           .set({
@@ -753,6 +858,12 @@ export class ClassSessionsService {
             updatedAt: new Date(),
           })
           .where(eq(schema.classSessions.id, sessionId));
+        const constraint = e.constraint_name ?? e.cause?.constraint_name ?? '';
+        if (constraint.includes('spot')) {
+          // (session_id, spot_label) — místo už obsadil někdo jiný.
+          return { ok: false as const, reason: 'spot_taken' as const };
+        }
+        // (session_id, customer_id): klient už v lekci je.
         return { ok: false as const, reason: 'already' as const };
       }
       throw err;
@@ -796,7 +907,18 @@ export class ClassSessionsService {
   private unwrapJoin(
     outcome:
       | { ok: true; booking: typeof schema.bookings.$inferSelect }
-      | { ok: false; reason: 'not_found' | 'full' | 'already' },
+      | {
+          ok: false;
+          reason:
+            | 'not_found'
+            | 'full'
+            | 'already'
+            | 'age_unknown'
+            | 'age_restricted'
+            | 'prerequisite_missing'
+            | 'invalid_spot'
+            | 'spot_taken';
+        },
   ) {
     if (outcome.ok) return outcome.booking;
     if (outcome.reason === 'not_found') {
@@ -807,6 +929,37 @@ export class ClassSessionsService {
     if (outcome.reason === 'full') {
       throw new BadRequestException({
         error: { code: 'SESSION_FULL', message: 'Lekce je plná nebo už není otevřená.' },
+      });
+    }
+    if (outcome.reason === 'age_unknown') {
+      throw new BadRequestException({
+        error: {
+          code: 'AGE_UNKNOWN',
+          message: 'Tato lekce má věkové omezení — u klienta chybí datum narození.',
+        },
+      });
+    }
+    if (outcome.reason === 'age_restricted') {
+      throw new BadRequestException({
+        error: { code: 'AGE_RESTRICTED', message: 'Klient nesplňuje věkové omezení lekce.' },
+      });
+    }
+    if (outcome.reason === 'prerequisite_missing') {
+      throw new BadRequestException({
+        error: {
+          code: 'PREREQUISITE_MISSING',
+          message: 'Lekce vyžaduje dříve absolvovanou službu (prerekvizita).',
+        },
+      });
+    }
+    if (outcome.reason === 'invalid_spot') {
+      throw new BadRequestException({
+        error: { code: 'INVALID_SPOT', message: 'Zvolené místo v sále neexistuje.' },
+      });
+    }
+    if (outcome.reason === 'spot_taken') {
+      throw new BadRequestException({
+        error: { code: 'SPOT_TAKEN', message: 'Zvolené místo už je obsazené. Vyber jiné.' },
       });
     }
     throw new BadRequestException({

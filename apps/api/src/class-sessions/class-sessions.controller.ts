@@ -50,6 +50,12 @@ export class ClassSessionsController {
     return { data };
   }
 
+  /** Mapa míst v sále (spot booking) — obsazená/volná. */
+  @Get(':id/spots')
+  async spots(@CurrentUser() user: AccessTokenPayload, @Param('id', ParseUUIDPipe) id: string) {
+    return { data: await this.svc.sessionSpots(user.tenantId, id) };
+  }
+
   @Post()
   @HttpCode(201)
   async create(

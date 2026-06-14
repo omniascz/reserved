@@ -14,6 +14,13 @@ export const CreateClassSessionSchema = z.object({
   startsAt: z.string().datetime(),
   /** Kapacita lekce. Default = services.capacity. Skupinová ≥ 2; EMS = 1 (s přístrojem). */
   capacity: z.number().int().min(1).max(1000).optional(),
+  /** Spot booking (10.33): počet pojmenovaných míst v sále. 0 = bez výběru místa. */
+  spotCount: z.number().int().min(0).max(1000).optional(),
+  /** Tvrdé podmínky (10.33): věkové omezení účastníka (k datu lekce). */
+  minAge: z.number().int().min(0).max(120).optional().nullable(),
+  maxAge: z.number().int().min(0).max(120).optional().nullable(),
+  /** Prerekvizita: účastník musí mít dokončenou rezervaci této služby. */
+  prerequisiteServiceId: z.string().uuid().optional().nullable(),
 });
 export type CreateClassSessionDto = z.infer<typeof CreateClassSessionSchema>;
 
@@ -22,6 +29,8 @@ export const JoinClassSessionSchema = z.object({
   customerEmail: z.string().email().max(255),
   customerPhone: z.string().regex(CZ_PHONE).optional().nullable(),
   customerNote: z.string().max(2000).optional().nullable(),
+  /** Spot booking (10.33): zvolené místo v sále (1..spotCount). */
+  spotLabel: z.string().min(1).max(16).optional().nullable(),
 });
 export type JoinClassSessionDto = z.infer<typeof JoinClassSessionSchema>;
 
