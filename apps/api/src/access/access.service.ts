@@ -47,6 +47,12 @@ export type ValidateResult =
 export class AccessService {
   constructor(@Inject(DbService) private readonly dbService: DbService) {}
 
+  /** Payload k zakódování do QR — turniket/čtečka ho naskenuje a pošle na validate. */
+  private qrPayloadFor(code: string): string {
+    const base = process.env.APP_URL ?? 'http://localhost:4002';
+    return `${base}/access?code=${code}`;
+  }
+
   /** 6místný numerický kód, unikátní v rámci tenanta (retry na kolizi). */
   private async generateUniqueCode(tx: Database, tenantId: string): Promise<string> {
     for (let attempt = 0; attempt < 12; attempt++) {
@@ -108,7 +114,7 @@ export class AccessService {
           maxUses: input.maxUses ?? 1,
         })
         .returning();
-      return grant!;
+      return { ...grant!, qrPayload: this.qrPayloadFor(grant!.code) };
     });
   }
 
@@ -154,7 +160,7 @@ export class AccessService {
           maxUses: input.maxUses ?? 0,
         })
         .returning();
-      return grant!;
+      return { ...grant!, qrPayload: this.qrPayloadFor(grant!.code) };
     });
   }
 
@@ -212,13 +218,16 @@ export class AccessService {
         });
       };
 
+      // Row-lock: dva souběžné pokusy o vstup se stejným kódem se serializují,
+      // aby jednorázový kód nešlo „prostrčit" dvakrát naráz (double-spend).
       const [grant] = await tx
         .select()
         .from(schema.accessGrants)
         .where(
           and(eq(schema.accessGrants.tenantId, tenantId), eq(schema.accessGrants.code, input.code)),
         )
-        .limit(1);
+        .limit(1)
+        .for('update');
 
       if (!grant) {
         await log('denied', 'not_found', null);
