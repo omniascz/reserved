@@ -442,6 +442,14 @@ export class PublicController {
     return { data: await this.classSessions.sessionSpots(tenant.id, id) };
   }
 
+  /** GET /api/v1/public/:slug/class-sessions/:id/price — aktuální (dynamická) cena lekce. */
+  @Public()
+  @Get('class-sessions/:id/price')
+  async classSessionPrice(@Param('slug') slug: string, @Param('id') id: string) {
+    const tenant = await this.resolveTenant(slug);
+    return { data: await this.classSessions.quoteSessionPrice(tenant.id, id) };
+  }
+
   /** POST /api/v1/public/:slug/class-sessions/:id/join — self-service přihlášení do lekce. */
   @Public()
   @Post('class-sessions/:id/join')

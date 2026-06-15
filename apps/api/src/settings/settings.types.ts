@@ -126,3 +126,69 @@ export function extractMeetingSettings(settings: unknown): MeetingSettings {
   if (!result.success) return DEFAULT_MEETING_SETTINGS;
   return result.data;
 }
+
+// ─── Dynamické ceny lekcí (sprint 10.39) ───────────────────────────────
+// Cena lekce se upraví podle (a) off-peak hodin a (b) poptávky (fill rate).
+export const DynamicPricingSchema = z.object({
+  enabled: z.boolean().default(false),
+  /** Off-peak okno (hodina v dni, UTC) — sleva mimo špičku. */
+  offPeakStartHour: z.number().int().min(0).max(23).default(9),
+  offPeakEndHour: z.number().int().min(0).max(23).default(15),
+  offPeakDiscountPct: z.number().int().min(0).max(90).default(20),
+  /** Vysoká poptávka: fill >= X % → přirážka. */
+  highDemandFillPct: z.number().int().min(0).max(100).default(80),
+  highDemandSurgePct: z.number().int().min(0).max(200).default(15),
+  /** Nízká poptávka: fill <= X % → sleva (zaplnit prázdnou lekci). */
+  lowDemandFillPct: z.number().int().min(0).max(100).default(20),
+  lowDemandDiscountPct: z.number().int().min(0).max(90).default(15),
+});
+export type DynamicPricingSettings = z.infer<typeof DynamicPricingSchema>;
+export const DEFAULT_DYNAMIC_PRICING: DynamicPricingSettings = DynamicPricingSchema.parse({});
+
+export function extractDynamicPricing(settings: unknown): DynamicPricingSettings {
+  if (!settings || typeof settings !== 'object') return DEFAULT_DYNAMIC_PRICING;
+  const raw = (settings as Record<string, unknown>).dynamicPricing;
+  if (!raw) return DEFAULT_DYNAMIC_PRICING;
+  const result = DynamicPricingSchema.safeParse(raw);
+  return result.success ? result.data : DEFAULT_DYNAMIC_PRICING;
+}
+
+/**
+ * Spočítá dynamickou cenu lekce z bazické ceny, hodiny začátku (UTC) a
+ * naplněnosti. Vrací upravenou cenu (v haléřích) + popis úprav. Čistá funkce.
+ */
+export function computeDynamicClassPrice(
+  baseHellers: number,
+  hourUtc: number,
+  bookedCount: number,
+  capacity: number,
+  cfg: DynamicPricingSettings,
+): { effectiveHellers: number; adjustments: string[] } {
+  if (!cfg.enabled || baseHellers <= 0) {
+    return { effectiveHellers: baseHellers, adjustments: [] };
+  }
+  let factor = 1;
+  const adjustments: string[] = [];
+
+  // Off-peak okno (ošetří i přechod přes půlnoc).
+  const inOffPeak =
+    cfg.offPeakStartHour <= cfg.offPeakEndHour
+      ? hourUtc >= cfg.offPeakStartHour && hourUtc < cfg.offPeakEndHour
+      : hourUtc >= cfg.offPeakStartHour || hourUtc < cfg.offPeakEndHour;
+  if (inOffPeak && cfg.offPeakDiscountPct > 0) {
+    factor *= 1 - cfg.offPeakDiscountPct / 100;
+    adjustments.push(`off-peak -${cfg.offPeakDiscountPct}%`);
+  }
+
+  // Poptávka dle naplněnosti.
+  const fillPct = capacity > 0 ? Math.round((bookedCount / capacity) * 100) : 0;
+  if (fillPct >= cfg.highDemandFillPct && cfg.highDemandSurgePct > 0) {
+    factor *= 1 + cfg.highDemandSurgePct / 100;
+    adjustments.push(`vysoká poptávka +${cfg.highDemandSurgePct}%`);
+  } else if (fillPct <= cfg.lowDemandFillPct && cfg.lowDemandDiscountPct > 0) {
+    factor *= 1 - cfg.lowDemandDiscountPct / 100;
+    adjustments.push(`nízká poptávka -${cfg.lowDemandDiscountPct}%`);
+  }
+
+  return { effectiveHellers: Math.max(0, Math.round(baseHellers * factor)), adjustments };
+}

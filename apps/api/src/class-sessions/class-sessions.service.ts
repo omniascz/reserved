@@ -21,7 +21,11 @@ import { type AppRole, type TenantContext, serviceContext } from '@reserved/rls-
 import type { Database } from '../db/db.service.js';
 import { randomBytes } from 'node:crypto';
 import { DbService } from '../db/db.service.js';
-import { extractBookingRules } from '../settings/settings.types.js';
+import {
+  extractBookingRules,
+  extractDynamicPricing,
+  computeDynamicClassPrice,
+} from '../settings/settings.types.js';
 import { CustomersService } from '../customers/customers.service.js';
 import { TimePacksService } from '../time-packs/time-packs.service.js';
 import { BundlePacksService } from '../bundle-packs/bundle-packs.service.js';
@@ -607,6 +611,55 @@ export class ClassSessionsService {
     });
   }
 
+  // ─── Dynamická cena lekce (10.39) ───────────────────────────────────
+
+  /** Aktuální cena lekce (off-peak / poptávka) — veřejné, pro widget. */
+  async quoteSessionPrice(tenantId: string, sessionId: string) {
+    return this.dbService.withRlsContext(serviceContext(tenantId), async (tx) => {
+      const [s] = await tx
+        .select({
+          startsAt: schema.classSessions.startsAt,
+          bookedCount: schema.classSessions.bookedCount,
+          capacity: schema.classSessions.capacity,
+          serviceId: schema.classSessions.serviceId,
+        })
+        .from(schema.classSessions)
+        .where(
+          and(eq(schema.classSessions.id, sessionId), eq(schema.classSessions.tenantId, tenantId)),
+        )
+        .limit(1);
+      if (!s) {
+        throw new NotFoundException({
+          error: { code: 'SESSION_NOT_FOUND', message: 'Lekce nenalezena.' },
+        });
+      }
+      const [svc] = await tx
+        .select({ priceHellers: schema.services.priceHellers, currency: schema.services.currency })
+        .from(schema.services)
+        .where(eq(schema.services.id, s.serviceId))
+        .limit(1);
+      const [t] = await tx
+        .select({ settings: schema.tenants.settings })
+        .from(schema.tenants)
+        .where(eq(schema.tenants.id, tenantId))
+        .limit(1);
+      const base = svc?.priceHellers ?? 0;
+      const { effectiveHellers, adjustments } = computeDynamicClassPrice(
+        base,
+        s.startsAt.getUTCHours(),
+        s.bookedCount,
+        s.capacity,
+        extractDynamicPricing(t?.settings),
+      );
+      return {
+        basePriceHellers: base,
+        effectivePriceHellers: effectiveHellers,
+        currency: svc?.currency ?? 'CZK',
+        adjustments,
+      };
+    });
+  }
+
   // ─── Čtení ──────────────────────────────────────────────────────────
 
   async get(tenantId: string, userId: string, role: AppRole, sessionId: string) {
@@ -799,6 +852,21 @@ export class ClassSessionsService {
       .limit(1);
     const service = svcRows[0]!;
 
+    // Dynamická cena lekce (10.39) — off-peak / poptávka dle naplněnosti
+    // (počítáno z fill PŘED tímto přihlášením = co klient viděl).
+    const [tenantRow] = await tx
+      .select({ settings: schema.tenants.settings })
+      .from(schema.tenants)
+      .where(eq(schema.tenants.id, tenantId))
+      .limit(1);
+    const { effectiveHellers } = computeDynamicClassPrice(
+      service.priceHellers,
+      session.startsAt.getUTCHours(),
+      session.bookedCount,
+      session.capacity,
+      extractDynamicPricing(tenantRow?.settings),
+    );
+
     try {
       // Vnořená transakce = SAVEPOINT: kolize „klient už v lekci" se vrátí jen sem,
       // vnější transakce zůstane použitelná pro korekci obsazenosti.
@@ -820,7 +888,7 @@ export class ClassSessionsService {
             bufferStartsAt: session.bufferStartsAt,
             bufferEndsAt: session.bufferEndsAt,
             status: 'confirmed',
-            pricePaidHellers: service.priceHellers,
+            pricePaidHellers: effectiveHellers,
             currency: service.currency,
             customerNote: dto.customerNote ?? null,
             referenceCode: generateReferenceCode(),
