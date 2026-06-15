@@ -45,6 +45,7 @@ import { AccessModule } from './access/access.module.js';
 import { ReferralsModule } from './referrals/referrals.module.js';
 import { ChallengesModule } from './challenges/challenges.module.js';
 import { MakeupModule } from './makeup/makeup.module.js';
+import { AdmissionsModule } from './admissions/admissions.module.js';
 import { DispatchModule } from './dispatch/dispatch.module.js';
 import { PayrollModule } from './payroll/payroll.module.js';
 import { PosModule } from './pos/pos.module.js';
@@ -135,6 +136,7 @@ import { TenantMiddleware } from './tenant/tenant.middleware.js';
     ReferralsModule,
     ChallengesModule,
     MakeupModule,
+    AdmissionsModule,
   ],
 })
 export class AppModule implements NestModule {
