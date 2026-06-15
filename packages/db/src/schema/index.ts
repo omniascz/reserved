@@ -21,6 +21,7 @@ export * from './courses.js';
 export * from './access-grants.js';
 export * from './referrals.js';
 export * from './challenges.js';
+export * from './makeup-credits.js';
 export * from './class-session-waitlist.js';
 export * from './reviews.js';
 export * from './marketing-campaigns.js';

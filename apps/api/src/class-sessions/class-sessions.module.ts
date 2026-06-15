@@ -4,11 +4,19 @@ import { CustomersModule } from '../customers/customers.module.js';
 import { TimePacksModule } from '../time-packs/time-packs.module.js';
 import { BundlePacksModule } from '../bundle-packs/bundle-packs.module.js';
 import { CreditPacksModule } from '../credit-packs/credit-packs.module.js';
+import { MakeupModule } from '../makeup/makeup.module.js';
 import { ClassSessionsController } from './class-sessions.controller.js';
 import { ClassSessionsService } from './class-sessions.service.js';
 
 @Module({
-  imports: [DbModule, CustomersModule, TimePacksModule, BundlePacksModule, CreditPacksModule],
+  imports: [
+    DbModule,
+    CustomersModule,
+    TimePacksModule,
+    BundlePacksModule,
+    CreditPacksModule,
+    MakeupModule,
+  ],
   controllers: [ClassSessionsController],
   providers: [ClassSessionsService],
   exports: [ClassSessionsService],

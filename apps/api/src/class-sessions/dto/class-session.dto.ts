@@ -31,6 +31,8 @@ export const JoinClassSessionSchema = z.object({
   customerNote: z.string().max(2000).optional().nullable(),
   /** Spot booking (10.33): zvolené místo v sále (1..spotCount). */
   spotLabel: z.string().min(1).max(16).optional().nullable(),
+  /** Náhrada (10.40): použít dostupný make-up credit → lekce zdarma. */
+  useMakeupCredit: z.boolean().optional(),
 });
 export type JoinClassSessionDto = z.infer<typeof JoinClassSessionSchema>;
 

@@ -30,6 +30,7 @@ import { CustomersService } from '../customers/customers.service.js';
 import { TimePacksService } from '../time-packs/time-packs.service.js';
 import { BundlePacksService } from '../bundle-packs/bundle-packs.service.js';
 import { CreditPacksService } from '../credit-packs/credit-packs.service.js';
+import { MakeupService } from '../makeup/makeup.service.js';
 import type {
   CreateClassSessionDto,
   CreateRecurrenceDto,
@@ -70,6 +71,7 @@ export class ClassSessionsService {
     @Inject(TimePacksService) private readonly timePacks: TimePacksService,
     @Inject(BundlePacksService) private readonly bundlePacks: BundlePacksService,
     @Inject(CreditPacksService) private readonly creditPacks: CreditPacksService,
+    @Inject(MakeupService) private readonly makeup: MakeupService,
   ) {}
 
   // ─── Permanentky / balíčky na lekce (sprint 10.12) ──────────────────
@@ -909,6 +911,24 @@ export class ClassSessionsService {
         return b!;
       });
 
+      // Náhrada (10.40): pokud klient chce použít make-up credit a má dostupný,
+      // spotřebuj ho a lekce je zdarma (cena 0).
+      if (dto.useMakeupCredit) {
+        const consumed = await this.makeup.consumeForBooking(
+          tx,
+          tenantId,
+          dto.customerEmail,
+          booking.id,
+        );
+        if (consumed) {
+          await tx
+            .update(schema.bookings)
+            .set({ pricePaidHellers: 0, updatedAt: new Date() })
+            .where(eq(schema.bookings.id, booking.id));
+          booking.pricePaidHellers = 0;
+        }
+      }
+
       return { ok: true as const, booking };
     } catch (err) {
       const e = err as {
@@ -1280,7 +1300,24 @@ export class ClassSessionsService {
           });
         }
 
-        // Zruš všechny aktivní účastníky (zachyť jejich ID pro vrácení permanentek).
+        // Zachyť účastníky PRO náhrady i vrácení permanentek (před zrušením).
+        const activeParticipants = await tx
+          .select({
+            id: schema.bookings.id,
+            customerId: schema.bookings.customerId,
+            customerName: schema.bookings.customerName,
+            customerEmail: schema.bookings.customerEmail,
+          })
+          .from(schema.bookings)
+          .where(
+            and(
+              eq(schema.bookings.tenantId, tenantId),
+              eq(schema.bookings.sessionId, sessionId),
+              sql`${schema.bookings.status} NOT IN ('cancelled', 'no_show')`,
+            ),
+          );
+
+        // Zruš všechny aktivní účastníky.
         const cancelledParticipants = await tx
           .update(schema.bookings)
           .set({
@@ -1297,6 +1334,9 @@ export class ClassSessionsService {
             ),
           )
           .returning({ id: schema.bookings.id });
+
+        // Náhrady: studio zrušilo lekci → každý účastník dostane make-up credit.
+        await this.makeup.issueForParticipants(tx, tenantId, activeParticipants);
 
         const [updated] = await tx
           .update(schema.classSessions)
