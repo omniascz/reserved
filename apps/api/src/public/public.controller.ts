@@ -32,6 +32,7 @@ import {
 import { ReviewsService } from '../reviews/reviews.service.js';
 import { SubmitReviewSchema, type SubmitReviewDto } from '../reviews/dto/review.dto.js';
 import { ReferralsService } from '../referrals/referrals.service.js';
+import { ChallengesService } from '../challenges/challenges.service.js';
 import { VouchersService } from '../vouchers/vouchers.service.js';
 import { IntakeService } from '../intake/intake.service.js';
 import { SubmitFormSchema, type SubmitFormDto } from '../intake/dto/intake.dto.js';
@@ -59,6 +60,7 @@ export class PublicController {
     @Inject(IntakeService) private readonly intake: IntakeService,
     @Inject(SmartService) private readonly smart: SmartService,
     @Inject(ReferralsService) private readonly referrals: ReferralsService,
+    @Inject(ChallengesService) private readonly challenges: ChallengesService,
   ) {}
 
   /** GET /api/v1/public/:slug — info o tenant (název + theme + currency, timezone). */
@@ -503,6 +505,43 @@ export class PublicController {
     }
     const data = await this.reviews.publicForService(tenant.id, serviceId);
     return { data };
+  }
+
+  /** GET /api/v1/public/:slug/challenges — aktivní výzvy. */
+  @Public()
+  @Get('challenges')
+  async listChallenges(@Param('slug') slug: string) {
+    const tenant = await this.resolveTenant(slug);
+    return { data: await this.challenges.listPublic(tenant.id) };
+  }
+
+  /** GET /api/v1/public/:slug/challenges/:id/leaderboard — žebříček výzvy. */
+  @Public()
+  @Get('challenges/:id/leaderboard')
+  async challengeLeaderboard(@Param('slug') slug: string, @Param('id') id: string) {
+    const tenant = await this.resolveTenant(slug);
+    return { data: await this.challenges.leaderboard(tenant.id, id) };
+  }
+
+  /** POST /api/v1/public/:slug/challenges/:id/enroll — klient se zapíše do výzvy. */
+  @Public()
+  @Post('challenges/:id/enroll')
+  async enrollChallenge(
+    @Param('slug') slug: string,
+    @Param('id') id: string,
+    @Body(
+      new ZodValidationPipe(
+        z.object({
+          customerEmail: z.string().email().max(255),
+          customerName: z.string().min(1).max(200),
+          customerId: z.string().uuid().optional().nullable(),
+        }),
+      ),
+    )
+    dto: { customerEmail: string; customerName: string; customerId?: string | null },
+  ) {
+    const tenant = await this.resolveTenant(slug);
+    return { data: await this.challenges.enroll(tenant.id, id, dto) };
   }
 
   /** POST /api/v1/public/:slug/referral/redeem — uplatnění doporučovacího kódu novým klientem. */

@@ -7,6 +7,7 @@ import { VouchersModule } from '../vouchers/vouchers.module.js';
 import { IntakeModule } from '../intake/intake.module.js';
 import { SmartModule } from '../smart/smart.module.js';
 import { ReferralsModule } from '../referrals/referrals.module.js';
+import { ChallengesModule } from '../challenges/challenges.module.js';
 import { DbModule } from '../db/db.module.js';
 import { TenantModule } from '../tenant/tenant.module.js';
 import { PublicController } from './public.controller.js';
@@ -23,6 +24,7 @@ import { PublicController } from './public.controller.js';
     IntakeModule,
     SmartModule,
     ReferralsModule,
+    ChallengesModule,
   ],
   controllers: [PublicController],
 })
