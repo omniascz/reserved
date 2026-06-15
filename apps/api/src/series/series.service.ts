@@ -68,7 +68,64 @@ export class SeriesService {
 
   async create(tenantId: string, userId: string, role: AppRole, dto: CreateSeriesDto) {
     assertCanManage(role);
-    return this.dbService.withRlsContext(ctxFor(tenantId, userId, role), async (tx) => {
+    return this.runCreate(ctxFor(tenantId, userId, role), tenantId, userId, dto);
+  }
+
+  /**
+   * Self-service: přihlášený zákazník si z portálu založí opakovanou rezervaci
+   * („držím si úterý 18:00"). Identita se bere z jeho účtu, běží v service kontextu.
+   */
+  async createSelfService(
+    tenantId: string,
+    customerId: string,
+    dto: {
+      serviceId: string;
+      employeeId: string;
+      startsAt: string;
+      frequency: 'weekly' | 'biweekly' | 'monthly';
+      occurrences: number;
+      customerNote?: string | null;
+    },
+  ) {
+    const cust = await this.dbService.withRlsContext(serviceContext(tenantId), async (tx) => {
+      const [c] = await tx
+        .select({
+          firstName: schema.customers.firstName,
+          lastName: schema.customers.lastName,
+          email: schema.customers.email,
+          phone: schema.customers.phone,
+        })
+        .from(schema.customers)
+        .where(and(eq(schema.customers.id, customerId), eq(schema.customers.tenantId, tenantId)))
+        .limit(1);
+      return c;
+    });
+    if (!cust) {
+      throw new NotFoundException({
+        error: { code: 'CUSTOMER_NOT_FOUND', message: 'Zákazník nenalezen.' },
+      });
+    }
+    const fullDto: CreateSeriesDto = {
+      serviceId: dto.serviceId,
+      employeeId: dto.employeeId,
+      customerName: `${cust.firstName} ${cust.lastName}`.trim(),
+      customerEmail: cust.email,
+      customerPhone: cust.phone ?? null,
+      startsAt: dto.startsAt,
+      frequency: dto.frequency,
+      occurrences: dto.occurrences,
+      customerNote: dto.customerNote ?? null,
+    };
+    return this.runCreate(serviceContext(tenantId), tenantId, customerId, fullDto);
+  }
+
+  private async runCreate(
+    ctx: TenantContext,
+    tenantId: string,
+    actorId: string,
+    dto: CreateSeriesDto,
+  ) {
+    return this.dbService.withRlsContext(ctx, async (tx) => {
       // 1. Služba
       const [service] = await tx
         .select()
@@ -147,7 +204,7 @@ export class SeriesService {
           startsAt: firstStart,
           occurrenceCount: dto.occurrences,
           status: 'active',
-          metadata: { createdByUserId: userId },
+          metadata: { createdByUserId: actorId },
         })
         .returning();
 
@@ -197,7 +254,7 @@ export class SeriesService {
               bookingId: b!.id,
               fromStatus: null,
               toStatus: 'confirmed',
-              changedBy: userId,
+              changedBy: actorId,
               metadata: { source: 'series' },
             });
             return b!;

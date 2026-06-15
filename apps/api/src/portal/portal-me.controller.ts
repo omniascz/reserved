@@ -12,11 +12,22 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import type { Request } from 'express';
+import { z } from 'zod';
 import { Public } from '../auth/decorators/public.decorator.js';
 import { ZodValidationPipe } from '../auth/zod-validation.pipe.js';
 import { PortalGuard } from './portal.guard.js';
 import { PortalMeService } from './portal-me.service.js';
 import { ContentService } from '../content/content.service.js';
+import { SeriesService } from '../series/series.service.js';
+
+const SelfSeriesSchema = z.object({
+  serviceId: z.string().uuid(),
+  employeeId: z.string().uuid(),
+  startsAt: z.string().datetime(),
+  frequency: z.enum(['weekly', 'biweekly', 'monthly']),
+  occurrences: z.number().int().min(2).max(52),
+  customerNote: z.string().max(2000).optional().nullable(),
+});
 import {
   CancelMyBookingSchema,
   RescheduleMyBookingSchema,
@@ -35,6 +46,7 @@ export class PortalMeController {
   constructor(
     @Inject(PortalMeService) private readonly me: PortalMeService,
     @Inject(ContentService) private readonly content: ContentService,
+    @Inject(SeriesService) private readonly series: SeriesService,
   ) {}
 
   private requireAuth(req: Request): { tenantId: string; customerId: string } {
@@ -50,6 +62,17 @@ export class PortalMeController {
   async getProfile(@Req() req: Request): Promise<{ data: unknown }> {
     const { tenantId, customerId } = this.requireAuth(req);
     return { data: await this.me.getProfile(tenantId, customerId) };
+  }
+
+  /** Self-service: klient si založí opakovanou rezervaci („držím si úterý 18:00"). */
+  @Post('series')
+  @HttpCode(201)
+  async createSeries(
+    @Req() req: Request,
+    @Body(new ZodValidationPipe(SelfSeriesSchema)) dto: z.infer<typeof SelfSeriesSchema>,
+  ): Promise<{ data: unknown }> {
+    const { tenantId, customerId } = this.requireAuth(req);
+    return { data: await this.series.createSelfService(tenantId, customerId, dto) };
   }
 
   /** Knihovna obsahu pro přihlášeného klienta — odemkne dle členství/předplatného. */
