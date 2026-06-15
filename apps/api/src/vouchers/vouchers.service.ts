@@ -13,6 +13,7 @@ import { schema } from '@reserved/db';
 import { type AppRole, serviceContext, type TenantContext } from '@reserved/rls-multitenancy';
 import { randomBytes } from 'node:crypto';
 import { DbService } from '../db/db.service.js';
+import { EmailService } from '../email/email.service.js';
 import type { IssueVoucherDto, RedeemVoucherDto } from './dto/voucher.dto.js';
 
 const MANAGE_ROLES: AppRole[] = ['owner', 'manager', 'receptionist'];
@@ -40,16 +41,19 @@ function generateCode(): string {
 
 @Injectable()
 export class VouchersService {
-  constructor(@Inject(DbService) private readonly dbService: DbService) {}
+  constructor(
+    @Inject(DbService) private readonly dbService: DbService,
+    @Inject(EmailService) private readonly email: EmailService,
+  ) {}
 
   async issue(tenantId: string, userId: string, role: AppRole, dto: IssueVoucherDto) {
     assertCanManage(role);
-    return this.dbService.withRlsContext(ctxFor(tenantId, userId, role), async (tx) => {
+    const row = await this.dbService.withRlsContext(ctxFor(tenantId, userId, role), async (tx) => {
       // Generuj unikátní kód (retry na kolizi).
       for (let attempt = 0; attempt < 5; attempt++) {
         const code = generateCode();
         try {
-          const [row] = await tx
+          const [r] = await tx
             .insert(schema.giftVouchers)
             .values({
               tenantId,
@@ -65,7 +69,7 @@ export class VouchersService {
               createdBy: userId,
             })
             .returning();
-          return row!;
+          return r!;
         } catch (err) {
           const e = err as { code?: string; cause?: { code?: string } };
           if ((e.code ?? e.cause?.code) === '23505') continue; // kolize kódu → zkus znovu
@@ -76,6 +80,39 @@ export class VouchersService {
         error: { code: 'CODE_GENERATION_FAILED', message: 'Nepodařilo se vygenerovat kód.' },
       });
     });
+
+    // Pošli dárek příjemci (po commitu, best-effort).
+    if (row.recipientEmail) {
+      await this.sendGiftEmail(tenantId, row);
+    }
+    return row;
+  }
+
+  /** Odešle dárkový poukaz příjemci e-mailem (kód + hodnota + vzkaz). */
+  private async sendGiftEmail(
+    tenantId: string,
+    voucher: typeof schema.giftVouchers.$inferSelect,
+  ): Promise<void> {
+    if (!voucher.recipientEmail) return;
+    const value = (voucher.initialValueHellers / 100).toLocaleString('cs-CZ');
+    const greeting = voucher.recipientName ? `Ahoj ${voucher.recipientName},` : 'Dobrý den,';
+    const note = voucher.note ? `\n\nVzkaz: ${voucher.note}` : '';
+    try {
+      await this.email.enqueue({
+        tenantId,
+        templateCode: 'custom',
+        recipient: voucher.recipientEmail,
+        vars: {
+          __customSubject: `Dárkový poukaz na ${value} ${voucher.currency}`,
+          __customBody:
+            `${greeting}\n\nbyl vám darován poukaz v hodnotě ${value} ${voucher.currency}.\n` +
+            `Kód poukazu: ${voucher.code}` +
+            note,
+        },
+      });
+    } catch {
+      // odeslání e-mailu nesmí shodit vydání poukazu
+    }
   }
 
   async listForAdmin(tenantId: string, userId: string, role: AppRole) {

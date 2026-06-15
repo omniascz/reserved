@@ -4,7 +4,7 @@ import { tenants } from './tenants.js';
 // Sprint 10.8 — věrnostní body. Ledger transakcí; zůstatek = SUM(points) na klienta.
 // Kladné = připsání (earn_booking), záporné = uplatnění (redeem). admin_adjust = ruční ±.
 
-export const loyaltyTxTypes = ['earn_booking', 'redeem', 'admin_adjust'] as const;
+export const loyaltyTxTypes = ['earn_booking', 'redeem', 'admin_adjust', 'referral'] as const;
 export type LoyaltyTxType = (typeof loyaltyTxTypes)[number];
 
 export const loyaltyTransactions = pgTable(
