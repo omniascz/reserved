@@ -1,6 +1,7 @@
-import { Body, Controller, Get, Inject, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, Inject, Post, Query, Redirect } from '@nestjs/common';
 import { z } from 'zod';
 import { CurrentUser } from '../auth/decorators/current-user.decorator.js';
+import { Public } from '../auth/decorators/public.decorator.js';
 import type { AccessTokenPayload } from '../auth/auth.types.js';
 import { ZodValidationPipe } from '../auth/zod-validation.pipe.js';
 import { DepositsService } from './deposits.service.js';
@@ -27,6 +28,26 @@ export class DepositsController {
     @Body(new ZodValidationPipe(ProviderSchema)) dto: z.infer<typeof ProviderSchema>,
   ) {
     return { data: await this.svc.connectStart(user.tenantId, user.sub, user.role, dto.provider) };
+  }
+
+  /** Stripe Connect: vrátí authorize URL pro onboarding (reálný OAuth). */
+  @Get('connect/stripe/url')
+  async stripeConnectUrl(@CurrentUser() user: AccessTokenPayload) {
+    return { data: await this.svc.stripeConnectUrl(user.tenantId, user.sub, user.role) };
+  }
+
+  /** Stripe Connect OAuth callback (veřejné — Stripe sem přesměruje prohlížeč). */
+  @Public()
+  @Get('connect/stripe/callback')
+  @Redirect()
+  async stripeConnectCallback(@Query('code') code: string, @Query('state') state: string) {
+    const appUrl = process.env.APP_URL ?? 'http://localhost:3000';
+    try {
+      await this.svc.stripeConnectCallback(code, state);
+      return { url: `${appUrl}/settings/payments?connected=stripe` };
+    } catch {
+      return { url: `${appUrl}/settings/payments?connect_error=1` };
+    }
   }
 
   @Get('deposit/quote')

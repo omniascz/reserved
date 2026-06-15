@@ -14,9 +14,11 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { createHmac, randomBytes } from 'node:crypto';
+import Stripe from 'stripe';
 import { and, eq } from 'drizzle-orm';
 import { schema } from '@reserved/db';
-import { type AppRole, type TenantContext } from '@reserved/rls-multitenancy';
+import { type AppRole, serviceContext, type TenantContext } from '@reserved/rls-multitenancy';
 import { DbService } from '../db/db.service.js';
 import { NoShowRiskService } from '../customers/no-show-risk.service.js';
 import { PaymentsService } from '../payments/payments.service.js';
@@ -126,6 +128,131 @@ export class DepositsService {
         .from(schema.paymentConnections)
         .where(eq(schema.paymentConnections.tenantId, tenantId));
     });
+  }
+
+  // ─── Stripe Connect (Standard, 0 % platform fee) — reálný OAuth onboarding ───
+  // Naběhne po doplnění env: STRIPE_CONNECT_CLIENT_ID (platforma) +
+  // STRIPE_SECRET_KEY (platforma, pro výměnu kódu). Bez nich vrací configured:false.
+
+  /** HMAC-podepsaný state proti CSRF: tenantId.nonce.sig */
+  private signConnectState(tenantId: string): string {
+    const secret = process.env.JWT_SECRET ?? 'dev-secret';
+    const nonce = randomBytes(8).toString('hex');
+    const payload = `${tenantId}.${nonce}`;
+    const sig = createHmac('sha256', secret).update(payload).digest('hex').slice(0, 32);
+    return `${payload}.${sig}`;
+  }
+
+  private verifyConnectState(state: string): string | null {
+    const secret = process.env.JWT_SECRET ?? 'dev-secret';
+    const parts = state.split('.');
+    if (parts.length !== 3) return null;
+    const [tenantId, nonce, sig] = parts;
+    const expected = createHmac('sha256', secret)
+      .update(`${tenantId}.${nonce}`)
+      .digest('hex')
+      .slice(0, 32);
+    return sig === expected && tenantId ? tenantId : null;
+  }
+
+  /** Vrátí Stripe Connect authorize URL (nebo configured:false, když chybí klíč). */
+  async stripeConnectUrl(tenantId: string, userId: string, role: AppRole) {
+    assertCanManage(role);
+    const clientId = process.env.STRIPE_CONNECT_CLIENT_ID;
+    if (!clientId) {
+      return {
+        configured: false as const,
+        message:
+          'Stripe Connect není nakonfigurován — nastav env STRIPE_CONNECT_CLIENT_ID (a STRIPE_SECRET_KEY pro callback).',
+      };
+    }
+    const apiBase = process.env.API_PUBLIC_URL ?? 'http://localhost:4000';
+    const redirectUri = `${apiBase}/api/v1/admin/payments/connect/stripe/callback`;
+    const state = this.signConnectState(tenantId);
+    const url =
+      'https://connect.stripe.com/oauth/authorize?response_type=code' +
+      `&client_id=${encodeURIComponent(clientId)}` +
+      '&scope=read_write' +
+      `&state=${encodeURIComponent(state)}` +
+      `&redirect_uri=${encodeURIComponent(redirectUri)}`;
+    return { configured: true as const, authorizeUrl: url };
+  }
+
+  /**
+   * OAuth callback — vymění code za connected account a aktivuje připojení.
+   * Vyžaduje platformní STRIPE_SECRET_KEY. Vrací connected:true + accountId.
+   */
+  async stripeConnectCallback(code: string, state: string) {
+    const tenantId = this.verifyConnectState(state);
+    if (!tenantId) {
+      throw new BadRequestException({
+        error: { code: 'INVALID_STATE', message: 'Neplatný state (CSRF).' },
+      });
+    }
+    const secret = process.env.STRIPE_SECRET_KEY;
+    if (!secret) {
+      throw new BadRequestException({
+        error: {
+          code: 'STRIPE_NOT_CONFIGURED',
+          message: 'Chybí platformní STRIPE_SECRET_KEY pro dokončení onboardingu.',
+        },
+      });
+    }
+    const stripe = new Stripe(secret, { apiVersion: '2025-02-24.acacia' });
+    const resp = await stripe.oauth.token({ grant_type: 'authorization_code', code });
+    const accountId = resp.stripe_user_id;
+    if (!accountId) {
+      throw new BadRequestException({
+        error: { code: 'CONNECT_FAILED', message: 'Stripe nevrátil connected account.' },
+      });
+    }
+
+    await this.dbService.withRlsContext(serviceContext(tenantId), async (tx) => {
+      const [existing] = await tx
+        .select({ id: schema.paymentConnections.id })
+        .from(schema.paymentConnections)
+        .where(
+          and(
+            eq(schema.paymentConnections.tenantId, tenantId),
+            eq(schema.paymentConnections.provider, 'stripe'),
+          ),
+        )
+        .limit(1);
+      const values = { status: 'active', chargesEnabled: true, accountId, updatedAt: new Date() };
+      if (existing) {
+        await tx
+          .update(schema.paymentConnections)
+          .set(values)
+          .where(eq(schema.paymentConnections.id, existing.id));
+      } else {
+        await tx
+          .insert(schema.paymentConnections)
+          .values({ tenantId, provider: 'stripe', ...values });
+      }
+      // Zapni platební metodu stripe.
+      const [m] = await tx
+        .select({ id: schema.paymentMethods.id })
+        .from(schema.paymentMethods)
+        .where(
+          and(
+            eq(schema.paymentMethods.tenantId, tenantId),
+            eq(schema.paymentMethods.methodType, 'stripe'),
+          ),
+        )
+        .limit(1);
+      if (m) {
+        await tx
+          .update(schema.paymentMethods)
+          .set({ isEnabled: true, updatedAt: new Date() })
+          .where(eq(schema.paymentMethods.id, m.id));
+      } else {
+        await tx
+          .insert(schema.paymentMethods)
+          .values({ tenantId, methodType: 'stripe', isEnabled: true, config: {} });
+      }
+    });
+
+    return { connected: true as const, accountId };
   }
 
   // ─── P2 + P3: kalkulace zálohy ───────────────────────────────────────
