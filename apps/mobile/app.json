@@ -1,0 +1,25 @@
+{
+  "expo": {
+    "name": "Moje rezervace",
+    "slug": "reserved-mobile",
+    "scheme": "reserved",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "cz.reserved.app"
+    },
+    "android": {
+      "package": "cz.reserved.app"
+    },
+    "plugins": ["expo-router", "expo-secure-store"],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "apiUrl": "http://localhost:4000/api/v1"
+    }
+  }
+}
