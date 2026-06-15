@@ -11,6 +11,8 @@ import { headers } from 'next/headers';
 import { notFound } from 'next/navigation';
 import { fetchSite, findTenantByHost, type SiteData } from '@/lib/api';
 import { ElegantTemplate } from '@/components/templates/Elegant';
+import { BoldTemplate } from '@/components/templates/Bold';
+import { FreshTemplate } from '@/components/templates/Fresh';
 
 export const dynamic = 'force-dynamic';
 
@@ -77,11 +79,13 @@ export default async function TenantSitePage({
     );
   }
 
-  // Render šablony — zatím pouze Elegant; další budou bold a fresh.
+  // Render šablony dle volby tenanta.
   switch (site.template) {
-    case 'elegant':
     case 'bold':
+      return <BoldTemplate site={site} />;
     case 'fresh':
+      return <FreshTemplate site={site} />;
+    case 'elegant':
     default:
       return <ElegantTemplate site={site} />;
   }

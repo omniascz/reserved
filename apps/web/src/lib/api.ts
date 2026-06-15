@@ -895,6 +895,35 @@ export async function getReportOverview(
   return data;
 }
 
+export interface ClassUtilization {
+  sessions: number;
+  totalCapacity: number;
+  totalBooked: number;
+  fillRatePct: number;
+  present: number;
+  noShow: number;
+  attendanceRatePct: number;
+}
+
+export async function getClassUtilization(filters: ReportFilters): Promise<ClassUtilization> {
+  const qs = buildReportQuery(filters);
+  const { data } = await fetchApi<{ data: ClassUtilization }>(
+    `/admin/reports/class-utilization?${qs}`,
+  );
+  return data;
+}
+
+export interface MrrReport {
+  activeSubscriptions: number;
+  mrrHellers: number;
+  arrHellers: number;
+}
+
+export async function getMrr(): Promise<MrrReport> {
+  const { data } = await fetchApi<{ data: MrrReport }>(`/admin/reports/mrr`);
+  return data;
+}
+
 export interface BookingPerDay {
   day: string;
   count: number;

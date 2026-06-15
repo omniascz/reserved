@@ -159,6 +159,17 @@ export function NavHeader() {
               Dashboard
             </Link>
 
+            <Link
+              href="/reports"
+              className={`px-3 py-1.5 rounded font-medium ${
+                pathname === '/reports'
+                  ? 'bg-brand-50 text-brand-700'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+              }`}
+            >
+              Reporty
+            </Link>
+
             {GROUPS.map((group) => {
               const active = isGroupActive(group);
               const isOpen = openGroup === group.key;
