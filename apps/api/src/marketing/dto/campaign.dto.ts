@@ -14,7 +14,7 @@ export type AudienceDef = z.infer<typeof AudienceSchema>;
 
 export const CreateCampaignSchema = z.object({
   name: z.string().min(1).max(200),
-  channel: z.enum(['email', 'sms']),
+  channel: z.enum(['email', 'sms', 'whatsapp']),
   subject: z.string().max(500).optional().nullable(),
   body: z.string().min(1).max(5000),
   audience: AudienceSchema,

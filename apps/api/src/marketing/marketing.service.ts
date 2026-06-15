@@ -97,7 +97,8 @@ export class MarketingService {
       eq(schema.customers.marketingOptIn, true),
     ];
 
-    if (channel === 'sms') {
+    // SMS i WhatsApp jdou na telefon → vyžaduj vyplněné číslo.
+    if (channel === 'sms' || channel === 'whatsapp') {
       conds.push(sql`${schema.customers.phone} IS NOT NULL AND ${schema.customers.phone} <> ''`);
     }
 
@@ -155,7 +156,7 @@ export class MarketingService {
         count: recipients.length,
         sample: recipients.slice(0, 5).map((r) => ({
           name: `${r.firstName} ${r.lastName}`.trim(),
-          contact: campaign.channel === 'sms' ? r.phone : r.email,
+          contact: campaign.channel === 'email' ? r.email : r.phone,
         })),
       };
     });
@@ -195,7 +196,7 @@ export class MarketingService {
       const now = new Date();
       let sent = 0;
       for (const r of recipients) {
-        const recipient = campaign.channel === 'sms' ? r.phone : r.email;
+        const recipient = campaign.channel === 'email' ? r.email : r.phone;
         if (!recipient) continue;
         await tx.insert(schema.notifications).values({
           tenantId,

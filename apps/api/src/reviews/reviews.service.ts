@@ -60,6 +60,17 @@ export class ReviewsService {
         });
       }
 
+      // Pre-moderace: nová recenze jde do 'pending' a veřejně se NEzobrazí,
+      // dokud ji admin nezveřejní. Tenant si může zapnout auto-publish.
+      const [t] = await tx
+        .select({ settings: schema.tenants.settings })
+        .from(schema.tenants)
+        .where(eq(schema.tenants.id, tenantId))
+        .limit(1);
+      const autoPublish =
+        (t?.settings as { reviews?: { autoPublish?: boolean } } | null)?.reviews?.autoPublish ===
+        true;
+
       const [review] = await tx
         .insert(schema.reviews)
         .values({
@@ -70,7 +81,7 @@ export class ReviewsService {
           employeeId: booking.employeeId,
           rating: dto.rating,
           comment: dto.comment ?? null,
-          status: 'published',
+          status: autoPublish ? 'published' : 'pending',
         })
         .returning();
       return review!;

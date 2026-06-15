@@ -15,7 +15,7 @@ import { tenants } from './tenants.js';
 // Odeslání vloží zprávy do fronty `notifications`, kterou rozešle worker.
 // audience jsonb: { type: 'all_optin' | 'inactive_days' | 'tag', days?: number, tag?: string }.
 
-export const campaignChannels = ['email', 'sms'] as const;
+export const campaignChannels = ['email', 'sms', 'whatsapp'] as const;
 export type CampaignChannel = (typeof campaignChannels)[number];
 
 export const campaignStatuses = ['draft', 'sent'] as const;

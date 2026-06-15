@@ -17,7 +17,7 @@ import { employees } from './employees.js';
 // jedna recenze na rezervaci. Veřejně se zobrazuje průměr na službu/zaměstnance,
 // admin může recenzi skrýt.
 
-export const reviewStatuses = ['published', 'hidden'] as const;
+export const reviewStatuses = ['pending', 'published', 'hidden'] as const;
 export type ReviewStatus = (typeof reviewStatuses)[number];
 
 export const reviews = pgTable(
