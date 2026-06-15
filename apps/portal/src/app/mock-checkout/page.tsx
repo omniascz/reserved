@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 
 // Mock checkout page — pro dev/test. Simuluje Stripe/GoPay checkout
@@ -9,7 +9,7 @@ import { useSearchParams } from 'next/navigation';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api/v1';
 
-export default function MockCheckoutPage() {
+function MockCheckoutInner() {
   const search = useSearchParams();
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -105,5 +105,13 @@ export default function MockCheckoutPage() {
         </p>
       </div>
     </main>
+  );
+}
+
+export default function MockCheckoutPage() {
+  return (
+    <Suspense fallback={null}>
+      <MockCheckoutInner />
+    </Suspense>
   );
 }
