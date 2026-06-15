@@ -10,11 +10,13 @@ import {
   MeetingSettingsSchema,
   NotificationSettingsSchema,
 } from './settings.types.js';
+import { CancellationPolicySchema } from './cancellation-policy.js';
 
 const PartialRulesSchema = BookingRulesSchema.partial();
 const PartialNotificationsSchema = NotificationSettingsSchema.partial();
 const PartialLoyaltySchema = LoyaltySettingsSchema.partial();
 const PartialMeetingSchema = MeetingSettingsSchema.partial();
+const PartialCancellationSchema = CancellationPolicySchema.partial();
 
 @Controller('admin/settings')
 export class SettingsController {
@@ -63,6 +65,22 @@ export class SettingsController {
     @Body(new ZodValidationPipe(PartialLoyaltySchema)) dto: z.infer<typeof PartialLoyaltySchema>,
   ) {
     const data = await this.svc.updateLoyaltySettings(user.tenantId, user.sub, user.role, dto);
+    return { data };
+  }
+
+  @Get('cancellation')
+  async getCancellation(@CurrentUser() user: AccessTokenPayload) {
+    const data = await this.svc.getCancellationPolicy(user.tenantId, user.sub, user.role);
+    return { data };
+  }
+
+  @Patch('cancellation')
+  async updateCancellation(
+    @CurrentUser() user: AccessTokenPayload,
+    @Body(new ZodValidationPipe(PartialCancellationSchema))
+    dto: z.infer<typeof PartialCancellationSchema>,
+  ) {
+    const data = await this.svc.updateCancellationPolicy(user.tenantId, user.sub, user.role, dto);
     return { data };
   }
 

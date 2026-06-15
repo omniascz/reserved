@@ -19,7 +19,12 @@ import { TimePacksService } from '../time-packs/time-packs.service.js';
 import { DbService } from '../db/db.service.js';
 import { EmailService } from '../email/email.service.js';
 import { EventBus } from '../rules/events.bus.js';
+import { MakeupService } from '../makeup/makeup.service.js';
 import { extractBookingRules } from '../settings/settings.types.js';
+import {
+  extractCancellationPolicy,
+  resolveCancelOutcome,
+} from '../settings/cancellation-policy.js';
 import type { BookingEventPayload, TriggerEvent } from '@reserved/rules-engine';
 import type {
   CancelMyBookingDto,
@@ -41,6 +46,7 @@ export class PortalMeService {
     @Inject(BundlePacksService) private readonly bundlePacks: BundlePacksService,
     @Inject(TimePacksService) private readonly timePacks: TimePacksService,
     @Inject(SubscriptionsService) private readonly subscriptions: SubscriptionsService,
+    @Inject(MakeupService) private readonly makeup: MakeupService,
   ) {}
 
   // ---------------------------------------------------------------------------
@@ -174,7 +180,7 @@ export class PortalMeService {
           .from(schema.tenants)
           .where(eq(schema.tenants.id, tenantId))
           .limit(1);
-        const rules = extractBookingRules(tenant?.settings);
+        const policy = extractCancellationPolicy(tenant?.settings);
 
         const [booking] = await tx
           .select()
@@ -198,16 +204,10 @@ export class PortalMeService {
           });
         }
 
-        // Check storno deadline
+        // Storno politika: zrušení je vždy povoleno, ale následek závisí na tom,
+        // jak dlouho před začátkem se ruší (okno volného storna vs. pozdě).
         const hoursUntilStart = (booking.startsAt.getTime() - Date.now()) / 3_600_000;
-        if (hoursUntilStart < rules.stornoLimitHours) {
-          throw new ForbiddenException({
-            error: {
-              code: 'STORNO_DEADLINE_PASSED',
-              message: `Storno je možné nejpozději ${rules.stornoLimitHours}h před začátkem. Kontaktujte prosím salon.`,
-            },
-          });
-        }
+        const outcome = resolveCancelOutcome(policy, { hoursUntilStart, kind: 'cancel' });
 
         const [updated] = await tx
           .update(schema.bookings)
@@ -227,45 +227,65 @@ export class PortalMeService {
           toStatus: 'cancelled',
           changedBy: customerId,
           reason: dto.reason ?? 'customer_cancelled',
-          metadata: { source: 'portal' },
+          metadata: { source: 'portal', stornoOutcome: outcome.reasonCode },
         });
 
-        return { booking: updated!, tenantName: tenant?.name ?? 'Reserved' };
+        return { booking: updated!, tenantName: tenant?.name ?? 'Reserved', outcome };
       },
     );
+
+    const outcome = result.outcome;
 
     // Notify customer + send email confirmation
     await this.sendBookingEmail(tenantId, result.booking, 'booking_cancelled', result.tenantName, {
       reason: dto.reason,
     });
 
-    // Refund pokud byl drive odpocteny — zkusi vsechny tri typy (time/bundle/credit).
-    try {
-      await this.timePacks.refundForBooking({
-        tenantId,
-        bookingId: result.booking.id,
-        performedBy: customerId,
-      });
-    } catch {
-      // ignoruj
+    // Storno V OKNĚ → vrať lekci/kredit (refund permanentky, zkusí všechny 3 typy).
+    // Pozdní storno (returnLesson=false) → kredit se NEvrací (lekce propadá).
+    if (outcome.returnLesson) {
+      try {
+        await this.timePacks.refundForBooking({
+          tenantId,
+          bookingId: result.booking.id,
+          performedBy: customerId,
+        });
+      } catch {
+        // ignoruj
+      }
+      try {
+        await this.bundlePacks.refundForBooking({
+          tenantId,
+          bookingId: result.booking.id,
+          performedBy: customerId,
+        });
+      } catch {
+        // ignoruj
+      }
+      try {
+        await this.creditPacks.refundForBooking({
+          tenantId,
+          bookingId: result.booking.id,
+          performedBy: customerId,
+        });
+      } catch {
+        // ignoruj
+      }
     }
-    try {
-      await this.bundlePacks.refundForBooking({
-        tenantId,
-        bookingId: result.booking.id,
-        performedBy: customerId,
-      });
-    } catch {
-      // ignoruj
-    }
-    try {
-      await this.creditPacks.refundForBooking({
-        tenantId,
-        bookingId: result.booking.id,
-        performedBy: customerId,
-      });
-    } catch {
-      // ignoruj
+
+    // Pozdní storno s politikou „náhradový kredit" → vydej náhradu.
+    if (outcome.issueMakeup) {
+      try {
+        await this.makeup.issueForCancel(tenantId, {
+          customerId: result.booking.customerId,
+          customerName: result.booking.customerName,
+          customerEmail: result.booking.customerEmail,
+          originBookingId: result.booking.id,
+          validDays: outcome.makeupValidDays,
+        });
+      } catch {
+        // ignoruj — storno proběhlo, náhrada je „bonus navíc"
+      }
     }
 
     // Emit domain event → rules engine reaguje

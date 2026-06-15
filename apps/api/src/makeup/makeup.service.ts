@@ -89,6 +89,38 @@ export class MakeupService {
     return participants.length;
   }
 
+  /**
+   * Vydá náhradu při zrušení/no-show podle storno politiky (volá portál/admin
+   * po commitu zrušení). Bez role-gate (serviceContext) — důvod 'client_cancelled'.
+   */
+  async issueForCancel(
+    tenantId: string,
+    dto: {
+      customerEmail: string;
+      customerName: string;
+      customerId?: string | null;
+      originBookingId?: string | null;
+      validDays: number;
+    },
+  ) {
+    return this.dbService.withRlsContext(serviceContext(tenantId), async (tx) => {
+      const validUntil = new Date(Date.now() + dto.validDays * 86400_000);
+      const [row] = await tx
+        .insert(schema.makeupCredits)
+        .values({
+          tenantId,
+          customerId: dto.customerId ?? null,
+          customerName: dto.customerName,
+          customerEmail: dto.customerEmail,
+          reason: 'client_cancelled',
+          originBookingId: dto.originBookingId ?? null,
+          validUntil,
+        })
+        .returning();
+      return row!;
+    });
+  }
+
   /** Dostupné náhrady zákazníka (dle e-mailu). */
   async listForCustomer(tenantId: string, customerEmail: string) {
     return this.dbService.withRlsContext(serviceContext(tenantId), async (tx) => {

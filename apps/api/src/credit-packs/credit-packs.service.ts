@@ -24,7 +24,8 @@ import {
 import { and, asc, desc, eq, gt, inArray, isNull, or, sql } from 'drizzle-orm';
 import { schema } from '@reserved/db';
 import { type AppRole, serviceContext, type TenantContext } from '@reserved/rls-multitenancy';
-import { DbService } from '../db/db.service.js';
+import { DbService, type Database } from '../db/db.service.js';
+import { extractCancellationPolicy, resolveRollover } from '../settings/cancellation-policy.js';
 import type {
   AdjustCreditsDto,
   AllocateCreditPackDto,
@@ -222,8 +223,83 @@ export class CreditPacksService {
         })
         .returning();
 
+      // Rollover: přenes nevyčerpané kredity z expirovaných programů zákazníka
+      // na tento nový nákup (dle storno politiky). Zdrojové balíčky se uzavřou.
+      await this.applyRollover(tx, tenantId, customerId, allocated!);
+
       return allocated!;
     });
+  }
+
+  /**
+   * Přenese nevyčerpané kredity z EXPIROVANÝCH balíčků zákazníka na nově
+   * koupený balíček. Respektuje storno politiku (zapnuto? max? prodloužení
+   * platnosti?). Zdrojové (propadlé) balíčky se vynulují a uzavřou jako
+   * `rolled_over`, ať se nepřenesou podruhé.
+   */
+  private async applyRollover(
+    tx: Database,
+    tenantId: string,
+    customerId: string,
+    newPack: { id: string },
+  ): Promise<void> {
+    const [tenant] = await tx
+      .select({ settings: schema.tenants.settings })
+      .from(schema.tenants)
+      .where(eq(schema.tenants.id, tenantId))
+      .limit(1);
+    const policy = extractCancellationPolicy(tenant?.settings);
+    if (!policy.rolloverEnabled) return;
+
+    // Propadlé balíčky se zbytkem kreditů (validUntil v minulosti), kromě nového.
+    const sources = await tx
+      .select({
+        id: schema.customerCreditPacks.id,
+        creditsRemaining: schema.customerCreditPacks.creditsRemaining,
+      })
+      .from(schema.customerCreditPacks)
+      .where(
+        and(
+          eq(schema.customerCreditPacks.tenantId, tenantId),
+          eq(schema.customerCreditPacks.customerId, customerId),
+          eq(schema.customerCreditPacks.status, 'active'),
+          gt(schema.customerCreditPacks.creditsRemaining, 0),
+          sql`${schema.customerCreditPacks.validUntil} IS NOT NULL AND ${schema.customerCreditPacks.validUntil} < now()`,
+          sql`${schema.customerCreditPacks.id} <> ${newPack.id}`,
+        ),
+      )
+      .orderBy(asc(schema.customerCreditPacks.validUntil));
+    if (sources.length === 0) return;
+
+    const unused = sources.reduce((sum, p) => sum + p.creditsRemaining, 0);
+    const { credits, extendDays } = resolveRollover(policy, { unusedCredits: unused });
+    if (credits <= 0) return;
+
+    // Přičti přenesené kredity na nový balíček + případně prodluž platnost.
+    await tx
+      .update(schema.customerCreditPacks)
+      .set({
+        creditsRemaining: sql`${schema.customerCreditPacks.creditsRemaining} + ${credits}`,
+        creditsAtPurchase: sql`${schema.customerCreditPacks.creditsAtPurchase} + ${credits}`,
+        validUntil:
+          extendDays > 0
+            ? sql`CASE WHEN ${schema.customerCreditPacks.validUntil} IS NULL THEN NULL ELSE ${schema.customerCreditPacks.validUntil} + (${extendDays} * interval '1 day') END`
+            : schema.customerCreditPacks.validUntil,
+        note: sql`coalesce(${schema.customerCreditPacks.note}, '') || ${` [+${credits} přeneseno z předchozího programu]`}`,
+        updatedAt: new Date(),
+      })
+      .where(eq(schema.customerCreditPacks.id, newPack.id));
+
+    // Uzavři zdrojové (propadlé) balíčky — ať se nepřenesou znovu.
+    await tx
+      .update(schema.customerCreditPacks)
+      .set({ creditsRemaining: 0, status: 'rolled_over', updatedAt: new Date() })
+      .where(
+        inArray(
+          schema.customerCreditPacks.id,
+          sources.map((s) => s.id),
+        ),
+      );
   }
 
   /**
