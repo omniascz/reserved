@@ -6,8 +6,10 @@ import { AccessService } from './access.service.js';
 import {
   IssueBookingCodeSchema,
   IssueGeneralCodeSchema,
+  ValidateCodeSchema,
   type IssueBookingCodeDto,
   type IssueGeneralCodeDto,
+  type ValidateCodeDto,
 } from './dto/access.dto.js';
 
 // Admin správa vstupních kódů (JWT). Vydání ke slotu / open gym, výpis, revoke.
@@ -41,5 +43,19 @@ export class AccessController {
   @Post('grants/:id/revoke')
   async revoke(@CurrentUser() user: AccessTokenPayload, @Param('id', ParseUUIDPipe) id: string) {
     return { data: await this.svc.revoke(user.tenantId, user.sub, user.role, id) };
+  }
+
+  /** Kiosk self-check-in — ověří kód přes přihlášenou staff session (ne API klíč). */
+  @Post('validate')
+  async validate(
+    @CurrentUser() user: AccessTokenPayload,
+    @Body(new ZodValidationPipe(ValidateCodeSchema)) dto: ValidateCodeDto,
+  ) {
+    return {
+      data: await this.svc.validate(user.tenantId, {
+        code: dto.code,
+        branchId: dto.branchId ?? null,
+      }),
+    };
   }
 }

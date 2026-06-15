@@ -2303,3 +2303,22 @@ export async function updateSiteSettings(
   });
   return data;
 }
+
+// ─── Kiosk self-check-in (access control) ────────────────────────────
+export type AccessValidateResult =
+  | {
+      granted: true;
+      grantId: string;
+      kind: string;
+      customerName: string | null;
+      usesRemaining: number | null;
+    }
+  | { granted: false; reason: string };
+
+export async function validateAccessCode(code: string): Promise<AccessValidateResult> {
+  const { data } = await fetchApi<{ data: AccessValidateResult }>(`/admin/access/validate`, {
+    method: 'POST',
+    body: JSON.stringify({ code }),
+  });
+  return data;
+}
