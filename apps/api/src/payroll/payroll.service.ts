@@ -218,4 +218,83 @@ export class PayrollService {
       };
     });
   }
+
+  /**
+   * Vygeneruje VÝPLATY (payouts) za období — persistovaný payslip per zaměstnanec
+   * ze snapshotu provizí. Na rozdíl od reportu je to trvalý záznam, který lze
+   * označit jako proplacený. Zaměstnanci s nulovou provizí se přeskočí.
+   */
+  async generatePayout(
+    tenantId: string,
+    userId: string,
+    role: AppRole,
+    opts: { from: Date; to: Date; employeeId?: string },
+  ) {
+    assertCanManage(role);
+    const report = await this.payoutReport(tenantId, userId, role, opts);
+    return this.dbService.withRlsContext(ctxFor(tenantId, userId, role), async (tx) => {
+      const created = [];
+      for (const line of report.lines) {
+        if (line.commissionHellers <= 0) continue;
+        const [row] = await tx
+          .insert(schema.payouts)
+          .values({
+            tenantId,
+            employeeId: line.employeeId,
+            employeeName: line.employeeName,
+            periodFrom: opts.from,
+            periodTo: opts.to,
+            bookingsCount: line.bookingsCount,
+            grossHellers: line.grossHellers,
+            commissionHellers: line.commissionHellers,
+          })
+          .returning();
+        created.push(row!);
+      }
+      return {
+        from: opts.from.toISOString(),
+        to: opts.to.toISOString(),
+        generated: created.length,
+        payouts: created,
+      };
+    });
+  }
+
+  async listPayouts(
+    tenantId: string,
+    userId: string,
+    role: AppRole,
+    filters: { status?: string; employeeId?: string },
+  ) {
+    assertCanManage(role);
+    return this.dbService.withRlsContext(ctxFor(tenantId, userId, role), async (tx) => {
+      const conds = [eq(schema.payouts.tenantId, tenantId)];
+      if (filters.status) conds.push(eq(schema.payouts.status, filters.status));
+      if (filters.employeeId) conds.push(eq(schema.payouts.employeeId, filters.employeeId));
+      return tx
+        .select()
+        .from(schema.payouts)
+        .where(and(...conds))
+        .orderBy(sql`${schema.payouts.createdAt} DESC`)
+        .limit(500);
+    });
+  }
+
+  /** Označí výplatu jako proplacenou. */
+  async markPayoutPaid(tenantId: string, userId: string, role: AppRole, payoutId: string) {
+    assertCanManage(role);
+    return this.dbService.withRlsContext(ctxFor(tenantId, userId, role), async (tx) => {
+      const [row] = await tx
+        .update(schema.payouts)
+        .set({ status: 'paid', paidAt: new Date(), updatedAt: new Date() })
+        .where(and(eq(schema.payouts.id, payoutId), eq(schema.payouts.tenantId, tenantId)))
+        .returning();
+      if (!row) {
+        throw new NotFoundException({
+          error: { code: 'PAYOUT_NOT_FOUND', message: 'Výplata nenalezena.' },
+        });
+      }
+      return row;
+    });
+  }
 }

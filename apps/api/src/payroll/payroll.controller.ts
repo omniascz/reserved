@@ -66,4 +66,42 @@ export class PayrollController {
       }),
     };
   }
+
+  /** Vygeneruje výplaty (payslip) za období z reportu — persistované záznamy. */
+  @Post('payouts/generate')
+  async generate(
+    @CurrentUser() user: AccessTokenPayload,
+    @Body() body: { from?: string; to?: string; employeeId?: string },
+  ) {
+    const fromDate = new Date(body.from ?? '');
+    const toDate = new Date(body.to ?? '');
+    if (Number.isNaN(fromDate.getTime()) || Number.isNaN(toDate.getTime())) {
+      throw new BadRequestException({
+        error: { code: 'INVALID_RANGE', message: 'from a to musí být platná ISO data.' },
+      });
+    }
+    return {
+      data: await this.svc.generatePayout(user.tenantId, user.sub, user.role, {
+        from: fromDate,
+        to: toDate,
+        employeeId: body.employeeId || undefined,
+      }),
+    };
+  }
+
+  @Get('payouts')
+  async listPayouts(
+    @CurrentUser() user: AccessTokenPayload,
+    @Query('status') status?: string,
+    @Query('employeeId') employeeId?: string,
+  ) {
+    return {
+      data: await this.svc.listPayouts(user.tenantId, user.sub, user.role, { status, employeeId }),
+    };
+  }
+
+  @Post('payouts/:id/paid')
+  async markPaid(@CurrentUser() user: AccessTokenPayload, @Param('id', ParseUUIDPipe) id: string) {
+    return { data: await this.svc.markPayoutPaid(user.tenantId, user.sub, user.role, id) };
+  }
 }
