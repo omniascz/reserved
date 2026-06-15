@@ -534,6 +534,38 @@ export class PublicController {
     return { data };
   }
 
+  /** POST /api/v1/public/:slug/vouchers/purchase — online nákup dárkového poukazu. */
+  @Public()
+  @Post('vouchers/purchase')
+  async purchaseVoucher(
+    @Param('slug') slug: string,
+    @Body(
+      new ZodValidationPipe(
+        z.object({
+          valueHellers: z.number().int().min(100).max(10_000_000),
+          currency: z.string().length(3).default('CZK'),
+          recipientName: z.string().max(200).optional().nullable(),
+          recipientEmail: z.string().email().max(255).optional().nullable(),
+          purchaserEmail: z.string().email().max(255),
+          methodType: z
+            .enum(['stripe', 'gopay', 'mock', 'comgate', 'thepay', 'payu', 'gpwebpay'])
+            .default('mock'),
+        }),
+      ),
+    )
+    dto: {
+      valueHellers: number;
+      currency: string;
+      recipientName?: string | null;
+      recipientEmail?: string | null;
+      purchaserEmail: string;
+      methodType: 'stripe' | 'gopay' | 'mock' | 'comgate' | 'thepay' | 'payu' | 'gpwebpay';
+    },
+  ) {
+    const tenant = await this.resolveTenant(slug);
+    return { data: await this.vouchers.purchaseOnline(tenant.id, dto) };
+  }
+
   // ─── Intake formuláře (sprint 10.10) ────────────────────────────────
 
   /** GET /api/v1/public/:slug/intake-forms?serviceId=… — aktivní formuláře. */

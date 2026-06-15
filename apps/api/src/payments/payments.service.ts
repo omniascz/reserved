@@ -22,6 +22,7 @@ import { and, desc, eq, gte, lte, sql } from 'drizzle-orm';
 import { schema } from '@reserved/db';
 import { type AppRole, type TenantContext } from '@reserved/rls-multitenancy';
 import { DbService } from '../db/db.service.js';
+import { EmailService } from '../email/email.service.js';
 import { SubscriptionsService } from '../subscriptions/subscriptions.service.js';
 import { generateSpaydString } from './qr-generator.js';
 import { PaymentProviderRegistry } from './providers/provider.registry.js';
@@ -89,7 +90,26 @@ export class PaymentsService {
     @Inject(PaymentProviderRegistry) private readonly providers: PaymentProviderRegistry,
     @Inject(forwardRef(() => SubscriptionsService))
     private readonly subscriptions: SubscriptionsService,
+    @Inject(EmailService) private readonly email: EmailService,
   ) {}
+
+  /**
+   * Veřejný/systémový checkout bez role-gate — pro anonymní toky (online nákup
+   * dárkového voucheru apod.). NEPOUŽÍVAT pro admin platby (tam je createCheckout
+   * s kontrolou role).
+   */
+  async createCheckoutSystem(input: {
+    tenantId: string;
+    methodType: 'stripe' | 'gopay' | 'mock' | 'comgate' | 'thepay' | 'payu' | 'gpwebpay';
+    amountHellers: number;
+    currency: string;
+    description: string;
+    customerEmail?: string;
+    successUrl: string;
+    cancelUrl: string;
+  }): Promise<{ paymentId: string; checkoutUrl: string }> {
+    return this.runCheckout(input);
+  }
 
   private isSubscriptionEventType(type: string, rawPayload: Record<string, unknown>): boolean {
     if (
@@ -445,6 +465,40 @@ export class PaymentsService {
         payload: event as unknown as Record<string, unknown>,
         verified: true,
       });
+
+      // 5. Online nákup voucheru: po úspěšné platbě aktivuj navázaný voucher
+      //    (pending_payment → active) a pošli dárek příjemci.
+      if (event.status === 'succeeded') {
+        const [voucher] = await tx
+          .update(schema.giftVouchers)
+          .set({ status: 'active', updatedAt: new Date() })
+          .where(
+            and(
+              eq(schema.giftVouchers.tenantId, tenantId),
+              eq(schema.giftVouchers.paymentId, payment.id),
+              eq(schema.giftVouchers.status, 'pending_payment'),
+            ),
+          )
+          .returning();
+        if (voucher?.recipientEmail) {
+          const value = (voucher.initialValueHellers / 100).toLocaleString('cs-CZ');
+          try {
+            await this.email.enqueue({
+              tenantId,
+              templateCode: 'custom',
+              recipient: voucher.recipientEmail,
+              vars: {
+                __customSubject: `Dárkový poukaz na ${value} ${voucher.currency}`,
+                __customBody:
+                  `Byl vám darován poukaz v hodnotě ${value} ${voucher.currency}.\n` +
+                  `Kód poukazu: ${voucher.code}`,
+              },
+            });
+          } catch {
+            // e-mail nesmí shodit zpracování webhooku
+          }
+        }
+      }
 
       return { paymentId: payment.id, status: event.status };
     });

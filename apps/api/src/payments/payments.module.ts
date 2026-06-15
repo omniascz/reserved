@@ -1,5 +1,6 @@
 import { forwardRef, Module } from '@nestjs/common';
 import { DbModule } from '../db/db.module.js';
+import { EmailModule } from '../email/email.module.js';
 import { SubscriptionsModule } from '../subscriptions/subscriptions.module.js';
 import { TenantModule } from '../tenant/tenant.module.js';
 import { PaymentsController } from './payments.controller.js';
@@ -16,7 +17,7 @@ import { GpWebpayPaymentProvider } from './providers/gpwebpay.provider.js';
 import { PaymentProviderRegistry } from './providers/provider.registry.js';
 
 @Module({
-  imports: [DbModule, TenantModule, forwardRef(() => SubscriptionsModule)],
+  imports: [DbModule, TenantModule, EmailModule, forwardRef(() => SubscriptionsModule)],
   controllers: [PaymentsController, WebhookController, CheckoutController],
   providers: [
     PaymentsService,

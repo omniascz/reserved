@@ -14,6 +14,7 @@ import { type AppRole, serviceContext, type TenantContext } from '@reserved/rls-
 import { randomBytes } from 'node:crypto';
 import { DbService } from '../db/db.service.js';
 import { EmailService } from '../email/email.service.js';
+import { PaymentsService } from '../payments/payments.service.js';
 import type { IssueVoucherDto, RedeemVoucherDto } from './dto/voucher.dto.js';
 
 const MANAGE_ROLES: AppRole[] = ['owner', 'manager', 'receptionist'];
@@ -44,7 +45,84 @@ export class VouchersService {
   constructor(
     @Inject(DbService) private readonly dbService: DbService,
     @Inject(EmailService) private readonly email: EmailService,
+    @Inject(PaymentsService) private readonly payments: PaymentsService,
   ) {}
+
+  /**
+   * Online samoobslužný nákup voucheru (veřejné). Vytvoří voucher ve stavu
+   * 'pending_payment', spustí checkout a vrátí URL. Po zaplacení webhook voucher
+   * aktivuje (PaymentsService.handleWebhook) a pošle příjemci.
+   */
+  async purchaseOnline(
+    tenantId: string,
+    dto: {
+      valueHellers: number;
+      currency: string;
+      recipientName?: string | null;
+      recipientEmail?: string | null;
+      purchaserEmail: string;
+      methodType: 'stripe' | 'gopay' | 'mock' | 'comgate' | 'thepay' | 'payu' | 'gpwebpay';
+    },
+  ) {
+    // 1. Vytvoř voucher pending_payment.
+    const voucher = await this.dbService.withRlsContext(serviceContext(tenantId), async (tx) => {
+      for (let attempt = 0; attempt < 5; attempt++) {
+        try {
+          const [r] = await tx
+            .insert(schema.giftVouchers)
+            .values({
+              tenantId,
+              code: generateCode(),
+              initialValueHellers: dto.valueHellers,
+              remainingValueHellers: dto.valueHellers,
+              currency: dto.currency,
+              status: 'pending_payment',
+              recipientName: dto.recipientName ?? null,
+              recipientEmail: dto.recipientEmail ?? null,
+              purchaserEmail: dto.purchaserEmail,
+            })
+            .returning();
+          return r!;
+        } catch (err) {
+          const e = err as { code?: string; cause?: { code?: string } };
+          if ((e.code ?? e.cause?.code) === '23505') continue;
+          throw err;
+        }
+      }
+      throw new BadRequestException({
+        error: { code: 'CODE_GENERATION_FAILED', message: 'Nepodařilo se vygenerovat kód.' },
+      });
+    });
+
+    // 2. Checkout na hodnotu voucheru.
+    const base = process.env.APP_URL ?? 'http://localhost:4002';
+    const checkout = await this.payments.createCheckoutSystem({
+      tenantId,
+      methodType: dto.methodType,
+      amountHellers: dto.valueHellers,
+      currency: dto.currency,
+      description: `Dárkový poukaz ${voucher.code}`,
+      customerEmail: dto.purchaserEmail,
+      successUrl: `${base}/payment/success`,
+      cancelUrl: `${base}/payment/cancel`,
+    });
+
+    // 3. Naváž platbu na voucher (webhook ho pak aktivuje).
+    await this.dbService.withRlsContext(serviceContext(tenantId), async (tx) => {
+      await tx
+        .update(schema.giftVouchers)
+        .set({ paymentId: checkout.paymentId, updatedAt: new Date() })
+        .where(eq(schema.giftVouchers.id, voucher.id));
+    });
+
+    return {
+      voucherId: voucher.id,
+      code: voucher.code,
+      status: 'pending_payment' as const,
+      paymentId: checkout.paymentId,
+      checkoutUrl: checkout.checkoutUrl,
+    };
+  }
 
   async issue(tenantId: string, userId: string, role: AppRole, dto: IssueVoucherDto) {
     assertCanManage(role);

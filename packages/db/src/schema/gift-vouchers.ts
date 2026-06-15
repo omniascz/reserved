@@ -35,6 +35,9 @@ export const giftVouchers = pgTable(
     recipientEmail: varchar('recipient_email', { length: 255 }),
     validUntil: timestamp('valid_until', { withTimezone: true }),
     note: text('note'),
+    /** Online nákup: vazba na platbu + e-mail kupujícího (status pending_payment). */
+    paymentId: uuid('payment_id'),
+    purchaserEmail: varchar('purchaser_email', { length: 255 }),
     createdBy: varchar('created_by', { length: 64 }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
