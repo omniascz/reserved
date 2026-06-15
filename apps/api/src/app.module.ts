@@ -47,6 +47,7 @@ import { ChallengesModule } from './challenges/challenges.module.js';
 import { MakeupModule } from './makeup/makeup.module.js';
 import { AdmissionsModule } from './admissions/admissions.module.js';
 import { OrdersModule } from './orders/orders.module.js';
+import { AppointmentRecordsModule } from './appointment-records/appointment-records.module.js';
 import { DispatchModule } from './dispatch/dispatch.module.js';
 import { PayrollModule } from './payroll/payroll.module.js';
 import { PosModule } from './pos/pos.module.js';
@@ -139,6 +140,7 @@ import { TenantMiddleware } from './tenant/tenant.middleware.js';
     MakeupModule,
     AdmissionsModule,
     OrdersModule,
+    AppointmentRecordsModule,
   ],
 })
 export class AppModule implements NestModule {
