@@ -43,6 +43,10 @@ const TRIGGER_TO_WEBHOOK: Partial<Record<TriggerEvent, WebhookEventType>> = {
 
 const MANAGE_ROLES: AppRole[] = ['owner', 'manager'];
 const REQUEST_TIMEOUT_MS = 10_000;
+/** Kolikrát zkusit doručit webhook, než ho označíme jako failed. */
+const MAX_DELIVERY_ATTEMPTS = 3;
+/** Backoff mezi pokusy (ms) — exponenciální. */
+const RETRY_BACKOFF_MS = [500, 2_000];
 
 function ctxFor(tenantId: string, userId: string, role: AppRole): TenantContext {
   return { tenantId, userId, role };
@@ -315,33 +319,48 @@ export class WebhooksService implements OnModuleInit {
     let responseStatus: number | null = null;
     let responseBody: string | null = null;
     let errorMsg: string | null = null;
+    let attempts = 0;
 
-    try {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-      const res = await fetch(webhook.url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Reserved-Signature': `sha256=${signature}`,
-          'X-Reserved-Event-Type': eventType,
-          'X-Reserved-Webhook-Id': webhook.id,
-          'X-Reserved-Delivery-Id': deliveryId,
-          'User-Agent': 'Reserved-Webhook/1.0',
-        },
-        body,
-        signal: controller.signal,
-      });
-      clearTimeout(timeout);
-      responseStatus = res.status;
-      const text = await res.text().catch(() => '');
-      responseBody = text.slice(0, 2000);
-      success = res.ok;
-      if (!success) {
+    // Retry s exponenciálním backoffem — síťová chyba / 5xx / timeout se zkusí
+    // znovu, než webhook označíme jako failed. 4xx (kromě 429) nemá smysl opakovat.
+    for (let i = 0; i < MAX_DELIVERY_ATTEMPTS; i++) {
+      attempts = i + 1;
+      responseStatus = null;
+      responseBody = null;
+      errorMsg = null;
+      try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+        const res = await fetch(webhook.url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Reserved-Signature': `sha256=${signature}`,
+            'X-Reserved-Event-Type': eventType,
+            'X-Reserved-Webhook-Id': webhook.id,
+            'X-Reserved-Delivery-Id': deliveryId,
+            'X-Reserved-Attempt': String(attempts),
+            'User-Agent': 'Reserved-Webhook/1.0',
+          },
+          body,
+          signal: controller.signal,
+        });
+        clearTimeout(timeout);
+        responseStatus = res.status;
+        const text = await res.text().catch(() => '');
+        responseBody = text.slice(0, 2000);
+        success = res.ok;
+        if (success) break;
         errorMsg = `HTTP ${res.status}: ${text.slice(0, 200)}`;
+        // 4xx (kromě 429 rate-limit) je trvalá chyba → neopakuj.
+        if (res.status >= 400 && res.status < 500 && res.status !== 429) break;
+      } catch (err) {
+        errorMsg = err instanceof Error ? err.message : String(err);
       }
-    } catch (err) {
-      errorMsg = err instanceof Error ? err.message : String(err);
+      // Backoff před dalším pokusem (ne po posledním).
+      if (i < MAX_DELIVERY_ATTEMPTS - 1) {
+        await new Promise((r) => setTimeout(r, RETRY_BACKOFF_MS[i] ?? 2_000));
+      }
     }
 
     // Aktualizuj delivery + webhook config
@@ -353,6 +372,7 @@ export class WebhooksService implements OnModuleInit {
           responseStatus: responseStatus ?? null,
           responseBody,
           lastError: errorMsg,
+          attempts,
           updatedAt: new Date(),
         })
         .where(eq(schema.webhookDeliveries.id, deliveryId));

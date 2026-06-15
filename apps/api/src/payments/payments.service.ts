@@ -696,6 +696,46 @@ export class PaymentsService {
         });
       }
 
+      // Reálný strh přes bránu — u plateb krytých bránou zavolej provider.refund()
+      // (vč. mock = dev simulace brány). Manuální platby (hotovost/terminál/QR)
+      // se vrací mimo systém → jen evidence.
+      const GATEWAY_METHODS = new Set([...ONLINE_METHODS, 'mock']);
+      let gatewayRefundId: string | null = null;
+      if (GATEWAY_METHODS.has(original.methodType)) {
+        if (!original.externalId) {
+          throw new BadRequestException({
+            error: {
+              code: 'NO_EXTERNAL_ID',
+              message: 'Platba nemá ID transakce u brány — nelze refundovat přes bránu.',
+            },
+          });
+        }
+        const [method] = await tx
+          .select({ config: schema.paymentMethods.config })
+          .from(schema.paymentMethods)
+          .where(
+            and(
+              eq(schema.paymentMethods.tenantId, tenantId),
+              eq(schema.paymentMethods.methodType, original.methodType),
+            ),
+          )
+          .limit(1);
+        const provider = this.providers.get(original.methodType);
+        const result = await provider.refund(
+          { externalId: original.externalId, amountHellers: refundAmount, reason: dto.reason },
+          (method?.config ?? {}) as Record<string, unknown>,
+        );
+        if (result.status === 'failed') {
+          throw new BadRequestException({
+            error: {
+              code: 'REFUND_GATEWAY_FAILED',
+              message: 'Brána refundaci odmítla. Zkuste to znovu nebo vraťte ručně.',
+            },
+          });
+        }
+        gatewayRefundId = result.externalId;
+      }
+
       // Vytvor refund zaznam (zaporna castka jako konvence)
       const [refund] = await tx
         .insert(schema.payments)
@@ -710,6 +750,7 @@ export class PaymentsService {
           status: 'refunded',
           description: dto.reason ? `Refund: ${dto.reason}` : 'Refund',
           refundedFromPaymentId: original.id,
+          externalId: gatewayRefundId,
           recordedBy: userId,
           paidAt: new Date(),
         })
@@ -727,7 +768,12 @@ export class PaymentsService {
         tenantId,
         paymentId: refund!.id,
         eventType: 'refund',
-        payload: { originalPaymentId: original.id, reason: dto.reason, by: userId },
+        payload: {
+          originalPaymentId: original.id,
+          reason: dto.reason,
+          by: userId,
+          gatewayRefundId,
+        },
         verified: true,
       });
 
