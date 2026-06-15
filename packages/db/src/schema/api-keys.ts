@@ -67,9 +67,7 @@ export const API_KEY_SCOPES = [
   'employees:read',
   'availability:read',
   'branches:read',
-  'webhooks:read',
   'access:validate',
-  'access:write',
 ] as const;
 
 export type ApiKeyScope = (typeof API_KEY_SCOPES)[number] | '*';

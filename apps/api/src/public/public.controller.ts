@@ -31,6 +31,7 @@ import {
 } from '../class-sessions/dto/class-session.dto.js';
 import { ReviewsService } from '../reviews/reviews.service.js';
 import { SubmitReviewSchema, type SubmitReviewDto } from '../reviews/dto/review.dto.js';
+import { ReferralsService } from '../referrals/referrals.service.js';
 import { VouchersService } from '../vouchers/vouchers.service.js';
 import { IntakeService } from '../intake/intake.service.js';
 import { SubmitFormSchema, type SubmitFormDto } from '../intake/dto/intake.dto.js';
@@ -57,6 +58,7 @@ export class PublicController {
     @Inject(VouchersService) private readonly vouchers: VouchersService,
     @Inject(IntakeService) private readonly intake: IntakeService,
     @Inject(SmartService) private readonly smart: SmartService,
+    @Inject(ReferralsService) private readonly referrals: ReferralsService,
   ) {}
 
   /** GET /api/v1/public/:slug — info o tenant (název + theme + currency, timezone). */
@@ -501,6 +503,26 @@ export class PublicController {
     }
     const data = await this.reviews.publicForService(tenant.id, serviceId);
     return { data };
+  }
+
+  /** POST /api/v1/public/:slug/referral/redeem — uplatnění doporučovacího kódu novým klientem. */
+  @Public()
+  @Post('referral/redeem')
+  async redeemReferral(
+    @Param('slug') slug: string,
+    @Body(
+      new ZodValidationPipe(
+        z.object({
+          code: z.string().min(3).max(32),
+          refereeEmail: z.string().email().max(255),
+          refereeCustomerId: z.string().uuid().optional().nullable(),
+        }),
+      ),
+    )
+    dto: { code: string; refereeEmail: string; refereeCustomerId?: string | null },
+  ) {
+    const tenant = await this.resolveTenant(slug);
+    return { data: await this.referrals.redeem(tenant.id, dto) };
   }
 
   /** GET /api/v1/public/:slug/vouchers/:code — ověření dárkového poukazu (zůstatek/platnost). */
