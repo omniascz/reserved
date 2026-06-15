@@ -498,7 +498,15 @@ export class PublicController {
   ) {
     const tenant = await this.resolveTenant(slug);
     const review = await this.reviews.submitPublic(tenant.id, dto);
-    return { data: { id: review.id, rating: review.rating, status: review.status } };
+    return {
+      data: {
+        id: review.id,
+        rating: review.rating,
+        status: review.status,
+        boostToGoogle: review.boostToGoogle,
+        googleReviewUrl: review.googleReviewUrl,
+      },
+    };
   }
 
   /** GET /api/v1/public/:slug/reviews?serviceId=… — publikované recenze + průměr. */

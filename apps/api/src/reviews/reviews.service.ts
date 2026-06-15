@@ -60,16 +60,23 @@ export class ReviewsService {
         });
       }
 
-      // Pre-moderace: nová recenze jde do 'pending' a veřejně se NEzobrazí,
-      // dokud ji admin nezveřejní. Tenant si může zapnout auto-publish.
+      // Nastavení recenzí: auto-publish + Google Reviews boost.
       const [t] = await tx
         .select({ settings: schema.tenants.settings })
         .from(schema.tenants)
         .where(eq(schema.tenants.id, tenantId))
         .limit(1);
-      const autoPublish =
-        (t?.settings as { reviews?: { autoPublish?: boolean } } | null)?.reviews?.autoPublish ===
-        true;
+      const reviewCfg =
+        (
+          t?.settings as {
+            reviews?: {
+              autoPublish?: boolean;
+              googleReviewUrl?: string;
+              googleBoostMinRating?: number;
+            };
+          } | null
+        )?.reviews ?? {};
+      const autoPublish = reviewCfg.autoPublish === true;
 
       const [review] = await tx
         .insert(schema.reviews)
@@ -84,7 +91,17 @@ export class ReviewsService {
           status: autoPublish ? 'published' : 'pending',
         })
         .returning();
-      return review!;
+
+      // Google Reviews boost: spokojeného klienta (rating >= práh, default 4)
+      // pošli ohodnotit i na Google. Nespokojené nepřesměrováváme (zpětná vazba
+      // zůstane interní). Vyžaduje nastavený settings.reviews.googleReviewUrl.
+      const minRating = reviewCfg.googleBoostMinRating ?? 4;
+      const boostToGoogle = !!reviewCfg.googleReviewUrl && dto.rating >= minRating;
+      return {
+        ...review!,
+        boostToGoogle,
+        googleReviewUrl: boostToGoogle ? reviewCfg.googleReviewUrl! : null,
+      };
     });
   }
 
