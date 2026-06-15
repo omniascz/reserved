@@ -414,12 +414,25 @@ describe('Fitness flow E2E (10.0–10.2)', () => {
       expect(dupe).toMatch(/ALREADY_REVIEWED|400/);
     });
 
-    it('veřejný průměr služby zahrnuje publikovanou recenzi', async () => {
-      const res = await apiCall<{ data: { aggregate: { count: number; avg: number } } }>(
+    it('admin schválí recenzi (pre-moderace) → zahrne se do veřejného průměru', async () => {
+      // Recenze vzniká ve stavu 'pending' (pre-moderace, sprint 10.x) — než ji
+      // admin zveřejní, do veřejného průměru NEpatří.
+      const before = await apiCall<{ data: { aggregate: { count: number } } }>(
         `/public/${slug}/reviews?serviceId=${groupServiceId}`,
       );
-      expect(res.data.aggregate.count).toBeGreaterThanOrEqual(1);
-      expect(res.data.aggregate.avg).toBeGreaterThanOrEqual(1);
+      expect(before.data.aggregate.count).toBe(0);
+
+      await apiCall(`/admin/reviews/${reviewId}`, {
+        method: 'PATCH',
+        token,
+        body: JSON.stringify({ status: 'published' }),
+      });
+
+      const after = await apiCall<{ data: { aggregate: { count: number; avg: number } } }>(
+        `/public/${slug}/reviews?serviceId=${groupServiceId}`,
+      );
+      expect(after.data.aggregate.count).toBeGreaterThanOrEqual(1);
+      expect(after.data.aggregate.avg).toBeGreaterThanOrEqual(1);
     });
 
     it('admin skryje recenzi → zmizí z veřejného průměru', async () => {
