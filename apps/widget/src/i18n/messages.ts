@@ -87,6 +87,9 @@ export const messages = {
     'timetable.waitlisted': 'Jsi v pořadníku. Dáme vědět, až se uvolní místo.',
     'timetable.cancel': 'Zrušit',
     'timetable.error': 'Něco se nepovedlo. Zkus to prosím znovu.',
+    'timetable.pickSpot': 'Vyber si místo v sále',
+    'timetable.spot': 'Místo',
+    'timetable.spotTaken': 'Obsazeno',
 
     // Calendar (měsíční kalendář dostupnosti)
     'calendar.title': 'Objednat termín',
@@ -178,6 +181,9 @@ export const messages = {
     'timetable.waitlisted': "You're on the waitlist. We'll notify you when a spot opens.",
     'timetable.cancel': 'Cancel',
     'timetable.error': 'Something went wrong. Please try again.',
+    'timetable.pickSpot': 'Pick your spot',
+    'timetable.spot': 'Spot',
+    'timetable.spotTaken': 'Taken',
 
     // Calendar
     'calendar.title': 'Book an appointment',

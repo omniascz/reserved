@@ -10,8 +10,10 @@ import {
   joinClassWaitlist,
   listAllClassSessions,
   listServices,
+  getSessionSpots,
   ReservedApiError,
   type PublicClassSession,
+  type SessionSpots,
 } from '@/lib/api';
 import { useLang, useT } from '@/i18n/I18nProvider';
 import { addDays, formatTime, todayInPrague } from '@/lib/format';
@@ -199,13 +201,40 @@ function JoinModal({
   const [submitting, setSubmitting] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [done, setDone] = useState<'join' | 'waitlist' | null>(null);
+  const [spots, setSpots] = useState<SessionSpots | null>(null);
+  const [selectedSpot, setSelectedSpot] = useState<string | null>(null);
+
+  // Spot booking: u lekce s místy načti mapu sálu.
+  useEffect(() => {
+    if (mode !== 'join') return;
+    let cancelled = false;
+    getSessionSpots(slug, session.id)
+      .then((s) => {
+        if (!cancelled && s.spotCount > 0) setSpots(s);
+      })
+      .catch(() => {
+        /* spot booking je volitelný — bez mapy se rezervuje normálně */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [slug, session.id, mode]);
 
   async function submit(e: React.FormEvent): Promise<void> {
     e.preventDefault();
+    if (spots && spots.spotCount > 0 && !selectedSpot) {
+      setErr(t('timetable.pickSpot'));
+      return;
+    }
     setSubmitting(true);
     setErr(null);
     try {
-      const input = { customerName: name, customerEmail: email, customerPhone: phone || null };
+      const input = {
+        customerName: name,
+        customerEmail: email,
+        customerPhone: phone || null,
+        ...(selectedSpot ? { spotLabel: selectedSpot } : {}),
+      };
       if (mode === 'waitlist') {
         await joinClassWaitlist(slug, session.id, input);
         setDone('waitlist');
@@ -251,6 +280,35 @@ function JoinModal({
           </div>
         ) : (
           <form onSubmit={submit} className="space-y-2">
+            {spots && spots.spotCount > 0 && (
+              <div className="space-y-1 pb-1">
+                <p className="text-xs font-medium text-slate-600">{t('timetable.pickSpot')}</p>
+                <div className="grid grid-cols-6 gap-1.5">
+                  {Array.from({ length: spots.spotCount }, (_, i) => String(i + 1)).map((label) => {
+                    const taken = spots.taken.includes(label);
+                    const selected = selectedSpot === label;
+                    return (
+                      <button
+                        key={label}
+                        type="button"
+                        disabled={taken}
+                        onClick={() => setSelectedSpot(label)}
+                        className={`aspect-square rounded-md text-xs font-semibold border transition ${
+                          taken
+                            ? 'bg-slate-200 text-slate-400 border-slate-200 cursor-not-allowed line-through'
+                            : selected
+                              ? 'bg-brand-600 text-white border-brand-600'
+                              : 'bg-white text-slate-700 border-slate-300 hover:border-brand-500'
+                        }`}
+                        title={taken ? t('timetable.spotTaken') : `${t('timetable.spot')} ${label}`}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
             <input
               type="text"
               required

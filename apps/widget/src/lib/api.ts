@@ -256,11 +256,26 @@ export async function joinClassSession(
     customerEmail: string;
     customerPhone?: string | null;
     customerNote?: string | null;
+    spotLabel?: string | null;
   },
 ): Promise<BookingConfirmation> {
   const { data } = await fetchApi<{ data: BookingConfirmation }>(
     `/public/${slug}/class-sessions/${sessionId}/join`,
     { method: 'POST', body: JSON.stringify(input) },
+  );
+  return data;
+}
+
+export interface SessionSpots {
+  spotCount: number;
+  taken: string[];
+  free: string[];
+}
+
+/** Mapa míst v sále (spot booking) — která jsou volná/obsazená. */
+export async function getSessionSpots(slug: string, sessionId: string): Promise<SessionSpots> {
+  const { data } = await fetchApi<{ data: SessionSpots }>(
+    `/public/${slug}/class-sessions/${sessionId}/spots`,
   );
   return data;
 }
