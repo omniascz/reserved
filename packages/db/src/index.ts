@@ -23,3 +23,6 @@ export type { PosPaymentMethod, PosSaleItemType } from './schema/pos.js';
 
 export { accessGrantKinds } from './schema/access-grants.js';
 export type { AccessGrantKind } from './schema/access-grants.js';
+
+export { loyaltyRewardKinds } from './schema/loyalty.js';
+export type { LoyaltyRewardKind } from './schema/loyalty.js';

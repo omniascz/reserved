@@ -2,6 +2,7 @@
 // rezervaci (dle nastavení tenanta), uplatnění a ruční korekce. Zůstatek = SUM.
 
 import { BadRequestException, ForbiddenException, Inject, Injectable } from '@nestjs/common';
+import { randomBytes } from 'node:crypto';
 import { and, desc, eq, sql } from 'drizzle-orm';
 import { schema } from '@reserved/db';
 import { type AppRole, type TenantContext } from '@reserved/rls-multitenancy';
@@ -162,6 +163,207 @@ export class LoyaltyService {
         createdBy: userId,
       });
       return { balance: balance + points };
+    });
+  }
+
+  // ─── Tiery (úrovně) ─────────────────────────────────────────────────
+
+  /** Celkově NASBÍRANÉ body (jen kladné transakce) — základ pro tier. */
+  private async lifetimeEarnedInTx(
+    tx: Database,
+    tenantId: string,
+    customerId: string,
+  ): Promise<number> {
+    const [row] = await tx
+      .select({
+        total: sql<number>`COALESCE(SUM(CASE WHEN ${schema.loyaltyTransactions.points} > 0 THEN ${schema.loyaltyTransactions.points} ELSE 0 END), 0)::int`,
+      })
+      .from(schema.loyaltyTransactions)
+      .where(
+        and(
+          eq(schema.loyaltyTransactions.tenantId, tenantId),
+          eq(schema.loyaltyTransactions.customerId, customerId),
+        ),
+      );
+    return Number(row?.total ?? 0);
+  }
+
+  async listTiers(tenantId: string, userId: string, role: AppRole) {
+    return this.dbService.withRlsContext(ctxFor(tenantId, userId, role), async (tx) => {
+      return tx
+        .select()
+        .from(schema.loyaltyTiers)
+        .where(eq(schema.loyaltyTiers.tenantId, tenantId))
+        .orderBy(schema.loyaltyTiers.minPoints);
+    });
+  }
+
+  async createTier(
+    tenantId: string,
+    userId: string,
+    role: AppRole,
+    dto: { name: string; minPoints: number; perk?: string | null; sortOrder?: number },
+  ) {
+    if (!REDEEM_ROLES.includes(role)) {
+      throw new ForbiddenException({
+        error: { code: 'INSUFFICIENT_ROLE', message: 'Tento účet nemůže spravovat tiery.' },
+      });
+    }
+    return this.dbService.withRlsContext(ctxFor(tenantId, userId, role), async (tx) => {
+      const [row] = await tx
+        .insert(schema.loyaltyTiers)
+        .values({
+          tenantId,
+          name: dto.name,
+          minPoints: dto.minPoints,
+          perk: dto.perk ?? null,
+          sortOrder: dto.sortOrder ?? 0,
+        })
+        .returning();
+      return row!;
+    });
+  }
+
+  /** Aktuální úroveň zákazníka = nejvyšší tier, jehož minPoints <= nasbírané body. */
+  async customerTier(tenantId: string, userId: string, role: AppRole, customerId: string) {
+    return this.dbService.withRlsContext(ctxFor(tenantId, userId, role), async (tx) => {
+      const lifetimeEarned = await this.lifetimeEarnedInTx(tx, tenantId, customerId);
+      const balance = await this.balanceInTx(tx, tenantId, customerId);
+      const tiers = await tx
+        .select()
+        .from(schema.loyaltyTiers)
+        .where(eq(schema.loyaltyTiers.tenantId, tenantId))
+        .orderBy(schema.loyaltyTiers.minPoints);
+      let current = null as (typeof tiers)[number] | null;
+      let next = null as (typeof tiers)[number] | null;
+      for (const t of tiers) {
+        if (lifetimeEarned >= t.minPoints) current = t;
+        else if (!next) next = t;
+      }
+      return {
+        lifetimeEarned,
+        balance,
+        currentTier: current,
+        nextTier: next,
+        pointsToNext: next ? next.minPoints - lifetimeEarned : null,
+      };
+    });
+  }
+
+  // ─── Katalog odměn ──────────────────────────────────────────────────
+
+  async listRewards(tenantId: string, userId: string, role: AppRole, onlyActive = false) {
+    return this.dbService.withRlsContext(ctxFor(tenantId, userId, role), async (tx) => {
+      const conds = [eq(schema.loyaltyRewards.tenantId, tenantId)];
+      if (onlyActive) conds.push(eq(schema.loyaltyRewards.isActive, true));
+      return tx
+        .select()
+        .from(schema.loyaltyRewards)
+        .where(and(...conds))
+        .orderBy(schema.loyaltyRewards.pointsCost);
+    });
+  }
+
+  async createReward(
+    tenantId: string,
+    userId: string,
+    role: AppRole,
+    dto: {
+      name: string;
+      description?: string | null;
+      pointsCost: number;
+      kind: string;
+      value?: number;
+    },
+  ) {
+    if (!REDEEM_ROLES.includes(role)) {
+      throw new ForbiddenException({
+        error: { code: 'INSUFFICIENT_ROLE', message: 'Tento účet nemůže spravovat odměny.' },
+      });
+    }
+    return this.dbService.withRlsContext(ctxFor(tenantId, userId, role), async (tx) => {
+      const [row] = await tx
+        .insert(schema.loyaltyRewards)
+        .values({
+          tenantId,
+          name: dto.name,
+          description: dto.description ?? null,
+          pointsCost: dto.pointsCost,
+          kind: dto.kind,
+          value: dto.value ?? 0,
+        })
+        .returning();
+      return row!;
+    });
+  }
+
+  /**
+   * Zákazník uplatní body za odměnu z katalogu. Atomicky: ověří zůstatek,
+   * strhne body (redeem transakce) a vydá uplatnění s kódem pro obsluhu.
+   */
+  async redeemReward(
+    tenantId: string,
+    userId: string,
+    role: AppRole,
+    customerId: string,
+    rewardId: string,
+  ) {
+    if (!REDEEM_ROLES.includes(role)) {
+      throw new ForbiddenException({
+        error: { code: 'INSUFFICIENT_ROLE', message: 'Tento účet nemůže uplatňovat odměny.' },
+      });
+    }
+    return this.dbService.withRlsContext(ctxFor(tenantId, userId, role), async (tx) => {
+      const [reward] = await tx
+        .select()
+        .from(schema.loyaltyRewards)
+        .where(
+          and(
+            eq(schema.loyaltyRewards.id, rewardId),
+            eq(schema.loyaltyRewards.tenantId, tenantId),
+            eq(schema.loyaltyRewards.isActive, true),
+          ),
+        )
+        .limit(1);
+      if (!reward) {
+        throw new BadRequestException({
+          error: { code: 'REWARD_NOT_FOUND', message: 'Odměna neexistuje nebo není aktivní.' },
+        });
+      }
+      const balance = await this.balanceInTx(tx, tenantId, customerId);
+      if (balance < reward.pointsCost) {
+        throw new BadRequestException({
+          error: {
+            code: 'INSUFFICIENT_POINTS',
+            message: `Nedostatek bodů — zůstatek ${balance}, odměna stojí ${reward.pointsCost}.`,
+          },
+        });
+      }
+      await tx.insert(schema.loyaltyTransactions).values({
+        tenantId,
+        customerId,
+        points: -reward.pointsCost,
+        type: 'redeem',
+        note: `Odměna: ${reward.name}`,
+        createdBy: userId,
+      });
+      const code = `RW-${randomBytes(3).toString('hex').toUpperCase()}`;
+      const [redemption] = await tx
+        .insert(schema.loyaltyRewardRedemptions)
+        .values({
+          tenantId,
+          customerId,
+          rewardId: reward.id,
+          rewardName: reward.name,
+          pointsCost: reward.pointsCost,
+          code,
+        })
+        .returning();
+      return {
+        redemption: redemption!,
+        balanceAfter: balance - reward.pointsCost,
+        reward: { name: reward.name, kind: reward.kind, value: reward.value },
+      };
     });
   }
 }
