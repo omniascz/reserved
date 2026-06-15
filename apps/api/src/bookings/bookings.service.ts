@@ -259,39 +259,56 @@ export class BookingsService {
           });
         }
 
-        // 3. Vytvoř booking
+        // 3. Vytvoř booking — hold je jen měkký zámek (nehlídá existující
+        //    rezervace), finální ochranu proti dvojí rezervaci dává DB EXCLUDE
+        //    constraint na bookings. Souběh dvou klientů o poslední termín tu
+        //    skončí jako 23P01 → přeložíme na čisté SLOT_TAKEN (ne 500).
         const refCode = generateReferenceCode();
-        const [booking] = await tx
-          .insert(schema.bookings)
-          .values({
-            tenantId,
-            branchId: hold.branchId,
-            serviceId: hold.serviceId,
-            employeeId: hold.employeeId,
-            customerUserId: dto.customerUserId ?? null,
-            customerId,
-            customerName: dto.customerName,
-            customerEmail: dto.customerEmail,
-            customerPhone: dto.customerPhone ?? null,
-            startsAt: hold.startsAt,
-            endsAt: hold.endsAt,
-            bufferStartsAt: hold.bufferStartsAt,
-            bufferEndsAt: hold.bufferEndsAt,
-            status: 'confirmed',
-            pricePaidHellers: discount.finalPriceHellers,
-            currency: service.currency,
-            customerNote: dto.customerNote ?? null,
-            referenceCode: refCode,
-            onlineMeetingUrl: service.isOnline ? service.defaultOnlineMeetingUrl : null,
-            metadata: {
-              source: 'public_widget',
-              ...(discount.discountPercent > 0 && {
-                subscriptionDiscountPercent: discount.discountPercent,
-                originalPriceHellers: service.priceHellers,
-              }),
-            },
-          })
-          .returning();
+        let booking;
+        try {
+          [booking] = await tx
+            .insert(schema.bookings)
+            .values({
+              tenantId,
+              branchId: hold.branchId,
+              serviceId: hold.serviceId,
+              employeeId: hold.employeeId,
+              customerUserId: dto.customerUserId ?? null,
+              customerId,
+              customerName: dto.customerName,
+              customerEmail: dto.customerEmail,
+              customerPhone: dto.customerPhone ?? null,
+              startsAt: hold.startsAt,
+              endsAt: hold.endsAt,
+              bufferStartsAt: hold.bufferStartsAt,
+              bufferEndsAt: hold.bufferEndsAt,
+              status: 'confirmed',
+              pricePaidHellers: discount.finalPriceHellers,
+              currency: service.currency,
+              customerNote: dto.customerNote ?? null,
+              referenceCode: refCode,
+              onlineMeetingUrl: service.isOnline ? service.defaultOnlineMeetingUrl : null,
+              metadata: {
+                source: 'public_widget',
+                ...(discount.discountPercent > 0 && {
+                  subscriptionDiscountPercent: discount.discountPercent,
+                  originalPriceHellers: service.priceHellers,
+                }),
+              },
+            })
+            .returning();
+        } catch (err) {
+          const e = err as { code?: string; cause?: { code?: string } };
+          if ((e.code ?? e.cause?.code) === '23P01') {
+            throw new BadRequestException({
+              error: {
+                code: 'SLOT_TAKEN',
+                message: 'Tento termín byl mezitím obsazen. Vyber prosím jiný.',
+              },
+            });
+          }
+          throw err;
+        }
 
         // 4. Mark hold as converted
         await tx
