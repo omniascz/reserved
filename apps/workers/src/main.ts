@@ -14,6 +14,7 @@ import { createWhatsAppProvider } from './providers/whatsapp/index.js';
 import { Poller } from './lib/poller.js';
 import { NotificationsWorker } from './workers/notifications.worker.js';
 import { SlotHoldsWorker } from './workers/slot-holds.worker.js';
+import { BirthdaysWorker } from './workers/birthdays.worker.js';
 
 async function bootstrap(): Promise<void> {
   const env = loadConfig();
@@ -27,6 +28,7 @@ async function bootstrap(): Promise<void> {
 
   const notificationsWorker = new NotificationsWorker(db, email, sms, whatsapp);
   const slotHoldsWorker = new SlotHoldsWorker(db);
+  const birthdaysWorker = new BirthdaysWorker(db);
 
   const pollers: Poller[] = [
     new Poller({
@@ -38,6 +40,12 @@ async function bootstrap(): Promise<void> {
       name: 'slot-holds',
       intervalSeconds: env.WORKER_HOLD_EXPIRY_TICK_SECONDS,
       tick: () => slotHoldsWorker.tick(),
+    }),
+    // Narozeniny — kontrola po hodině; idempotence zajistí max 1 přání/den/zákazník.
+    new Poller({
+      name: 'birthdays',
+      intervalSeconds: 3600,
+      tick: () => birthdaysWorker.tick(),
     }),
   ];
 

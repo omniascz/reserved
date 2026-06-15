@@ -27,8 +27,11 @@ export interface RegistrationsPerDay {
 export interface PlatformAdoption {
   tenantsWithPaymentsConnected: number;
   activeCustomerSubscriptions: number;
-  platformMrrHellers: number;
-  platformArrHellers: number;
+  /** SaaS MRR Reserved = co platí tenanti za své plány (skutečná tržba platformy). */
+  platformSaasMrrHellers: number;
+  platformSaasArrHellers: number;
+  /** GMV: MRR z předplatných KONCOVÝCH zákazníků napříč tenanty (ne tržba Reserved). */
+  customerGmvMrrHellers: number;
   modules: {
     posSales: number;
     stays: number;
@@ -233,8 +236,8 @@ export class PlatformDashboardService {
         .from(schema.paymentConnections)
         .where(eq(schema.paymentConnections.status, 'active'));
 
-      // Platformní MRR — všechna aktivní/trialing předplatná, normalizováno měsíčně.
-      const [mrr] = await tx
+      // GMV — předplatná KONCOVÝCH zákazníků napříč tenanty (ne tržba Reserved).
+      const [gmv] = await tx
         .select({
           subs: sql<number>`COUNT(*)::int`,
           mrr: sql<number>`COALESCE(SUM(
@@ -248,6 +251,18 @@ export class PlatformDashboardService {
         .from(schema.customerSubscriptions)
         .where(sql`${schema.customerSubscriptions.status} IN ('active', 'trialing')`);
 
+      // SaaS MRR Reserved — co reálně platí tenanti za své plány. Jen aktivní
+      // (ne trial, ne suspended, ne smazaní) tenanti na placeném plánu.
+      const [saas] = await tx
+        .select({
+          mrr: sql<number>`COALESCE(SUM(${schema.platformPlans.monthlyPriceHellers}), 0)::int`,
+        })
+        .from(schema.tenants)
+        .innerJoin(schema.platformPlans, eq(schema.tenants.plan, schema.platformPlans.key))
+        .where(
+          sql`${schema.tenants.status} = 'active' AND ${schema.tenants.suspendedAt} IS NULL AND ${schema.tenants.deletedAt} IS NULL`,
+        );
+
       const cnt = sql<number>`COUNT(DISTINCT tenant_id)::int`;
       const [posT] = await tx.select({ value: cnt }).from(schema.posSales);
       const [stayT] = await tx.select({ value: cnt }).from(schema.stays);
@@ -256,9 +271,10 @@ export class PlatformDashboardService {
 
       return {
         tenantsWithPaymentsConnected: Number(pay?.value ?? 0),
-        activeCustomerSubscriptions: Number(mrr?.subs ?? 0),
-        platformMrrHellers: Number(mrr?.mrr ?? 0),
-        platformArrHellers: Number(mrr?.mrr ?? 0) * 12,
+        activeCustomerSubscriptions: Number(gmv?.subs ?? 0),
+        platformSaasMrrHellers: Number(saas?.mrr ?? 0),
+        platformSaasArrHellers: Number(saas?.mrr ?? 0) * 12,
+        customerGmvMrrHellers: Number(gmv?.mrr ?? 0),
         modules: {
           posSales: Number(posT?.value ?? 0),
           stays: Number(stayT?.value ?? 0),
