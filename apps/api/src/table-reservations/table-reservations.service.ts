@@ -54,6 +54,9 @@ function assertCanManage(role: AppRole): void {
 
 interface TableMeta {
   seats?: number;
+  x?: number;
+  y?: number;
+  shape?: string;
 }
 export interface FreeTable {
   id: string;
@@ -261,11 +264,15 @@ export class TableReservationsService {
 
       return tables.map((t) => {
         const occ = byResource.get(t.id);
+        const meta = (t.metadata ?? {}) as TableMeta;
         return {
           id: t.id,
           name: t.name,
           branchId: t.branchId,
-          seats: ((t.metadata ?? {}) as TableMeta).seats ?? 0,
+          seats: meta.seats ?? 0,
+          x: meta.x ?? null,
+          y: meta.y ?? null,
+          shape: meta.shape ?? null,
           status: occ ? ('occupied' as const) : ('free' as const),
           reservationId: occ?.reservationId ?? null,
           freeAt: occ?.occupiedEndsAt ?? null,

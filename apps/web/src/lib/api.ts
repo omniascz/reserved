@@ -2330,9 +2330,67 @@ export interface TableOverviewItem {
   name: string;
   branchId: string | null;
   seats: number;
+  x: number | null;
+  y: number | null;
+  shape: string | null;
   status: 'free' | 'occupied';
   reservationId: string | null;
   freeAt: string | null;
+}
+
+export interface AdminTable {
+  id: string;
+  name: string;
+  branchId: string;
+  type: string;
+  isActive: boolean;
+  metadata: { seats?: number; x?: number; y?: number; shape?: string };
+}
+
+/** Stoly = resources typu 'table'. */
+export async function listTables(): Promise<AdminTable[]> {
+  const { data } = await fetchApi<{ data: AdminTable[] }>(`/admin/resources`);
+  return data.filter((r) => r.type === 'table');
+}
+
+export async function createTable(input: {
+  branchId: string;
+  name: string;
+  seats: number;
+  x?: number;
+  y?: number;
+  shape?: 'round' | 'square' | 'rect';
+}): Promise<AdminTable> {
+  const { data } = await fetchApi<{ data: AdminTable }>(`/admin/resources`, {
+    method: 'POST',
+    body: JSON.stringify({
+      branchId: input.branchId,
+      name: input.name,
+      type: 'table',
+      metadata: { seats: input.seats, x: input.x, y: input.y, shape: input.shape },
+    }),
+  });
+  return data;
+}
+
+export async function updateTable(
+  id: string,
+  patch: { name?: string; isActive?: boolean; metadata?: AdminTable['metadata'] },
+): Promise<AdminTable> {
+  const { data } = await fetchApi<{ data: AdminTable }>(`/admin/resources/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(patch),
+  });
+  return data;
+}
+
+/** Uloží pozici stolu na půdorysu (merge do metadata). */
+export async function updateTablePosition(id: string, x: number, y: number): Promise<AdminTable> {
+  return updateTable(id, { metadata: { x, y } });
+}
+
+export async function deleteTable(id: string): Promise<void> {
+  await fetchApi(`/admin/resources/${id}`, { method: 'DELETE' });
 }
 
 export interface TableReservation {

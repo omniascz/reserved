@@ -54,7 +54,13 @@ export class ResourcesService {
       }
       const [row] = await tx
         .insert(schema.resources)
-        .values({ tenantId, branchId: dto.branchId, name: dto.name, type: dto.type })
+        .values({
+          tenantId,
+          branchId: dto.branchId,
+          name: dto.name,
+          type: dto.type,
+          ...(dto.metadata !== undefined ? { metadata: dto.metadata } : {}),
+        })
         .returning();
       return row;
     });
@@ -69,6 +75,24 @@ export class ResourcesService {
   ) {
     assertCanManage(role);
     return this.dbService.withRlsContext(ctxFor(tenantId, userId, role), async (tx) => {
+      // Pro merge metadata potřebujeme stávající hodnotu.
+      let mergedMetadata: Record<string, unknown> | undefined;
+      if (dto.metadata !== undefined) {
+        const [existing] = await tx
+          .select({ metadata: schema.resources.metadata })
+          .from(schema.resources)
+          .where(and(eq(schema.resources.id, resourceId), eq(schema.resources.tenantId, tenantId)))
+          .limit(1);
+        if (!existing) {
+          throw new NotFoundException({
+            error: { code: 'RESOURCE_NOT_FOUND', message: 'Zdroj nenalezen.' },
+          });
+        }
+        mergedMetadata = {
+          ...((existing.metadata ?? {}) as Record<string, unknown>),
+          ...dto.metadata,
+        };
+      }
       const [row] = await tx
         .update(schema.resources)
         .set({
@@ -76,6 +100,7 @@ export class ResourcesService {
           ...(dto.name !== undefined ? { name: dto.name } : {}),
           ...(dto.type !== undefined ? { type: dto.type } : {}),
           ...(dto.isActive !== undefined ? { isActive: dto.isActive } : {}),
+          ...(mergedMetadata !== undefined ? { metadata: mergedMetadata } : {}),
           updatedAt: new Date(),
         })
         .where(and(eq(schema.resources.id, resourceId), eq(schema.resources.tenantId, tenantId)))

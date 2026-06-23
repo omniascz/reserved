@@ -1,20 +1,27 @@
 'use client';
 
-// Vertikála Restaurace — admin floor plan (sprint 10.23).
-// Půdorys stolů ke zvolenému okamžiku + dnešní rezervace + nová rezervace / walk-in.
+// Vertikála Restaurace — interaktivní floor plan (sprint 10.23).
+// View: půdorys stolů rozmístěných dle pozice, barva dle obsazenosti.
+// Edit: drag stolů (ukládá pozici), přidání/mazání stolů.
+// Pod tím: rezervace se stavovými akcemi + nová rezervace / walk-in.
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { NavHeader } from '@/components/NavHeader';
 import {
   AdminApiError,
   clearAuth,
+  createTable,
   createTableReservation,
+  deleteTable,
   getAccessToken,
   getTableOverview,
+  listBranches,
   listTableReservations,
   setTableReservationStatus,
+  updateTablePosition,
   walkInTableReservation,
+  type AdminBranch,
   type TableOverviewItem,
   type TableReservation,
 } from '@/lib/api';
@@ -26,7 +33,6 @@ const STATUS_LABELS: Record<string, string> = {
   no_show: 'Nedorazil',
   cancelled: 'Zrušeno',
 };
-
 const STATUS_STYLES: Record<string, string> = {
   confirmed: 'bg-blue-100 text-blue-700',
   seated: 'bg-green-100 text-green-700',
@@ -35,11 +41,9 @@ const STATUS_STYLES: Record<string, string> = {
   cancelled: 'bg-red-100 text-red-700',
 };
 
-function toLocalInputValue(d: Date): string {
-  // datetime-local očekává YYYY-MM-DDTHH:mm v lokálním čase.
-  const off = d.getTimezoneOffset();
-  return new Date(d.getTime() - off * 60_000).toISOString().slice(0, 16);
-}
+const CANVAS_H = 460;
+const TABLE_W = 84;
+const TABLE_H = 64;
 
 function fmtTime(iso: string | null): string {
   if (!iso) return '—';
@@ -49,12 +53,26 @@ function fmtTime(iso: string | null): string {
     timeZone: 'Europe/Prague',
   });
 }
+function toLocalInputValue(d: Date): string {
+  const off = d.getTimezoneOffset();
+  return new Date(d.getTime() - off * 60_000).toISOString().slice(0, 16);
+}
+/** Fallback pozice pro stoly bez uložené souřadnice (mřížka). */
+function fallbackPos(i: number): { x: number; y: number } {
+  const perRow = 6;
+  return { x: 16 + (i % perRow) * (TABLE_W + 16), y: 16 + Math.floor(i / perRow) * (TABLE_H + 16) };
+}
+function clamp(v: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, v));
+}
 
 export default function RestauracePage() {
   const router = useRouter();
   const [tables, setTables] = useState<TableOverviewItem[]>([]);
   const [reservations, setReservations] = useState<TableReservation[]>([]);
+  const [branches, setBranches] = useState<AdminBranch[]>([]);
   const [at, setAt] = useState<string>(() => toLocalInputValue(new Date()));
+  const [editMode, setEditMode] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
@@ -66,6 +84,9 @@ export default function RestauracePage() {
     seatingPref: '',
   });
 
+  const canvasRef = useRef<HTMLDivElement>(null);
+  const dragRef = useRef<{ id: string; dx: number; dy: number } | null>(null);
+
   useEffect(() => {
     if (!getAccessToken()) router.replace('/login');
   }, [router]);
@@ -75,12 +96,20 @@ export default function RestauracePage() {
     setError(null);
     try {
       const atIso = new Date(at).toISOString();
-      const [overview, resv] = await Promise.all([
+      const [overview, resv, br] = await Promise.all([
         getTableOverview({ at: atIso }),
         listTableReservations(),
+        listBranches(),
       ]);
-      setTables(overview);
+      // Doplň fallback pozice stolům, které ještě nemají uloženou souřadnici.
+      setTables(
+        overview.map((t, i) => {
+          const fb = fallbackPos(i);
+          return { ...t, x: t.x ?? fb.x, y: t.y ?? fb.y };
+        }),
+      );
       setReservations(resv);
+      setBranches(br);
     } catch (e) {
       if (e instanceof AdminApiError && e.status === 401) {
         clearAuth();
@@ -96,6 +125,67 @@ export default function RestauracePage() {
   useEffect(() => {
     reload();
   }, [reload]);
+
+  // ── Drag stolů (edit mode) ──────────────────────────────────────────
+  function onTablePointerDown(e: React.PointerEvent, t: TableOverviewItem): void {
+    if (!editMode) return;
+    const rect = canvasRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    dragRef.current = {
+      id: t.id,
+      dx: e.clientX - (rect.left + (t.x ?? 0)),
+      dy: e.clientY - (rect.top + (t.y ?? 0)),
+    };
+    (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+  }
+  function onCanvasPointerMove(e: React.PointerEvent): void {
+    const drag = dragRef.current;
+    const rect = canvasRef.current?.getBoundingClientRect();
+    if (!drag || !rect) return;
+    const x = clamp(e.clientX - rect.left - drag.dx, 0, rect.width - TABLE_W);
+    const y = clamp(e.clientY - rect.top - drag.dy, 0, CANVAS_H - TABLE_H);
+    setTables((prev) => prev.map((t) => (t.id === drag.id ? { ...t, x, y } : t)));
+  }
+  async function onCanvasPointerUp(): Promise<void> {
+    const drag = dragRef.current;
+    dragRef.current = null;
+    if (!drag) return;
+    const t = tables.find((x) => x.id === drag.id);
+    if (!t || t.x == null || t.y == null) return;
+    try {
+      await updateTablePosition(t.id, Math.round(t.x), Math.round(t.y));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Nepodařilo se uložit pozici.');
+    }
+  }
+
+  async function handleAddTable(): Promise<void> {
+    const branchId = branches[0]?.id;
+    if (!branchId) {
+      setError('Nejdřív vytvoř pobočku.');
+      return;
+    }
+    const name = prompt('Název stolu (např. „Stůl 7“):');
+    if (!name) return;
+    const seats = Number(prompt('Počet míst:', '4'));
+    if (!seats || seats < 1) return;
+    try {
+      await createTable({ branchId, name, seats, x: 320, y: 200, shape: 'square' });
+      reload();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Chyba při vytváření stolu.');
+    }
+  }
+
+  async function handleDeleteTable(id: string, name: string): Promise<void> {
+    if (!confirm(`Smazat stůl „${name}“?`)) return;
+    try {
+      await deleteTable(id);
+      reload();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Chyba při mazání.');
+    }
+  }
 
   async function handleAction(
     id: string,
@@ -147,24 +237,46 @@ export default function RestauracePage() {
       <main className="flex-1 p-6 max-w-5xl mx-auto w-full">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h2 className="text-2xl font-bold">Restaurace — stoly</h2>
+            <h2 className="text-2xl font-bold">Restaurace — půdorys</h2>
             <p className="text-sm text-slate-500">
-              Půdorys stolů, rezervace a walk-in. Zelená = volno, červená = obsazeno.
+              Zelená = volno, červená = obsazeno. V režimu úprav přetáhni stoly a ulož rozmístění.
             </p>
           </div>
           <div className="flex gap-2">
             <button
-              onClick={handleWalkIn}
-              className="bg-slate-200 hover:bg-slate-300 font-semibold px-4 py-2 rounded-lg"
+              onClick={() => setEditMode(!editMode)}
+              className={`font-semibold px-4 py-2 rounded-lg ${
+                editMode
+                  ? 'bg-amber-500 hover:bg-amber-600 text-white'
+                  : 'bg-slate-200 hover:bg-slate-300'
+              }`}
             >
-              Walk-in
+              {editMode ? 'Hotovo' : 'Upravit půdorys'}
             </button>
-            <button
-              onClick={() => setShowForm(!showForm)}
-              className="bg-brand-600 hover:bg-brand-700 text-white font-semibold px-4 py-2 rounded-lg"
-            >
-              {showForm ? 'Zavřít' : '+ Rezervace'}
-            </button>
+            {!editMode && (
+              <>
+                <button
+                  onClick={handleWalkIn}
+                  className="bg-slate-200 hover:bg-slate-300 font-semibold px-4 py-2 rounded-lg"
+                >
+                  Walk-in
+                </button>
+                <button
+                  onClick={() => setShowForm(!showForm)}
+                  className="bg-brand-600 hover:bg-brand-700 text-white font-semibold px-4 py-2 rounded-lg"
+                >
+                  {showForm ? 'Zavřít' : '+ Rezervace'}
+                </button>
+              </>
+            )}
+            {editMode && (
+              <button
+                onClick={handleAddTable}
+                className="bg-brand-600 hover:bg-brand-700 text-white font-semibold px-4 py-2 rounded-lg"
+              >
+                + Stůl
+              </button>
+            )}
           </div>
         </div>
 
@@ -174,7 +286,7 @@ export default function RestauracePage() {
           </div>
         )}
 
-        {showForm && (
+        {showForm && !editMode && (
           <form
             onSubmit={handleSubmit}
             className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 mb-6 grid sm:grid-cols-2 gap-4"
@@ -262,130 +374,167 @@ export default function RestauracePage() {
                 ({freeCount} volných z {tables.length})
               </span>
             </h3>
-            <label className="flex items-center gap-2 text-sm">
-              <span className="text-slate-500">Stav k:</span>
-              <input
-                type="datetime-local"
-                value={at}
-                onChange={(e) => setAt(e.target.value)}
-                className="px-2 py-1 border border-slate-300 rounded"
-              />
-            </label>
+            {!editMode && (
+              <label className="flex items-center gap-2 text-sm">
+                <span className="text-slate-500">Stav k:</span>
+                <input
+                  type="datetime-local"
+                  value={at}
+                  onChange={(e) => setAt(e.target.value)}
+                  className="px-2 py-1 border border-slate-300 rounded"
+                />
+              </label>
+            )}
           </div>
 
-          {loading ? (
-            <p className="text-slate-500 py-8 text-center">Načítám…</p>
-          ) : tables.length === 0 ? (
-            <p className="text-slate-500 py-8 text-center">
-              Žádné stoly. Přidej zdroje typu „stůl“ (resource type=table).
-            </p>
-          ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-3">
-              {tables.map((t) => {
-                const occupied = t.status === 'occupied';
-                return (
-                  <div
-                    key={t.id}
-                    className={`rounded-xl border-2 p-3 text-center ${
-                      occupied ? 'border-red-300 bg-red-50' : 'border-green-300 bg-green-50'
-                    }`}
-                    title={occupied ? `Volný v ${fmtTime(t.freeAt)}` : 'Volný'}
-                  >
-                    <div className="font-semibold text-slate-900">{t.name}</div>
-                    <div className="text-xs text-slate-500">{t.seats} míst</div>
-                    <div
-                      className={`mt-1 text-xs font-medium ${
-                        occupied ? 'text-red-700' : 'text-green-700'
-                      }`}
+          <div
+            ref={canvasRef}
+            onPointerMove={onCanvasPointerMove}
+            onPointerUp={onCanvasPointerUp}
+            className={`relative rounded-lg border-2 border-dashed ${
+              editMode ? 'border-amber-300 bg-amber-50/40' : 'border-slate-200 bg-slate-50'
+            }`}
+            style={{ height: CANVAS_H }}
+          >
+            {loading && (
+              <p className="absolute inset-0 flex items-center justify-center text-slate-500">
+                Načítám…
+              </p>
+            )}
+            {!loading && tables.length === 0 && (
+              <p className="absolute inset-0 flex items-center justify-center text-slate-500 text-center px-4">
+                Žádné stoly.{' '}
+                {editMode
+                  ? 'Přidej stůl tlačítkem „+ Stůl“.'
+                  : 'Zapni „Upravit půdorys“ a přidej stoly.'}
+              </p>
+            )}
+            {tables.map((t) => {
+              const occupied = t.status === 'occupied';
+              const round = t.shape === 'round';
+              return (
+                <div
+                  key={t.id}
+                  onPointerDown={(e) => onTablePointerDown(e, t)}
+                  className={`absolute flex flex-col items-center justify-center border-2 text-center select-none ${
+                    round ? 'rounded-full' : 'rounded-lg'
+                  } ${
+                    occupied ? 'border-red-300 bg-red-50' : 'border-green-300 bg-green-50'
+                  } ${editMode ? 'cursor-move shadow-md' : ''}`}
+                  style={{ left: t.x ?? 0, top: t.y ?? 0, width: TABLE_W, height: TABLE_H }}
+                  title={occupied ? `Obsazeno do ${fmtTime(t.freeAt)}` : 'Volno'}
+                >
+                  {editMode && (
+                    <button
+                      onPointerDown={(e) => e.stopPropagation()}
+                      onClick={() => handleDeleteTable(t.id, t.name)}
+                      className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-red-600 text-white text-xs leading-none"
+                      aria-label="Smazat stůl"
+                    >
+                      ×
+                    </button>
+                  )}
+                  <span className="font-semibold text-xs text-slate-900">{t.name}</span>
+                  <span className="text-[10px] text-slate-500">{t.seats} míst</span>
+                  {!editMode && (
+                    <span
+                      className={`text-[10px] font-medium ${occupied ? 'text-red-700' : 'text-green-700'}`}
                     >
                       {occupied ? `do ${fmtTime(t.freeAt)}` : 'volno'}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          {editMode && (
+            <p className="text-xs text-slate-500 mt-2">
+              Přetáhni stůl na místo — pozice se uloží automaticky. Křížkem stůl smažeš.
+            </p>
           )}
         </div>
 
         {/* Rezervace */}
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-          <h3 className="font-semibold px-4 py-3 border-b border-slate-200">Rezervace</h3>
-          <table className="w-full text-sm">
-            <thead className="bg-slate-50 border-b border-slate-200">
-              <tr>
-                <th className="text-left px-4 py-3 font-semibold">Čas</th>
-                <th className="text-left px-4 py-3 font-semibold">Host</th>
-                <th className="text-left px-4 py-3 font-semibold">Osob</th>
-                <th className="text-left px-4 py-3 font-semibold">Stav</th>
-                <th className="text-right px-4 py-3 font-semibold">Akce</th>
-              </tr>
-            </thead>
-            <tbody>
-              {!loading && reservations.length === 0 && (
+        {!editMode && (
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+            <h3 className="font-semibold px-4 py-3 border-b border-slate-200">Rezervace</h3>
+            <table className="w-full text-sm">
+              <thead className="bg-slate-50 border-b border-slate-200">
                 <tr>
-                  <td colSpan={5} className="text-center py-8 text-slate-500">
-                    Žádné rezervace.
-                  </td>
+                  <th className="text-left px-4 py-3 font-semibold">Čas</th>
+                  <th className="text-left px-4 py-3 font-semibold">Host</th>
+                  <th className="text-left px-4 py-3 font-semibold">Osob</th>
+                  <th className="text-left px-4 py-3 font-semibold">Stav</th>
+                  <th className="text-right px-4 py-3 font-semibold">Akce</th>
                 </tr>
-              )}
-              {reservations.map((r) => (
-                <tr key={r.id} className="border-b border-slate-100 hover:bg-slate-50">
-                  <td className="px-4 py-3">{fmtTime(r.startsAt)}</td>
-                  <td className="px-4 py-3">
-                    {r.customerName}
-                    {r.customerPhone && (
-                      <span className="text-slate-400"> · {r.customerPhone}</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3">{r.partySize}</td>
-                  <td className="px-4 py-3">
-                    <span
-                      className={`text-xs font-medium px-2 py-0.5 rounded ${
-                        STATUS_STYLES[r.status] ?? 'bg-slate-100 text-slate-600'
-                      }`}
-                    >
-                      {STATUS_LABELS[r.status] ?? r.status}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-right whitespace-nowrap">
-                    {r.status === 'confirmed' && (
-                      <>
-                        <button
-                          onClick={() => handleAction(r.id, 'seat')}
-                          className="text-green-700 hover:text-green-900 mr-3"
-                        >
-                          Usadit
-                        </button>
-                        <button
-                          onClick={() => handleAction(r.id, 'no-show')}
-                          className="text-amber-700 hover:text-amber-900 mr-3"
-                        >
-                          Nedorazil
-                        </button>
-                      </>
-                    )}
-                    {r.status === 'seated' && (
-                      <button
-                        onClick={() => handleAction(r.id, 'complete')}
-                        className="text-slate-700 hover:text-slate-900 mr-3"
+              </thead>
+              <tbody>
+                {!loading && reservations.length === 0 && (
+                  <tr>
+                    <td colSpan={5} className="text-center py-8 text-slate-500">
+                      Žádné rezervace.
+                    </td>
+                  </tr>
+                )}
+                {reservations.map((r) => (
+                  <tr key={r.id} className="border-b border-slate-100 hover:bg-slate-50">
+                    <td className="px-4 py-3">{fmtTime(r.startsAt)}</td>
+                    <td className="px-4 py-3">
+                      {r.customerName}
+                      {r.customerPhone && (
+                        <span className="text-slate-400"> · {r.customerPhone}</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">{r.partySize}</td>
+                    <td className="px-4 py-3">
+                      <span
+                        className={`text-xs font-medium px-2 py-0.5 rounded ${
+                          STATUS_STYLES[r.status] ?? 'bg-slate-100 text-slate-600'
+                        }`}
                       >
-                        Dokončit
-                      </button>
-                    )}
-                    {(r.status === 'confirmed' || r.status === 'seated') && (
-                      <button
-                        onClick={() => handleAction(r.id, 'cancel')}
-                        className="text-red-600 hover:text-red-800"
-                      >
-                        Zrušit
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                        {STATUS_LABELS[r.status] ?? r.status}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-right whitespace-nowrap">
+                      {r.status === 'confirmed' && (
+                        <>
+                          <button
+                            onClick={() => handleAction(r.id, 'seat')}
+                            className="text-green-700 hover:text-green-900 mr-3"
+                          >
+                            Usadit
+                          </button>
+                          <button
+                            onClick={() => handleAction(r.id, 'no-show')}
+                            className="text-amber-700 hover:text-amber-900 mr-3"
+                          >
+                            Nedorazil
+                          </button>
+                        </>
+                      )}
+                      {r.status === 'seated' && (
+                        <button
+                          onClick={() => handleAction(r.id, 'complete')}
+                          className="text-slate-700 hover:text-slate-900 mr-3"
+                        >
+                          Dokončit
+                        </button>
+                      )}
+                      {(r.status === 'confirmed' || r.status === 'seated') && (
+                        <button
+                          onClick={() => handleAction(r.id, 'cancel')}
+                          className="text-red-600 hover:text-red-800"
+                        >
+                          Zrušit
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </main>
     </div>
   );
