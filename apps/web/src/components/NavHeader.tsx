@@ -27,6 +27,12 @@ const GROUPS: NavGroup[] = [
     label: 'Provoz',
     items: [
       { href: '/calendar', label: 'Kalendář', description: 'Drag-and-drop kalendář rezervací' },
+      {
+        href: '/restaurace',
+        label: 'Restaurace',
+        description: 'Půdorys stolů, rezervace, walk-in',
+        badge: 'new',
+      },
       { href: '/customers', label: 'Zákazníci', description: 'CRM, historie, tagy, no-show risk' },
       { href: '/payments', label: 'Platby', description: 'Hotovost, terminál, Stripe, QR' },
     ],

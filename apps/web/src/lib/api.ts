@@ -2322,3 +2322,103 @@ export async function validateAccessCode(code: string): Promise<AccessValidateRe
   });
   return data;
 }
+
+// ─── Restaurace: rezervace stolů (sprint 10.23) ──────────────────────
+
+export interface TableOverviewItem {
+  id: string;
+  name: string;
+  branchId: string | null;
+  seats: number;
+  status: 'free' | 'occupied';
+  reservationId: string | null;
+  freeAt: string | null;
+}
+
+export interface TableReservation {
+  id: string;
+  branchId: string | null;
+  resourceId: string | null;
+  servicePeriodId: string | null;
+  customerName: string;
+  customerPhone: string | null;
+  startsAt: string;
+  endsAt: string;
+  partySize: number;
+  seatingPref: string | null;
+  occasion: string | null;
+  depositHellers: number;
+  currency: string;
+  status: string;
+  note: string | null;
+}
+
+/** Půdorysný přehled stolů k danému okamžiku (default teď). */
+export async function getTableOverview(opts?: {
+  at?: string;
+  branchId?: string;
+}): Promise<TableOverviewItem[]> {
+  const params = new URLSearchParams();
+  if (opts?.at) params.append('at', opts.at);
+  if (opts?.branchId) params.append('branchId', opts.branchId);
+  const { data } = await fetchApi<{ data: TableOverviewItem[] }>(
+    `/admin/table-reservations/overview?${params.toString()}`,
+  );
+  return data;
+}
+
+export async function listTableReservations(status?: string): Promise<TableReservation[]> {
+  const params = new URLSearchParams();
+  if (status) params.append('status', status);
+  const { data } = await fetchApi<{ data: TableReservation[] }>(
+    `/admin/table-reservations?${params.toString()}`,
+  );
+  return data;
+}
+
+export async function createTableReservation(input: {
+  resourceId?: string;
+  branchId?: string;
+  servicePeriodId?: string;
+  customerName: string;
+  customerPhone?: string;
+  startsAt: string;
+  partySize: number;
+  turnMinutes?: number;
+  seatingPref?: string;
+  occasion?: string;
+  note?: string;
+}): Promise<TableReservation & { tables: string[] }> {
+  const { data } = await fetchApi<{ data: TableReservation & { tables: string[] } }>(
+    `/admin/table-reservations`,
+    { method: 'POST', body: JSON.stringify(input) },
+  );
+  return data;
+}
+
+export async function walkInTableReservation(input: {
+  partySize: number;
+  resourceId?: string;
+  branchId?: string;
+  servicePeriodId?: string;
+  customerName?: string;
+  seatingPref?: string;
+}): Promise<TableReservation & { tables: string[] }> {
+  const { data } = await fetchApi<{ data: TableReservation & { tables: string[] } }>(
+    `/admin/table-reservations/walk-in`,
+    { method: 'POST', body: JSON.stringify(input) },
+  );
+  return data;
+}
+
+/** Změna stavu rezervace: seat | complete | no-show | cancel. */
+export async function setTableReservationStatus(
+  id: string,
+  action: 'seat' | 'complete' | 'no-show' | 'cancel',
+): Promise<TableReservation> {
+  const { data } = await fetchApi<{ data: TableReservation }>(
+    `/admin/table-reservations/${id}/${action}`,
+    { method: 'POST' },
+  );
+  return data;
+}
