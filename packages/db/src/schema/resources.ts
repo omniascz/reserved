@@ -10,7 +10,17 @@ import { branches } from './branches.js';
 // Dvojí rezervaci stejného přístroje ve stejný čas hlídá EXCLUDE constraint
 // na class_sessions (migrace 0052), analogicky k 1:1 ochraně zaměstnance.
 
-export const resourceTypes = ['ems_machine', 'room', 'equipment', 'vehicle', 'other'] as const;
+// 'table' = restaurační stůl (vertikála Restaurace, sprint 10.23).
+// Kapacita míst / slučitelnost / tvar jdou do `metadata`:
+//   { "seats": 4, "combinable": true, "combineGroup": "A", "shape": "round" }
+export const resourceTypes = [
+  'ems_machine',
+  'room',
+  'equipment',
+  'vehicle',
+  'table',
+  'other',
+] as const;
 export type ResourceType = (typeof resourceTypes)[number];
 
 export const resources = pgTable(

@@ -55,3 +55,7 @@ export * from './webhooks.js';
 export * from './platform-admins.js';
 export * from './api-keys.js';
 export * from './platform-plans.js';
+export * from './service-periods.js';
+export * from './table-reservations.js';
+export * from './table-reservation-tables.js';
+export * from './table-combinations.js';

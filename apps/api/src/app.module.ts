@@ -54,6 +54,9 @@ import { PosModule } from './pos/pos.module.js';
 import { SeriesModule } from './series/series.module.js';
 import { ServicesModule } from './services/services.module.js';
 import { StaysModule } from './stays/stays.module.js';
+import { TableReservationsModule } from './table-reservations/table-reservations.module.js';
+import { ServicePeriodsModule } from './service-periods/service-periods.module.js';
+import { TableCombinationsModule } from './table-combinations/table-combinations.module.js';
 import { SettingsModule } from './settings/settings.module.js';
 import { SmartModule } from './smart/smart.module.js';
 import { IcalModule } from './ical/ical.module.js';
@@ -130,6 +133,9 @@ import { TenantMiddleware } from './tenant/tenant.middleware.js';
     ContentModule,
     PosModule,
     StaysModule,
+    TableReservationsModule,
+    ServicePeriodsModule,
+    TableCombinationsModule,
     ChainedBookingsModule,
     DispatchModule,
     CoursesModule,
