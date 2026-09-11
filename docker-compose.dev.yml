@@ -2,6 +2,12 @@
 # Spuštění: docker compose -f docker-compose.dev.yml up -d
 # Ukončení: docker compose -f docker-compose.dev.yml down
 # Reset:    docker compose -f docker-compose.dev.yml down -v
+#
+# Porty: Postgres 5433 (5432 bývá obsazený jinými projekty), Mailhog SMTP 1026 / UI 8026.
+# Redis se nepoužívá (fronty = Postgres polling v apps/workers), proto tu není.
+#
+# Init skripty v packages/db/init se spustí jen při prvním startu nového volume
+# (vytvoří mj. testovací DB reserved_test).
 
 services:
   postgres:
@@ -14,7 +20,7 @@ services:
       POSTGRES_PASSWORD: dev
       PGDATA: /var/lib/postgresql/data/pgdata
     ports:
-      - '5432:5432'
+      - '5433:5432'
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./packages/db/init:/docker-entrypoint-initdb.d:ro
@@ -22,21 +28,6 @@ services:
       test: ['CMD-SHELL', 'pg_isready -U dev -d reserved_dev']
       interval: 5s
       timeout: 5s
-      retries: 5
-
-  redis:
-    image: redis:7-alpine
-    container_name: reserved-redis
-    restart: unless-stopped
-    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
-    ports:
-      - '6379:6379'
-    volumes:
-      - redis_data:/data
-    healthcheck:
-      test: ['CMD', 'redis-cli', 'ping']
-      interval: 5s
-      timeout: 3s
       retries: 5
 
   mailhog:
@@ -49,6 +40,5 @@ services:
 
 volumes:
   postgres_data:
-    name: reserved_postgres_data
-  redis_data:
-    name: reserved_redis_data
+    # Nový volume (v2) — starý `reserved_postgres_data` se záměrně nepoužívá ani nemaže.
+    name: reserved_postgres_data_v2
