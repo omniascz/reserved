@@ -10,7 +10,8 @@ import {
   type PulseUpExport,
 } from '../pulseup-import.js';
 
-const DATABASE_URL = process.env.DATABASE_URL ?? 'postgresql://dev:dev@localhost:5432/reserved_dev';
+const DATABASE_URL =
+  process.env.DATABASE_URL ?? 'postgresql://dev:dev@localhost:5433/reserved_test';
 const sql = postgres(DATABASE_URL, { max: 4 });
 
 const tenantImport = randomUUID();

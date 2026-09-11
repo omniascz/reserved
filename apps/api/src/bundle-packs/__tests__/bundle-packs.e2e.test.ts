@@ -9,7 +9,8 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import postgres from 'postgres';
 import { randomUUID } from 'node:crypto';
 
-const DATABASE_URL = process.env.DATABASE_URL ?? 'postgresql://dev:dev@localhost:5432/reserved_dev';
+const DATABASE_URL =
+  process.env.DATABASE_URL ?? 'postgresql://dev:dev@localhost:5433/reserved_test';
 const sql = postgres(DATABASE_URL, { max: 4 });
 
 type BundleItem = { serviceId: string; quantity: number };

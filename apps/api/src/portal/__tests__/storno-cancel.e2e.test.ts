@@ -12,7 +12,7 @@ import postgres from 'postgres';
 import { createHash, randomBytes } from 'node:crypto';
 
 const API = process.env.API_URL ?? 'http://localhost:4010/api/v1';
-const DB = process.env.DATABASE_URL ?? 'postgresql://dev:dev@localhost:5432/reserved_dev';
+const DB = process.env.DATABASE_URL ?? 'postgresql://dev:dev@localhost:5433/reserved_test';
 const sql = postgres(DB, { max: 4 });
 
 function sha256(x: string): string {
