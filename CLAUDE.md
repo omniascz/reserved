@@ -7,14 +7,22 @@
 
 ## Stack (pevně rozhodnuto)
 
-- **Runtime:** Node.js 22, TypeScript 5.7, ESM only
-- **Backend:** NestJS 10 (REST + WebSockets via Socket.io Gateway)
-- **Frontend:** Next.js 14 (App Router) — 3 apps: `web` (admin), `widget` (embed), `portal` (zákazník)
-- **DB:** PostgreSQL 16 + Drizzle ORM (žádná Prisma)
-- **Cache/Queue:** Redis 7 + BullMQ
+- **Runtime:** Node.js ≥ 22, TypeScript 5.7, ESM only
+- **Backend:** NestJS 10 (REST, prefix `/api/v1`) — žádné WebSockety
+- **Frontend:** Next.js 14 (App Router) — 6 apps: `web` (admin), `portal` (zákazník), `widget` (embed),
+  `master` (provozovatel platformy), `marketing` (veřejný web), `tenant-site` (mini-web tenanta);
+  mobilní app `apps/mobile` (Expo / React Native)
+- **DB:** PostgreSQL 16 + Drizzle ORM (žádná Prisma), migrace přes drizzle journal (`pnpm db:migrate`)
+- **Fronty/joby:** tabulky v Postgresu + pollery v `apps/workers` — **žádný Redis ani BullMQ**
 - **Monorepo:** pnpm workspaces + Turborepo
 - **Validace:** Zod na všech HTTP request handlerech (strict)
-- **Testy:** Vitest (unit + integration), Playwright (E2E)
+- **Testy:** Vitest — unit, DB-integrační (DB `reserved_test`) a full-stack E2E proti běžícímu API
+  (`tests/e2e`). Žádný Playwright.
+
+## Lokální porty
+
+API 4010 · master 4001 · web 4002 · portal 4003 · widget 4004 · marketing 4005 · tenant-site 4006 ·
+Postgres 5433 (DB `reserved_dev` + `reserved_test`) · Mailhog SMTP 1026 / UI 8026
 
 ## Železná pravidla
 
@@ -40,7 +48,7 @@
 
 - **Zod schema** pro každý route handler s `await request.json()`.
 - Šablona: `const Schema = z.object({...}); const data = Schema.parse(await req.json());`
-- ESLint pravidlo: `no-unvalidated-json` (přidáme).
+- ESLint pravidlo: `no-unvalidated-json` (přidáme — ESLint zatím v repu není nakonfigurovaný).
 
 ### Naming
 
@@ -76,7 +84,8 @@
 
 - Conventional commits: `feat:`, `fix:`, `chore:`, `refactor:`, `test:`, `docs:`
 - Každý commit funkční (CI green) — žádné WIP commity v `main`
-- Pre-commit hook: lint + typecheck + format + gitleaks
+- Pre-commit hook: format (prettier přes lint-staged) + typecheck + gitleaks (pokud je nainstalovaný);
+  commit-msg: commitlint (header max. 100 znaků)
 
 ### Bezpečnost
 
@@ -92,18 +101,24 @@
 ```
 reserved/
 ├── apps/
-│   ├── api/          NestJS API (REST + WS)
+│   ├── api/          NestJS API (REST)
 │   ├── web/          Admin panel (Next.js)
-│   ├── widget/       Embed booking widget (Next.js)
-│   ├── portal/       Customer portal (Next.js)
-│   └── workers/      BullMQ background jobs
+│   ├── portal/       Customer portal (Next.js, PWA)
+│   ├── widget/       Embed booking widget (Next.js) + public/embed.js
+│   ├── master/       Admin provozovatele platformy (Next.js)
+│   ├── marketing/    Veřejný web (Next.js, CS/EN)
+│   ├── tenant-site/  Mini-web tenanta (Next.js)
+│   ├── mobile/       Klientská mobilní app (Expo)
+│   └── workers/      Pollery nad Postgresem (notifikace, slot holdy, narozeniny)
 ├── packages/
 │   ├── db/           Drizzle schema + migrations + seed
+│   ├── rls-multitenancy/ Tenant kontext (RLS)
 │   ├── types/        Shared DTOs, enums, branded types
-│   ├── ui/           Shared shadcn/ui components
+│   ├── ui/           (zatím prázdný)
 │   ├── rules-engine/ Rules evaluator
-│   └── utils/        Shared helpers (date, money, validation)
-├── docker-compose.dev.yml
+│   └── utils/        Shared helpers
+├── tests/e2e/        Full-stack E2E testy proti běžícímu API
+├── docker-compose.dev.yml  Postgres 16 (5433) + Mailhog
 ├── turbo.json
 ├── pnpm-workspace.yaml
 └── tsconfig.base.json
