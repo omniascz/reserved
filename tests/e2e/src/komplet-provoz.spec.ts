@@ -13,7 +13,7 @@
 
 import { describe, it, expect, beforeAll } from 'vitest';
 
-const API_URL = process.env.API_URL ?? 'http://localhost:4000/api/v1';
+const API_URL = process.env.API_URL ?? 'http://localhost:4010/api/v1';
 
 function uniqueSlug(): string {
   const ts = Date.now().toString(36);

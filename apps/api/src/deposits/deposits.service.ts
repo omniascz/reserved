@@ -166,7 +166,7 @@ export class DepositsService {
           'Stripe Connect není nakonfigurován — nastav env STRIPE_CONNECT_CLIENT_ID (a STRIPE_SECRET_KEY pro callback).',
       };
     }
-    const apiBase = process.env.API_PUBLIC_URL ?? 'http://localhost:4000';
+    const apiBase = process.env.API_PUBLIC_URL ?? 'http://localhost:4010';
     const redirectUri = `${apiBase}/api/v1/admin/payments/connect/stripe/callback`;
     const state = this.signConnectState(tenantId);
     const url =

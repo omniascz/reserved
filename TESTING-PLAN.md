@@ -1,7 +1,7 @@
 # Reserved — Hloubkový testovací plán (200+ scénářů)
 
 > Spuštěno: 2026-05-14
-> Admin: http://localhost:3003 | Widget: http://localhost:3002 | Portal: http://localhost:3005 | Emaily: http://localhost:8026
+> Admin: http://localhost:4002 | Widget: http://localhost:4004 | Portal: http://localhost:4003 | Emaily: http://localhost:8026
 > Login: tenant `demo` / `admin@demo.local` / `admin123`
 
 Označuj `[x]` u splněných, `[!]` u nalezených chyb, `[?]` u nejasných.

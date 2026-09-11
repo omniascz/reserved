@@ -2,7 +2,7 @@
 // Tenant slug se nepřenáší v JWT — token vždy patří k jednomu tenantovi.
 // Při loginu se posílá X-Tenant-ID header (jak to dělá widget i admin).
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api/v1';
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4010/api/v1';
 
 const TOKEN_KEY = 'portal_access_token';
 const REFRESH_KEY = 'portal_refresh_token';

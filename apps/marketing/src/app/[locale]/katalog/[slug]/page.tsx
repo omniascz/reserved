@@ -22,7 +22,7 @@ interface CatalogProfile {
   }>;
 }
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4010/api/v1';
 const WIDGET_URL = process.env.NEXT_PUBLIC_WIDGET_URL ?? 'http://localhost:4004';
 
 async function fetchProfile(slug: string): Promise<CatalogProfile | null> {

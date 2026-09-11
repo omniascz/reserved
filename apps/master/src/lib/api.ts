@@ -1,6 +1,6 @@
 // Master admin API klient. Pouziva platform JWT (audience reserved-api-platform).
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api/v1';
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4010/api/v1';
 const ADMIN_BASE = process.env.NEXT_PUBLIC_ADMIN_BASE_URL ?? 'http://localhost:3003';
 
 const TOKEN_KEY = 'master_access_token';

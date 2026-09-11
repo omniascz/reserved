@@ -1,7 +1,7 @@
 // API klient pro Reserved public endpointy.
 // Žádný auth — tenant identifikován slug-em v URL.
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api/v1';
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4010/api/v1';
 
 export interface ApiError {
   code: string;

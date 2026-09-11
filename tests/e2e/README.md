@@ -25,7 +25,7 @@ pnpm --filter @reserved/e2e test
 
 | Env proměnná | Default                        | Účel             |
 | ------------ | ------------------------------ | ---------------- |
-| `API_URL`    | `http://localhost:4000/api/v1` | Base URL pro API |
+| `API_URL`    | `http://localhost:4010/api/v1` | Base URL pro API |
 
 Pro test proti staging serveru:
 

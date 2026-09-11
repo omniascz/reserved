@@ -101,7 +101,7 @@ async function seed(): Promise<void> {
   console.log(`\n✓ Seed OK`);
   console.log(`  Tenant: ${tenant.slug} (${tenant.id})`);
   console.log(`  Login:  ${DEMO_EMAIL}  /  ${DEMO_PASSWORD}`);
-  console.log(`  Admin:  http://localhost:3000  (tenant: demo)\n`);
+  console.log(`  Admin:  http://localhost:4002  (tenant: demo)\n`);
   process.exit(0);
 }
 

@@ -60,7 +60,7 @@ export class IcalService {
 
   /** Veřejná subscription URL pro daný feed. */
   feedUrl(slug: string, tenantId: string, employeeId: string): string {
-    const base = process.env.API_URL ?? 'http://localhost:4000';
+    const base = process.env.API_URL ?? 'http://localhost:4010';
     const token = this.signToken(tenantId, employeeId);
     return `${base}/api/v1/public/${slug}/ical/${token}`;
   }

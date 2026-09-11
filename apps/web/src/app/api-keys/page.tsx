@@ -69,7 +69,7 @@ export default function ApiKeysPage() {
               Pro programatický přístup k Reserved API z vlastních systémů (e-shop, mobilní appka,
               CRM). Dokumentace:{' '}
               <a
-                href="http://localhost:4000/api-docs"
+                href="http://localhost:4010/api-docs"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-brand-700 hover:underline"

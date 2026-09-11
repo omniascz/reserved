@@ -159,7 +159,7 @@ export class UploadsService {
   }
 
   private getApiBaseUrl(): string {
-    return process.env.API_URL ?? 'http://localhost:4000';
+    return process.env.API_URL ?? 'http://localhost:4010';
   }
 
   private extFromContentType(contentType: string): string {

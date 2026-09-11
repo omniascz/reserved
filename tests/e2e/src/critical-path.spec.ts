@@ -6,7 +6,7 @@
 //   3. Vytvoření služby (admin endpoint, JWT auth)
 //   4. Veřejný widget endpoint vrátí službu (public read, bez auth)
 //
-// Test běží proti reálnému API (default http://localhost:4000) a vyžaduje
+// Test běží proti reálnému API (default http://localhost:4010) a vyžaduje
 // běžící DB. Pro produkční smoke test stačí přepnout API_URL na staging.
 //
 // Run: pnpm --filter @reserved/e2e test
@@ -14,7 +14,7 @@
 
 import { describe, it, expect, beforeAll } from 'vitest';
 
-const API_URL = process.env.API_URL ?? 'http://localhost:4000/api/v1';
+const API_URL = process.env.API_URL ?? 'http://localhost:4010/api/v1';
 
 interface RegisterResponse {
   tenantId: string;

@@ -7,7 +7,7 @@ import { useSearchParams } from 'next/navigation';
 // bez external API. User klikne 'Zaplatit' nebo 'Zruseni' a triggerne
 // webhook → backend update.
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api/v1';
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4010/api/v1';
 
 function MockCheckoutInner() {
   const search = useSearchParams();

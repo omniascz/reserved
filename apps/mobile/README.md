@@ -35,5 +35,5 @@ pnpm --filter @reserved/mobile start
 
 ## Konfigurace
 
-`app.json → expo.extra.apiUrl` = URL API (default `http://localhost:4000/api/v1`).
+`app.json → expo.extra.apiUrl` = URL API (default `http://localhost:4010/api/v1`).
 Pro produkci nastav na veřejnou doménu API.

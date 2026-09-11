@@ -5,7 +5,7 @@ import Constants from 'expo-constants';
 import { getSession } from './auth';
 
 const API_URL =
-  (Constants.expoConfig?.extra?.apiUrl as string | undefined) ?? 'http://localhost:4000/api/v1';
+  (Constants.expoConfig?.extra?.apiUrl as string | undefined) ?? 'http://localhost:4010/api/v1';
 
 export class ApiError extends Error {
   constructor(

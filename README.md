@@ -27,9 +27,9 @@ pnpm db:seed
 pnpm dev
 ```
 
-API běží na `http://localhost:3001`, healthcheck na `GET /health`.
+API běží na `http://localhost:4010`, healthcheck na `GET /api/v1/health`.
 
-Mailhog (zachycené emaily): http://localhost:8025
+Mailhog (zachycené emaily): http://localhost:8026
 
 ## Struktura
 

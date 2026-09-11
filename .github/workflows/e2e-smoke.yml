@@ -39,7 +39,7 @@ jobs:
 
     env:
       NODE_ENV: test
-      API_PORT: 4000
+      API_PORT: 4010
       APP_URL: http://localhost:4002
       DATABASE_URL: postgresql://dev:dev@localhost:5432/reserved_test
       DATABASE_APP_URL: postgresql://app_user:app@localhost:5432/reserved_test
@@ -59,7 +59,7 @@ jobs:
       EMAIL_FROM: noreply@reserved.local
       EMAIL_FROM_NAME: Reserved CI
       # API_URL pro E2E test
-      API_URL: http://localhost:4000/api/v1
+      API_URL: http://localhost:4010/api/v1
 
     steps:
       - uses: actions/checkout@v4
@@ -96,7 +96,7 @@ jobs:
       - name: Wait for API to be ready (max 60s)
         run: |
           for i in {1..60}; do
-            if curl -fs http://localhost:4000/api/v1/health > /dev/null 2>&1; then
+            if curl -fs http://localhost:4010/api/v1/health > /dev/null 2>&1; then
               echo "API is up after ${i}s"
               exit 0
             fi

@@ -26,7 +26,7 @@ export function Footer() {
               </Link>
             </li>
             <li>
-              <a href="http://localhost:4000/api-docs" className="hover:text-white">
+              <a href="http://localhost:4010/api-docs" className="hover:text-white">
                 {t('apiDocs')}
               </a>
             </li>

@@ -1,6 +1,6 @@
 // API klient pro admin endpointy. JWT token v paměti + localStorage.
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api/v1';
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4010/api/v1';
 
 const TOKEN_KEY = 'reserved_access_token';
 const REFRESH_KEY = 'reserved_refresh_token';

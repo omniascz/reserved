@@ -41,7 +41,7 @@ export class DepositsController {
   @Get('connect/stripe/callback')
   @Redirect()
   async stripeConnectCallback(@Query('code') code: string, @Query('state') state: string) {
-    const appUrl = process.env.APP_URL ?? 'http://localhost:3000';
+    const appUrl = process.env.APP_URL ?? 'http://localhost:4002';
     try {
       await this.svc.stripeConnectCallback(code, state);
       return { url: `${appUrl}/settings/payments?connected=stripe` };

@@ -93,7 +93,7 @@ async function bootstrap(): Promise<void> {
           '3. **Anonymní** (`/public/:slug/*` — pro booking widget)',
       )
       .setVersion('1.0')
-      .addServer(`http://localhost:${process.env.API_PORT ?? 4000}`)
+      .addServer(`http://localhost:${process.env.API_PORT ?? 4010}`)
       .addBearerAuth(
         {
           type: 'http',
@@ -125,7 +125,7 @@ async function bootstrap(): Promise<void> {
     });
   }
 
-  const port = Number(process.env.API_PORT ?? 3001);
+  const port = Number(process.env.API_PORT ?? 4010);
   await app.listen(port);
   // eslint-disable-next-line no-console
   console.log(`Reserved API listening on http://localhost:${port}`);
