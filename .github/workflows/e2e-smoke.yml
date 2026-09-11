@@ -10,7 +10,7 @@ on:
 jobs:
   e2e-smoke:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
 
     services:
       postgres:
@@ -27,96 +27,75 @@ jobs:
           --health-timeout 5s
           --health-retries 10
 
-      redis:
-        image: redis:7-alpine
-        ports:
-          - 6379:6379
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 5s
-          --health-timeout 3s
-          --health-retries 5
-
     env:
       NODE_ENV: test
       API_PORT: 4010
       APP_URL: http://localhost:4002
+      # Migrace jako vlastník (dev); API běží jako app_user (roli vytvoří migrace 0003).
       DATABASE_URL: postgresql://dev:dev@localhost:5432/reserved_test
       DATABASE_APP_URL: postgresql://app_user:app@localhost:5432/reserved_test
-      DATABASE_POOL_MIN: 2
       DATABASE_POOL_MAX: 10
-      REDIS_URL: redis://localhost:6379
-      JWT_SECRET: ci_smoke_test_secret_64_bytes_long_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-      JWT_ACCESS_EXPIRY: 15m
-      JWT_REFRESH_EXPIRY: 30d
+      JWT_SECRET: ci_smoke_test_secret_at_least_32_characters_long_xxxx
       JWT_ISSUER: reserved
       JWT_AUDIENCE: reserved-api
       APP_BASE_DOMAIN: localhost
-      APP_PROTOCOL: http
-      INTERNAL_SERVICE_TOKEN: ci_internal_token_xxxxxxxxxxxxxxxxxxxxxxxxxx
       SMTP_HOST: localhost
       SMTP_PORT: 1025
       EMAIL_FROM: noreply@reserved.local
       EMAIL_FROM_NAME: Reserved CI
-      # API_URL pro E2E test
-      API_URL: http://localhost:4010/api/v1
+      # API_URL záměrně NEnastavujeme: API ho používá jako vlastní base URL (bez /api/v1),
+      # E2E testy mají správný default http://localhost:4010/api/v1.
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 10
+      # Verze pnpm se bere z package.json (packageManager).
+      - uses: pnpm/action-setup@v6
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile
 
-      - name: Setup app_user DB role
+      - name: DB migrace (prázdná DB → všech 85)
+        run: pnpm db:migrate
+
+      # DOČASNĚ přes tsx: `node dist/main.js` zatím nejde spustit, protože balíčky
+      # @reserved/* exportují TS zdrojáky (packages/*/package.json -> src/index.ts).
+      # Rozhodnutí o produkčním startu čeká (viz PR popis).
+      - name: Start API na pozadí
         run: |
-          PGPASSWORD=dev psql -h localhost -U dev -d reserved_test -c "CREATE ROLE app_user LOGIN PASSWORD 'app';"
-          PGPASSWORD=dev psql -h localhost -U dev -d reserved_test -c "GRANT ALL PRIVILEGES ON SCHEMA public TO app_user;"
-
-      - name: Run DB migrations
-        run: pnpm --filter @reserved/db db:migrate
-
-      - name: Build API
-        run: pnpm --filter @reserved/api build
-
-      - name: Start API in background
-        run: |
-          pnpm --filter @reserved/api start > /tmp/api.log 2>&1 &
+          pnpm --filter @reserved/api exec tsx src/main.ts > /tmp/api.log 2>&1 &
           echo $! > /tmp/api.pid
         env:
           NODE_ENV: production
 
-      - name: Wait for API to be ready (max 60s)
+      - name: Počkat na API (max 60 s)
         run: |
           for i in {1..60}; do
             if curl -fs http://localhost:4010/api/v1/health > /dev/null 2>&1; then
-              echo "API is up after ${i}s"
+              echo "API běží po ${i}s"
               exit 0
             fi
             sleep 1
           done
-          echo "API did not start in 60s"
+          echo "API nenaběhlo do 60 s"
           echo "─── API logs ───"
           cat /tmp/api.log
           exit 1
 
-      - name: Run E2E smoke tests
+      - name: E2E smoke testy
         run: pnpm --filter @reserved/e2e test
 
-      - name: Print API logs on failure
+      - name: Logy API při selhání
         if: failure()
         run: |
           echo "─── API logs ───"
           cat /tmp/api.log || true
 
-      - name: Stop API
+      - name: Zastavit API
         if: always()
         run: |
           if [ -f /tmp/api.pid ]; then
