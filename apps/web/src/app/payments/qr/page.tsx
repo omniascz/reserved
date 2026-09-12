@@ -1,12 +1,12 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 
 // QR generator pomocí Google Charts API (žádné npm deps).
 // Alternativně: lze použít qrcode.react, ale zatim minimalisticky.
 
-export default function QrPaymentPage() {
+function QrPaymentContent() {
   const search = useSearchParams();
   const [qrUrl, setQrUrl] = useState<string>('');
   const spayd = search.get('spayd') ?? '';
@@ -66,5 +66,20 @@ export default function QrPaymentPage() {
         </button>
       </div>
     </main>
+  );
+}
+
+export default function QrPaymentPage() {
+  // useSearchParams() musí být uvnitř <Suspense>, jinak Next 14 stránku nepřerenderuje.
+  return (
+    <Suspense
+      fallback={
+        <main className="min-h-screen flex items-center justify-center p-6">
+          <div className="text-slate-500">Načítám…</div>
+        </main>
+      }
+    >
+      <QrPaymentContent />
+    </Suspense>
   );
 }
