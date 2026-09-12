@@ -1,4 +1,5 @@
-import { pgTable, uuid, boolean, timestamp, varchar, index } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, boolean, timestamp, varchar, index, check } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 import { tenants } from './tenants.js';
 import { tableReservations } from './table-reservations.js';
 import { resources } from './resources.js';
@@ -37,6 +38,10 @@ export const tableReservationTables = pgTable(
     tenantIdx: index('table_reservation_tables_tenant_idx').on(table.tenantId),
     reservationIdx: index('table_reservation_tables_reservation_idx').on(table.reservationId),
     resourceIdx: index('table_reservation_tables_resource_idx').on(table.resourceId),
+    windowValid: check(
+      'trt_window_valid',
+      sql`${table.occupiedEndsAt} > ${table.occupiedStartsAt}`,
+    ),
   }),
 );
 

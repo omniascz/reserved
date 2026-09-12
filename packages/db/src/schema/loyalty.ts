@@ -7,7 +7,9 @@ import {
   boolean,
   timestamp,
   index,
+  uniqueIndex,
 } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 import { tenants } from './tenants.js';
 
 // Sprint 10.8 — věrnostní body. Ledger transakcí; zůstatek = SUM(points) na klienta.
@@ -36,6 +38,10 @@ export const loyaltyTransactions = pgTable(
   (table) => ({
     tenantIdx: index('loyalty_transactions_tenant_idx').on(table.tenantId),
     customerIdx: index('loyalty_transactions_customer_idx').on(table.tenantId, table.customerId),
+    /** BYZNYS PRAVIDLO: body za jednu rezervaci se připíšou jen jednou (migrace 0056). */
+    earnBookingUniq: uniqueIndex('loyalty_transactions_earn_booking_uniq')
+      .on(table.bookingId)
+      .where(sql`type = 'earn_booking' AND booking_id IS NOT NULL`),
   }),
 );
 

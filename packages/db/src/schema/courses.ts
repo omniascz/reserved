@@ -1,4 +1,14 @@
-import { pgTable, uuid, varchar, integer, text, timestamp, index } from 'drizzle-orm/pg-core';
+import {
+  pgTable,
+  uuid,
+  varchar,
+  integer,
+  text,
+  timestamp,
+  index,
+  uniqueIndex,
+} from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 import { tenants } from './tenants.js';
 import { services } from './services.js';
 import { employees } from './employees.js';
@@ -53,6 +63,10 @@ export const courseEnrollments = pgTable(
   },
   (table) => ({
     courseIdx: index('course_enrollments_course_idx').on(table.courseId),
+    /** BYZNYS PRAVIDLO: jeden e-mail = jeden aktivní zápis do kurzu (migrace 0069). */
+    activeUniq: uniqueIndex('course_enrollments_unique_active')
+      .on(table.courseId, sql`lower(${table.customerEmail})`)
+      .where(sql`status <> 'cancelled'`),
   }),
 );
 export type CourseEnrollment = typeof courseEnrollments.$inferSelect;

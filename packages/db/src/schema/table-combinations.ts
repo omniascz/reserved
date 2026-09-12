@@ -1,4 +1,14 @@
-import { pgTable, uuid, varchar, integer, boolean, timestamp, index } from 'drizzle-orm/pg-core';
+import {
+  pgTable,
+  uuid,
+  varchar,
+  integer,
+  boolean,
+  timestamp,
+  index,
+  check,
+} from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 import { tenants } from './tenants.js';
 import { branches } from './branches.js';
 
@@ -34,6 +44,10 @@ export const tableCombinations = pgTable(
   (table) => ({
     tenantIdx: index('table_combinations_tenant_idx').on(table.tenantId),
     branchIdx: index('table_combinations_branch_idx').on(table.branchId),
+    capacityPositive: check(
+      'table_combinations_capacity_positive',
+      sql`${table.combinedCapacity} > 0`,
+    ),
   }),
 );
 

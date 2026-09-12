@@ -1,4 +1,14 @@
-import { pgTable, uuid, varchar, integer, text, timestamp, index } from 'drizzle-orm/pg-core';
+import {
+  pgTable,
+  uuid,
+  varchar,
+  integer,
+  text,
+  timestamp,
+  index,
+  check,
+} from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 import { tenants } from './tenants.js';
 import { branches } from './branches.js';
 import { resources } from './resources.js';
@@ -48,6 +58,7 @@ export const logisticsJobs = pgTable(
     tenantIdx: index('logistics_jobs_tenant_idx').on(table.tenantId, table.startsAt),
     vehicleIdx: index('logistics_jobs_vehicle_idx').on(table.vehicleId),
     driverIdx: index('logistics_jobs_driver_idx').on(table.driverId),
+    timeValid: check('logistics_jobs_time_valid', sql`${table.endsAt} > ${table.startsAt}`),
   }),
 );
 

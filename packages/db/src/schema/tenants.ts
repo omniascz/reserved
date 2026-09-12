@@ -9,6 +9,7 @@ import {
   index,
   uniqueIndex,
 } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 
 // Reference: reserved-docs/13a_db_schema_core.md
 //
@@ -88,6 +89,22 @@ export const tenants = pgTable(
     statusIdx: index('tenants_status_idx').on(table.status),
     suspendedIdx: index('tenants_suspended_idx').on(table.suspendedAt),
     businessTypeIdx: index('tenants_business_type_idx').on(table.businessType),
+    /** Částečné indexy dle migrací 0046, 0047, 0049. */
+    customDomainVerifiedIdx: index('tenants_custom_domain_verified_idx')
+      .on(table.customDomain)
+      .where(sql`custom_domain IS NOT NULL AND custom_domain_verified_at IS NOT NULL`),
+    listedCatalogIdx: index('tenants_listed_catalog_idx')
+      .on(table.listedInCatalog)
+      .where(sql`listed_in_catalog = true AND deleted_at IS NULL AND suspended_at IS NULL`),
+    businessTypeListedIdx: index('tenants_business_type_listed_idx')
+      .on(table.businessType)
+      .where(sql`listed_in_catalog = true AND business_type IS NOT NULL`),
+    publicCityIdx: index('tenants_public_city_idx')
+      .on(table.publicCity)
+      .where(sql`listed_in_catalog = true AND public_city IS NOT NULL`),
+    siteEnabledIdx: index('tenants_site_enabled_idx')
+      .on(table.siteEnabled)
+      .where(sql`site_enabled = true`),
   }),
 );
 

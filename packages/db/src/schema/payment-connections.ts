@@ -1,4 +1,4 @@
-import { pgTable, uuid, varchar, boolean, timestamp, index } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, varchar, boolean, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
 import { tenants } from './tenants.js';
 
 // Platby koncových klientů — propojení účtu tenanta (Stripe Connect Standard).
@@ -25,7 +25,8 @@ export const paymentConnections = pgTable(
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({
-    tenantProviderIdx: index('payment_connections_tenant_provider_idx').on(
+    /** Jeden tenant = jedno propojení na providera (UNIQUE dle migrace 0070). */
+    tenantProviderIdx: uniqueIndex('payment_connections_tenant_provider_idx').on(
       table.tenantId,
       table.provider,
     ),

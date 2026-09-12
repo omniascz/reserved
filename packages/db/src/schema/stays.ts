@@ -1,4 +1,15 @@
-import { pgTable, uuid, varchar, integer, text, date, timestamp, index } from 'drizzle-orm/pg-core';
+import {
+  pgTable,
+  uuid,
+  varchar,
+  integer,
+  text,
+  date,
+  timestamp,
+  index,
+  check,
+} from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 import { tenants } from './tenants.js';
 import { branches } from './branches.js';
 import { resources } from './resources.js';
@@ -46,6 +57,7 @@ export const stays = pgTable(
     tenantIdx: index('stays_tenant_idx').on(table.tenantId),
     resourceIdx: index('stays_resource_idx').on(table.resourceId),
     checkInIdx: index('stays_checkin_idx').on(table.tenantId, table.checkIn),
+    datesValid: check('stays_dates_valid', sql`${table.checkOut} > ${table.checkIn}`),
   }),
 );
 

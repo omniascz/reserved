@@ -45,6 +45,7 @@ export const giftVouchers = pgTable(
   (table) => ({
     codeUniq: uniqueIndex('gift_vouchers_code_uniq').on(table.tenantId, table.code),
     tenantIdx: index('gift_vouchers_tenant_idx').on(table.tenantId, table.status),
+    paymentIdx: index('gift_vouchers_payment_idx').on(table.tenantId, table.paymentId),
     remainingNonNegative: check(
       'gift_vouchers_remaining_nonneg',
       sql`${table.remainingValueHellers} >= 0`,

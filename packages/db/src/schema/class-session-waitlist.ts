@@ -1,4 +1,13 @@
-import { pgTable, uuid, varchar, integer, timestamp, index } from 'drizzle-orm/pg-core';
+import {
+  pgTable,
+  uuid,
+  varchar,
+  integer,
+  timestamp,
+  index,
+  uniqueIndex,
+} from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 import { tenants } from './tenants.js';
 import { classSessions } from './class-sessions.js';
 
@@ -32,6 +41,10 @@ export const classSessionWaitlist = pgTable(
   (table) => ({
     tenantIdx: index('class_session_waitlist_tenant_idx').on(table.tenantId),
     sessionIdx: index('class_session_waitlist_session_idx').on(table.sessionId, table.position),
+    /** BYZNYS PRAVIDLO: jeden e-mail je v pořadníku lekce nejvýš jednou (migrace 0053). */
+    waitingUniq: uniqueIndex('class_session_waitlist_uniq')
+      .on(table.sessionId, sql`lower(${table.customerEmail})`)
+      .where(sql`status = 'waiting'`),
   }),
 );
 
