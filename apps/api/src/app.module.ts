@@ -49,6 +49,7 @@ import { AdmissionsModule } from './admissions/admissions.module.js';
 import { OrdersModule } from './orders/orders.module.js';
 import { AppointmentRecordsModule } from './appointment-records/appointment-records.module.js';
 import { DispatchModule } from './dispatch/dispatch.module.js';
+import { PassesModule } from './passes/passes.module.js';
 import { PayrollModule } from './payroll/payroll.module.js';
 import { PosModule } from './pos/pos.module.js';
 import { SeriesModule } from './series/series.module.js';
@@ -129,6 +130,7 @@ import { TenantMiddleware } from './tenant/tenant.middleware.js';
     SmartModule,
     SeriesModule,
     IcalModule,
+    PassesModule,
     PayrollModule,
     ContentModule,
     PosModule,

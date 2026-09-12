@@ -32,11 +32,17 @@ export const AllocateCreditPackSchema = z.object({
 });
 export type AllocateCreditPackDto = z.infer<typeof AllocateCreditPackSchema>;
 
-// Manualni uprava kreditu (admin "+5" za bonus apod)
-export const AdjustCreditsSchema = z.object({
-  creditsDelta: z.number().int(),
-  note: z.string().max(500),
-});
+// Manualni uprava kreditu (admin "+5" za bonus apod) a/nebo prodlouzeni platnosti.
+export const AdjustCreditsSchema = z
+  .object({
+    creditsDelta: z.number().int().optional(),
+    /** Posunout platnost o N dní (kladné = prodloužit). Jen u balíčku, který expiraci má. */
+    extendDays: z.number().int().optional(),
+    note: z.string().min(1).max(500),
+  })
+  .refine((dto) => dto.creditsDelta !== undefined || dto.extendDays !== undefined, {
+    message: 'Zadej creditsDelta, extendDays, nebo obojí.',
+  });
 export type AdjustCreditsDto = z.infer<typeof AdjustCreditsSchema>;
 
 // Alokace firme (sprint 3.3 fáze B2) — firma kupi pack, members ho cerpaji

@@ -378,7 +378,11 @@ export class TimePacksService {
         tenantId,
         customerTimePackId: allocationId,
         bookingId: null,
-        serviceId: alloc.snapshotAllowedServiceIds[0] ?? alloc.timePackId, // placeholder for adjust
+        // Ruční úprava se netýká konkrétní služby → NULL. Dřív se tu ukládal
+        // `snapshotAllowedServiceIds[0] ?? timePackId`, což u balíčku platného
+        // na všechny služby (prázdný seznam) vložilo do sloupce s cizím klíčem
+        // na `services` id balíčku → porušení FK → HTTP 500. Ověřeno během.
+        serviceId: null,
         action: 'admin_adjustment',
         performedBy: userId,
         note: dto.note,

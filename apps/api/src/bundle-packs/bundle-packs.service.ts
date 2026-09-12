@@ -353,26 +353,47 @@ export class BundlePacksService {
       }
 
       const items = alloc.itemsRemaining as BundleItem[];
-      const idx = items.findIndex((i) => i.serviceId === dto.serviceId);
-      if (idx === -1) {
-        throw new BadRequestException({
-          error: {
-            code: 'ITEM_NOT_IN_BUNDLE',
-            message: 'Tato služba není součástí bundle balíčku.',
-          },
-        });
+      // Položku měníme jen když přišla; samotné prodloužení platnosti se jí netýká.
+      let auditServiceId: string | null = null;
+      let quantityDelta = 0;
+      if (dto.serviceId !== undefined && dto.quantityDelta !== undefined) {
+        const idx = items.findIndex((i) => i.serviceId === dto.serviceId);
+        if (idx === -1) {
+          throw new BadRequestException({
+            error: {
+              code: 'ITEM_NOT_IN_BUNDLE',
+              message: 'Tato služba není součástí bundle balíčku.',
+            },
+          });
+        }
+        const currentQty = items[idx]!.quantity;
+        const newQty = currentQty + dto.quantityDelta;
+        if (newQty < 0) {
+          throw new BadRequestException({
+            error: {
+              code: 'NEGATIVE_QUANTITY',
+              message: `Nelze odečíst ${Math.abs(dto.quantityDelta)} ks — zbývá jen ${currentQty}.`,
+            },
+          });
+        }
+        items[idx] = { serviceId: dto.serviceId, quantity: newQty };
+        auditServiceId = dto.serviceId;
+        quantityDelta = dto.quantityDelta;
       }
-      const currentQty = items[idx]!.quantity;
-      const newQty = currentQty + dto.quantityDelta;
-      if (newQty < 0) {
-        throw new BadRequestException({
-          error: {
-            code: 'NEGATIVE_QUANTITY',
-            message: `Nelze odečíst ${Math.abs(dto.quantityDelta)} ks — zbývá jen ${currentQty}.`,
-          },
-        });
+
+      // Prodloužení platnosti (UI 2). Balíček bez expirace nemá co posouvat.
+      let newValidUntil = alloc.validUntil;
+      if (dto.extendDays !== undefined && dto.extendDays !== 0) {
+        if (alloc.validUntil === null) {
+          throw new BadRequestException({
+            error: {
+              code: 'NO_EXPIRY_TO_EXTEND',
+              message: 'Tento balíček nemá platnost omezenou datem — není co prodloužit.',
+            },
+          });
+        }
+        newValidUntil = new Date(alloc.validUntil.getTime() + dto.extendDays * 24 * 60 * 60 * 1000);
       }
-      items[idx] = { serviceId: dto.serviceId, quantity: newQty };
 
       const newStatus = totalRemaining(items) === 0 ? 'used_up' : alloc.status;
 
@@ -381,22 +402,29 @@ export class BundlePacksService {
         .set({
           itemsRemaining: items,
           status: newStatus,
+          validUntil: newValidUntil,
           updatedAt: new Date(),
         })
         .where(eq(schema.customerBundlePacks.id, allocationId));
 
-      await tx.insert(schema.bundleItemUses).values({
-        tenantId,
-        customerBundlePackId: allocationId,
-        bookingId: null,
-        serviceId: dto.serviceId,
-        quantityDeducted: -dto.quantityDelta, // delta=+1 -> deducted=-1 (refund); delta=-1 -> deducted=1 (consume)
-        action: 'admin_adjustment',
-        performedBy: userId,
-        note: dto.note,
-      });
+      // Audit: service_id je NOT NULL, takže u samotného prodloužení bereme
+      // první službu ze snapshotu (reálné id — cizí klíč drží).
+      const snapshotFallback = (alloc.snapshotItems as BundleItem[])[0]?.serviceId ?? null;
+      const auditService = auditServiceId ?? snapshotFallback;
+      if (auditService) {
+        await tx.insert(schema.bundleItemUses).values({
+          tenantId,
+          customerBundlePackId: allocationId,
+          bookingId: null,
+          serviceId: auditService,
+          quantityDeducted: -quantityDelta, // delta=+1 -> deducted=-1 (refund); delta=-1 -> deducted=1 (consume)
+          action: 'admin_adjustment',
+          performedBy: userId,
+          note: dto.note,
+        });
+      }
 
-      return { allocationId, items };
+      return { allocationId, items, validUntil: newValidUntil };
     });
   }
 
