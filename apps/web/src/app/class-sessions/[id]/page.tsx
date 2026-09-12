@@ -31,6 +31,7 @@ import {
   type AdminResource,
   type AdminServiceFull,
   type AdminWaitlistEntry,
+  type ParticipantConflict,
 } from '@/lib/api';
 import {
   SessionForm,
@@ -90,6 +91,7 @@ export default function ClassSessionDetailPage({ params }: { params: { id: strin
   const [error, setError] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<SessionFormValues | null>(null);
   const [editError, setEditError] = useState<string | null>(null);
+  const [conflicts, setConflicts] = useState<ParticipantConflict[]>([]);
   const [joinForm, setJoinForm] = useState<JoinFormState | null>(null);
   const [joinError, setJoinError] = useState<string | null>(null);
 
@@ -148,7 +150,7 @@ export default function ClassSessionDetailPage({ params }: { params: { id: strin
     if (!editForm || !session) return;
     setEditError(null);
     try {
-      await updateClassSession(session.id, {
+      const updated = await updateClassSession(session.id, {
         startsAt: localInputToIso(editForm.startsAtLocal),
         employeeId: editForm.employeeId || null,
         resourceId: editForm.resourceId || null,
@@ -158,6 +160,8 @@ export default function ClassSessionDetailPage({ params }: { params: { id: strin
         prerequisiteServiceId: editForm.prerequisiteServiceId || null,
       });
       setEditForm(null);
+      // Posun se nezablokoval — jen ukážeme, komu se nový čas kříže s jinou rezervací.
+      setConflicts(updated.participantConflicts);
       await reload();
     } catch (e) {
       setEditError(e instanceof Error ? e.message : 'Chyba');
@@ -275,6 +279,28 @@ export default function ClassSessionDetailPage({ params }: { params: { id: strin
         {error && (
           <div className="bg-red-50 border border-red-200 text-red-800 text-sm p-3 rounded mb-4">
             {error}
+          </div>
+        )}
+
+        {conflicts.length > 0 && (
+          <div className="bg-amber-50 border border-amber-300 text-amber-900 text-sm p-3 rounded mb-4">
+            <strong className="block font-semibold mb-1">
+              Tito klienti mají v novém čase jinou rezervaci:
+            </strong>
+            <ul className="list-disc list-inside space-y-0.5">
+              {conflicts.map((c) => (
+                <li key={c.conflictingBookingId}>
+                  {c.customerName} — {formatDateTime(c.conflictStartsAt)}
+                </li>
+              ))}
+            </ul>
+            <button
+              type="button"
+              onClick={() => setConflicts([])}
+              className="underline mt-2 text-xs"
+            >
+              Rozumím, skrýt
+            </button>
           </div>
         )}
 

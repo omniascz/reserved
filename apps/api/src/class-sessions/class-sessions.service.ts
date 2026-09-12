@@ -15,7 +15,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { and, asc, desc, eq, gt, gte, isNull, isNotNull, lt, lte, ne, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, gte, isNull, isNotNull, lt, lte, ne, or, sql } from 'drizzle-orm';
 import { schema } from '@reserved/db';
 import { type AppRole, type TenantContext, serviceContext } from '@reserved/rls-multitenancy';
 import type { Database } from '../db/db.service.js';
@@ -443,6 +443,17 @@ export class ClassSessionsService {
         const bufferStartsAt = new Date(startsAt.getTime() - service.bufferBeforeMinutes * 60_000);
         const bufferEndsAt = new Date(endsAt.getTime() + service.bufferAfterMinutes * 60_000);
 
+        // Nový termín nesmí ležet v minulosti — posunout lekci dozadu by posunulo
+        // dozadu i rezervace účastníků, což nedává smysl.
+        if (timeChanged && startsAt.getTime() < Date.now()) {
+          throw new BadRequestException({
+            error: {
+              code: 'SESSION_STARTS_IN_PAST',
+              message: 'Nový začátek lekce leží v minulosti. Vyber budoucí termín.',
+            },
+          });
+        }
+
         // Přístroj: ověř, že patří tenantovi a není smazaný.
         let resourceBranchId: string | null = null;
         if (resourceId) {
@@ -619,9 +630,54 @@ export class ClassSessionsService {
             });
         }
 
+        // Kolize účastníků: kdo má v NOVÉM čase jinou nezrušenou rezervaci —
+        // individuální termín i jinou lekci. Posun ZÁMĚRNĚ neblokujeme (provoz
+        // pro to může mít důvod), jen to vrátíme, aby to provozovatel viděl.
+        // Párujeme přes e-mail, stejně jako ostatní kontroly v tomto modulu
+        // (admin rezervace nemusí mít vyplněný customer_id).
+        const participantConflicts: Array<{
+          bookingId: string;
+          customerName: string;
+          conflictingBookingId: string;
+          conflictStartsAt: Date;
+        }> = [];
+        if (movedParticipants.length > 0) {
+          const byEmail = new Map(
+            movedParticipants.map((p) => [p.customerEmail.toLowerCase(), p] as const),
+          );
+          const overlapping = await tx
+            .select({
+              id: schema.bookings.id,
+              customerEmail: schema.bookings.customerEmail,
+              startsAt: schema.bookings.startsAt,
+            })
+            .from(schema.bookings)
+            .where(
+              and(
+                eq(schema.bookings.tenantId, tenantId),
+                // Účastníky téhle lekce přeskoč — ti se právě posunuli s ní.
+                or(isNull(schema.bookings.sessionId), ne(schema.bookings.sessionId, sessionId)),
+                sql`${schema.bookings.status} NOT IN ('cancelled', 'no_show')`,
+                lt(schema.bookings.bufferStartsAt, bufferEndsAt),
+                gt(schema.bookings.bufferEndsAt, bufferStartsAt),
+              ),
+            );
+          for (const other of overlapping) {
+            const participant = byEmail.get(other.customerEmail.toLowerCase());
+            if (!participant) continue;
+            participantConflicts.push({
+              bookingId: participant.id,
+              customerName: participant.customerName,
+              conflictingBookingId: other.id,
+              conflictStartsAt: other.startsAt,
+            });
+          }
+        }
+
         return {
           session: updated!,
           movedParticipants,
+          participantConflicts,
           oldStartsAt: session.startsAt,
           serviceName: service.name,
         };
@@ -633,7 +689,7 @@ export class ClassSessionsService {
       await this.notifyParticipantsOfReschedule(tenantId, result);
     }
 
-    return result.session;
+    return { ...result.session, participantConflicts: result.participantConflicts };
   }
 
   /** Pošle účastníkům e-mail o posunutém termínu (šablona booking_rescheduled). */
