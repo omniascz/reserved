@@ -47,6 +47,12 @@ export class BookingsController {
     return { data };
   }
 
+  /** Motor 1 (10.21): zdroje navázané na rezervaci. */
+  @Get(':id/resources')
+  async resources(@CurrentUser() user: AccessTokenPayload, @Param('id', ParseUUIDPipe) id: string) {
+    return { data: await this.svc.listResources(user.tenantId, user.sub, user.role, id) };
+  }
+
   @Post()
   @HttpCode(201)
   async create(

@@ -14,6 +14,8 @@ import { branches } from './branches.js';
 import { employees } from './employees.js';
 import { services } from './services.js';
 import { users } from './users.js';
+import { classSessions } from './class-sessions.js';
+import { bookingSeries } from './booking-series.js';
 
 // Reference: reserved-docs/13d_db_schema_bookings_series_packages.md
 //            reserved-docs/15_concurrent_booking_marketplace.md
@@ -55,6 +57,20 @@ export const bookings = pgTable(
     employeeId: uuid('employee_id').references(() => employees.id, {
       onDelete: 'set null',
     }),
+    /**
+     * Skupinová lekce (sprint 10.0). NULL = klasická 1:1 rezervace (chování beze
+     * změny, chrání ji EXCLUDE constraint). Vyplněné = účastník skupinové lekce;
+     * kapacitu hlídá class_sessions.booked_count, EXCLUDE se na tyto řádky nevztahuje.
+     */
+    sessionId: uuid('session_id').references(() => classSessions.id, {
+      onDelete: 'set null',
+    }),
+    /** Série opakovaných 1:1 rezervací (sprint 10.14). NULL = samostatná rezervace. */
+    seriesId: uuid('series_id').references(() => bookingSeries.id, {
+      onDelete: 'set null',
+    }),
+    /** Spot booking (10.33): konkrétní místo v sále (kolo/podložka/stanice). */
+    spotLabel: varchar('spot_label', { length: 16 }),
     /** Volitelně přihlášený zákazník (link na users.id pokud měl účet). */
     customerUserId: uuid('customer_user_id').references(() => users.id),
     /** Customer entity (sprint 1.7). Nullable pro backward compat. */
@@ -88,6 +104,16 @@ export const bookings = pgTable(
     cancelledAt: timestamp('cancelled_at', { withTimezone: true }),
     cancelledReason: text('cancelled_reason'),
     completedAt: timestamp('completed_at', { withTimezone: true }),
+    /**
+     * Smart vrstva (sprint 10.13) — proaktivní potvrzení účasti.
+     * 'none' = nevyžádáno, 'requested' = odeslána výzva, 'confirmed' = klient potvrdil,
+     * 'declined' = klient odmítl / nepotvrdil (místo se uvolnilo).
+     */
+    confirmationStatus: varchar('confirmation_status', { length: 16 }).notNull().default('none'),
+    /** Jednorázový token pro veřejné potvrzení/odmítnutí přes magic-link. */
+    confirmationToken: uuid('confirmation_token'),
+    confirmationRequestedAt: timestamp('confirmation_requested_at', { withTimezone: true }),
+    confirmationRespondedAt: timestamp('confirmation_responded_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
@@ -102,6 +128,9 @@ export const bookings = pgTable(
     customerIdx: index('bookings_customer_idx').on(table.tenantId, table.customerUserId),
     refCodeIdx: index('bookings_ref_code_idx').on(table.referenceCode),
     branchIdx: index('bookings_branch_idx').on(table.branchId, table.startsAt),
+    sessionIdx: index('bookings_session_idx').on(table.sessionId),
+    confirmationTokenIdx: index('bookings_confirmation_token_idx').on(table.confirmationToken),
+    seriesIdx: index('bookings_series_idx').on(table.seriesId),
   }),
 );
 

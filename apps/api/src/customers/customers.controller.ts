@@ -15,6 +15,7 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator.js';
 import type { AccessTokenPayload } from '../auth/auth.types.js';
 import { ZodValidationPipe } from '../auth/zod-validation.pipe.js';
 import { CustomersService } from './customers.service.js';
+import { NoShowRiskService } from './no-show-risk.service.js';
 import {
   CreateCustomerNoteSchema,
   CreateCustomerTagSchema,
@@ -26,7 +27,10 @@ import {
 
 @Controller('admin/customers')
 export class CustomersController {
-  constructor(@Inject(CustomersService) private readonly svc: CustomersService) {}
+  constructor(
+    @Inject(CustomersService) private readonly svc: CustomersService,
+    @Inject(NoShowRiskService) private readonly riskSvc: NoShowRiskService,
+  ) {}
 
   @Get()
   async list(
@@ -50,6 +54,15 @@ export class CustomersController {
   @Get(':id')
   async getDetail(@CurrentUser() user: AccessTokenPayload, @Param('id', ParseUUIDPipe) id: string) {
     const data = await this.svc.getDetail(user.tenantId, user.sub, user.role, id);
+    return { data };
+  }
+
+  @Get(':id/no-show-risk')
+  async getNoShowRisk(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    const data = await this.riskSvc.computeForCustomer(user.tenantId, user.sub, user.role, id);
     return { data };
   }
 

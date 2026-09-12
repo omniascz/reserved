@@ -1,8 +1,9 @@
 'use client';
 
+import { Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 
-export default function PaymentSuccessPage() {
+function PaymentSuccessInner() {
   const search = useSearchParams();
   const paymentId = search.get('id') ?? '';
 
@@ -28,5 +29,13 @@ export default function PaymentSuccessPage() {
         </button>
       </div>
     </main>
+  );
+}
+
+export default function PaymentSuccessPage() {
+  return (
+    <Suspense fallback={null}>
+      <PaymentSuccessInner />
+    </Suspense>
   );
 }

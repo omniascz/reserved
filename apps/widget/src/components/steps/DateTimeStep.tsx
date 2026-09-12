@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useT } from '@/i18n/I18nProvider';
 import {
   createHold,
   getAvailability,
@@ -26,6 +27,7 @@ export function DateTimeStep({
   onPick: (slot: AvailableSlot, hold: HoldResult) => void;
   onBack: () => void;
 }) {
+  const t = useT();
   const [date, setDate] = useState<string>(todayInPrague());
   const [availability, setAvailability] = useState<AvailabilityForEmployee[] | null>(null);
   const [loading, setLoading] = useState(false);
@@ -37,9 +39,9 @@ export function DateTimeStep({
     setError(null);
     getAvailability(slug, service.id, date, employee.id)
       .then((data) => setAvailability(data))
-      .catch((e) => setError(e?.message ?? 'Chyba'))
+      .catch((e) => setError(e?.message ?? t('contact.genericError')))
       .finally(() => setLoading(false));
-  }, [slug, service.id, employee.id, date]);
+  }, [slug, service.id, employee.id, date, t]);
 
   async function pickSlot(slot: AvailableSlot) {
     setLocking(slot.startsAt);
@@ -53,11 +55,11 @@ export function DateTimeStep({
       onPick(slot, hold);
     } catch (e) {
       if (e instanceof ReservedApiError && e.code === 'SLOT_TAKEN') {
-        setError('Tento termín už si někdo zarezervoval. Vyber jiný.');
+        setError(t('datetime.slotTaken'));
         // Refresh availability
         getAvailability(slug, service.id, date, employee.id).then(setAvailability);
       } else {
-        setError(e instanceof Error ? e.message : 'Chyba při rezervaci');
+        setError(e instanceof Error ? e.message : t('datetime.bookingError'));
       }
     } finally {
       setLocking(null);
@@ -70,13 +72,13 @@ export function DateTimeStep({
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-2">
         <div>
-          <h2 className="text-xl font-bold">Vyber termín</h2>
+          <h2 className="text-xl font-bold">{t('datetime.title')}</h2>
           <p className="text-sm text-slate-500 mt-1">
             {service.name} · {employee.displayName ?? `${employee.firstName} ${employee.lastName}`}
           </p>
         </div>
         <button onClick={onBack} className="text-sm text-slate-500 hover:text-slate-900">
-          ← Zpět
+          {t('common.back')}
         </button>
       </div>
 
@@ -84,7 +86,7 @@ export function DateTimeStep({
         <button
           onClick={() => setDate(addDays(date, -1))}
           className="p-2 hover:bg-slate-100 rounded"
-          aria-label="Předchozí den"
+          aria-label={t('datetime.prevDay')}
         >
           ←
         </button>
@@ -98,7 +100,7 @@ export function DateTimeStep({
         <button
           onClick={() => setDate(addDays(date, 1))}
           className="p-2 hover:bg-slate-100 rounded"
-          aria-label="Další den"
+          aria-label={t('datetime.nextDay')}
         >
           →
         </button>
@@ -112,11 +114,9 @@ export function DateTimeStep({
       )}
 
       {loading ? (
-        <div className="text-slate-400 py-8 text-center">Načítám termíny…</div>
+        <div className="text-slate-400 py-8 text-center">{t('datetime.loading')}</div>
       ) : slots.length === 0 ? (
-        <div className="text-slate-500 py-8 text-center">
-          Pro tento den nejsou žádné volné termíny. Vyber jiný den.
-        </div>
+        <div className="text-slate-500 py-8 text-center">{t('datetime.noSlots')}</div>
       ) : (
         <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2">
           {slots.map((s) => (
@@ -128,7 +128,7 @@ export function DateTimeStep({
             >
               <span className="font-semibold">{formatTime(s.startsAt)}</span>
               {locking === s.startsAt && (
-                <span className="block text-xs text-brand-600">zamykám…</span>
+                <span className="block text-xs text-brand-600">{t('datetime.locking')}</span>
               )}
             </button>
           ))}

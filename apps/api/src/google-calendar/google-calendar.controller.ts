@@ -54,7 +54,7 @@ export class GoogleCalendarController {
     @Query('error') error: string | undefined,
     @Res() res: Response,
   ) {
-    const adminUrl = process.env.ADMIN_BASE_URL ?? 'http://localhost:3000';
+    const adminUrl = process.env.ADMIN_BASE_URL ?? 'http://localhost:4002';
     if (error) {
       return res.redirect(`${adminUrl}/settings?google_error=${encodeURIComponent(error)}`);
     }

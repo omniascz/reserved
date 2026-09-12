@@ -56,7 +56,7 @@ export interface RefundResult {
 
 export interface PaymentProvider {
   /** Provider identifier (matches DB methodType). */
-  readonly type: 'stripe' | 'gopay' | 'mock';
+  readonly type: 'stripe' | 'gopay' | 'mock' | 'comgate' | 'thepay' | 'payu' | 'gpwebpay';
 
   /** Vytvori checkout session, vrati URL. */
   createCheckout(input: CheckoutInput, config: Record<string, unknown>): Promise<CheckoutResult>;

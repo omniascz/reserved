@@ -21,6 +21,10 @@ export interface SignAccessTokenInput {
   role: AppRole;
   customRoleId: string | null;
   branchIds: string[];
+  /** UUID master admina pokud token vznikl impersonaci. Jinak undefined. */
+  impersonatedBy?: string;
+  /** Override TTL v sekundach. Pouziva se napr. pro impersonation tokeny (short-lived). */
+  ttlOverrideSeconds?: number;
 }
 
 @Injectable()
@@ -32,15 +36,21 @@ export class JwtService {
   ): Promise<{ token: string; jti: string; expiresIn: number }> {
     const jti = randomUUID();
     const now = Math.floor(Date.now() / 1000);
-    const exp = now + this.config.accessTtl;
+    const ttl = input.ttlOverrideSeconds ?? this.config.accessTtl;
+    const exp = now + ttl;
 
-    const token = await new SignJWT({
+    const claims: Record<string, unknown> = {
       tenantId: input.tenantId,
       role: input.role,
       customRoleId: input.customRoleId,
       branchIds: input.branchIds,
       jti,
-    })
+    };
+    if (input.impersonatedBy) {
+      claims.impersonatedBy = input.impersonatedBy;
+    }
+
+    const token = await new SignJWT(claims)
       .setProtectedHeader({ alg: ALGORITHM })
       .setSubject(input.userId)
       .setIssuedAt(now)
@@ -49,7 +59,7 @@ export class JwtService {
       .setAudience(this.config.audience)
       .sign(this.config.secret);
 
-    return { token, jti, expiresIn: this.config.accessTtl };
+    return { token, jti, expiresIn: ttl };
   }
 
   async signRefreshToken(userId: string, family: string): Promise<{ token: string; jti: string }> {
@@ -101,12 +111,13 @@ export class JwtService {
   }
 
   private extractAccessPayload(payload: JWTPayload): AccessTokenPayload {
-    const { sub, tenantId, role, customRoleId, branchIds, iat, exp, jti } =
+    const { sub, tenantId, role, customRoleId, branchIds, impersonatedBy, iat, exp, jti } =
       payload as JWTPayload & {
         tenantId: unknown;
         role: unknown;
         customRoleId: unknown;
         branchIds: unknown;
+        impersonatedBy?: unknown;
       };
 
     if (
@@ -132,12 +143,17 @@ export class JwtService {
       throw new AuthError('TOKEN_INVALID');
     }
 
+    if (impersonatedBy !== undefined && typeof impersonatedBy !== 'string') {
+      throw new AuthError('TOKEN_INVALID');
+    }
+
     return {
       sub,
       tenantId,
       role: role as AppRole,
       customRoleId: customRoleId as string | null,
       branchIds: branchIds as string[],
+      impersonatedBy: (impersonatedBy as string | undefined) ?? null,
       iat,
       exp,
       jti,

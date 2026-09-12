@@ -24,6 +24,7 @@ import {
   type UpdateServiceDto,
 } from './dto/service.dto.js';
 import { ServicesService } from './services.service.js';
+import { listServiceArchetypes } from './archetypes.js';
 
 @Controller('admin')
 export class ServicesController {
@@ -72,6 +73,12 @@ export class ServicesController {
   async listServices(@CurrentUser() user: AccessTokenPayload) {
     const data = await this.svc.listServices(user.tenantId, user.sub, user.role);
     return { data };
+  }
+
+  /** Katalog archetypů pro selektor v UI (sprint 10.1). Musí být před services/:id. */
+  @Get('services/archetypes')
+  listArchetypes() {
+    return { data: listServiceArchetypes() };
   }
 
   @Get('services/:id')

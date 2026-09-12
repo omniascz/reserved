@@ -22,6 +22,7 @@ import { and, desc, eq, gte, lte, sql } from 'drizzle-orm';
 import { schema } from '@reserved/db';
 import { type AppRole, type TenantContext } from '@reserved/rls-multitenancy';
 import { DbService } from '../db/db.service.js';
+import { EmailService } from '../email/email.service.js';
 import { SubscriptionsService } from '../subscriptions/subscriptions.service.js';
 import { generateSpaydString } from './qr-generator.js';
 import { PaymentProviderRegistry } from './providers/provider.registry.js';
@@ -38,7 +39,14 @@ const MANAGE_ROLES: AppRole[] = ['owner', 'manager'];
 // Recepcni muze zaznamenavat manual platby (cash, terminal, qr)
 const RECORD_ROLES: AppRole[] = ['owner', 'manager', 'receptionist'];
 // Online brany vidi jen vyssi role
-const ONLINE_METHODS: PaymentMethodType[] = ['stripe', 'gopay'];
+const ONLINE_METHODS: PaymentMethodType[] = [
+  'stripe',
+  'gopay',
+  'comgate',
+  'thepay',
+  'payu',
+  'gpwebpay',
+];
 
 function ctxFor(tenantId: string, userId: string, role: AppRole): TenantContext {
   return { tenantId, userId, role };
@@ -82,7 +90,26 @@ export class PaymentsService {
     @Inject(PaymentProviderRegistry) private readonly providers: PaymentProviderRegistry,
     @Inject(forwardRef(() => SubscriptionsService))
     private readonly subscriptions: SubscriptionsService,
+    @Inject(EmailService) private readonly email: EmailService,
   ) {}
+
+  /**
+   * Veřejný/systémový checkout bez role-gate — pro anonymní toky (online nákup
+   * dárkového voucheru apod.). NEPOUŽÍVAT pro admin platby (tam je createCheckout
+   * s kontrolou role).
+   */
+  async createCheckoutSystem(input: {
+    tenantId: string;
+    methodType: 'stripe' | 'gopay' | 'mock' | 'comgate' | 'thepay' | 'payu' | 'gpwebpay';
+    amountHellers: number;
+    currency: string;
+    description: string;
+    customerEmail?: string;
+    successUrl: string;
+    cancelUrl: string;
+  }): Promise<{ paymentId: string; checkoutUrl: string }> {
+    return this.runCheckout(input);
+  }
 
   private isSubscriptionEventType(type: string, rawPayload: Record<string, unknown>): boolean {
     if (
@@ -108,7 +135,7 @@ export class PaymentsService {
     tenantId: string;
     /** Volajici role — pro permission check. */
     role: AppRole;
-    methodType: 'stripe' | 'gopay' | 'mock';
+    methodType: 'stripe' | 'gopay' | 'mock' | 'comgate' | 'thepay' | 'payu' | 'gpwebpay';
     amountHellers: number;
     currency: string;
     description: string;
@@ -121,7 +148,26 @@ export class PaymentsService {
   }): Promise<{ paymentId: string; checkoutUrl: string }> {
     // Online checkout muze spustit jen kdo umi zaznamenavat platby
     assertCanRecord(input.role);
+    return this.runCheckout(input);
+  }
 
+  /**
+   * Interní checkout bez role-gate — pro systémové/automatické platby
+   * (např. strh storno poplatku z pravidla). NEVOLAT z controlleru přímo.
+   */
+  private async runCheckout(input: {
+    tenantId: string;
+    methodType: 'stripe' | 'gopay' | 'mock' | 'comgate' | 'thepay' | 'payu' | 'gpwebpay';
+    amountHellers: number;
+    currency: string;
+    description: string;
+    customerId?: string;
+    customerEmail?: string;
+    bookingId?: string;
+    creditPackAllocationId?: string;
+    successUrl: string;
+    cancelUrl: string;
+  }): Promise<{ paymentId: string; checkoutUrl: string }> {
     return this.dbService.withRlsContext(
       { tenantId: input.tenantId, role: 'service' },
       async (tx) => {
@@ -211,6 +257,104 @@ export class PaymentsService {
     );
   }
 
+  // ─── Storno / no-show fee charge (P4) ──────────────────────────
+
+  /**
+   * Strhne storno/no-show poplatek za rezervaci přes napojenou bránu.
+   * Najde aktivní payment_connection tenanta a vytvoří na poplatek checkout
+   * (pending platba + odkaz k úhradě). Bez napojené brány vrací charged:false.
+   * Pozn.: bez uložené karty (off-session) zatím generujeme odkaz k zaplacení,
+   * ne tichý strh — reálné off-session účtování doplní saved-card tokenizace.
+   */
+  async chargeStornoFee(input: {
+    tenantId: string;
+    bookingId: string;
+    feeHellers: number;
+    reason?: string | null;
+  }): Promise<
+    | { charged: false; reason: 'zero_fee' | 'booking_not_found' | 'payments_not_connected' }
+    | {
+        charged: true;
+        paymentId: string;
+        checkoutUrl: string;
+        provider: string;
+        feeHellers: number;
+      }
+  > {
+    if (!input.feeHellers || input.feeHellers <= 0) {
+      return { charged: false, reason: 'zero_fee' };
+    }
+    const ctx = { tenantId: input.tenantId, role: 'service' as const };
+
+    const booking = await this.dbService.withRlsContext(ctx, async (tx) => {
+      const [b] = await tx
+        .select({
+          id: schema.bookings.id,
+          customerId: schema.bookings.customerId,
+          customerEmail: schema.bookings.customerEmail,
+          referenceCode: schema.bookings.referenceCode,
+          currency: schema.bookings.currency,
+        })
+        .from(schema.bookings)
+        .where(
+          and(
+            eq(schema.bookings.id, input.bookingId),
+            eq(schema.bookings.tenantId, input.tenantId),
+          ),
+        )
+        .limit(1);
+      return b;
+    });
+    if (!booking) return { charged: false, reason: 'booking_not_found' };
+
+    // Najdi aktivní napojenou bránu (chargesEnabled).
+    const provider = await this.dbService.withRlsContext(ctx, async (tx) => {
+      const [c] = await tx
+        .select({ provider: schema.paymentConnections.provider })
+        .from(schema.paymentConnections)
+        .where(
+          and(
+            eq(schema.paymentConnections.tenantId, input.tenantId),
+            eq(schema.paymentConnections.status, 'active'),
+            eq(schema.paymentConnections.chargesEnabled, true),
+          ),
+        )
+        .limit(1);
+      return c?.provider as
+        | 'stripe'
+        | 'gopay'
+        | 'mock'
+        | 'comgate'
+        | 'thepay'
+        | 'payu'
+        | 'gpwebpay'
+        | undefined;
+    });
+    if (!provider) return { charged: false, reason: 'payments_not_connected' };
+
+    const base = process.env.APP_URL ?? 'http://localhost:4002';
+    const checkout = await this.runCheckout({
+      tenantId: input.tenantId,
+      methodType: provider,
+      amountHellers: input.feeHellers,
+      currency: booking.currency,
+      description: `Storno/no-show poplatek — rezervace ${booking.referenceCode}`,
+      customerId: booking.customerId ?? undefined,
+      customerEmail: booking.customerEmail,
+      bookingId: booking.id,
+      successUrl: `${base}/payment/success`,
+      cancelUrl: `${base}/payment/cancel`,
+    });
+
+    return {
+      charged: true,
+      paymentId: checkout.paymentId,
+      checkoutUrl: checkout.checkoutUrl,
+      provider,
+      feeHellers: input.feeHellers,
+    };
+  }
+
   // ─── Webhook handling ──────────────────────────────────────────
 
   /**
@@ -220,7 +364,7 @@ export class PaymentsService {
    */
   async handleWebhook(
     tenantId: string,
-    providerType: 'stripe' | 'gopay' | 'mock',
+    providerType: 'stripe' | 'gopay' | 'mock' | 'comgate' | 'thepay' | 'payu' | 'gpwebpay',
     rawBody: string | Buffer,
     signatureHeader: string,
   ): Promise<{ paymentId: string | null; status: string }> {
@@ -321,6 +465,40 @@ export class PaymentsService {
         payload: event as unknown as Record<string, unknown>,
         verified: true,
       });
+
+      // 5. Online nákup voucheru: po úspěšné platbě aktivuj navázaný voucher
+      //    (pending_payment → active) a pošli dárek příjemci.
+      if (event.status === 'succeeded') {
+        const [voucher] = await tx
+          .update(schema.giftVouchers)
+          .set({ status: 'active', updatedAt: new Date() })
+          .where(
+            and(
+              eq(schema.giftVouchers.tenantId, tenantId),
+              eq(schema.giftVouchers.paymentId, payment.id),
+              eq(schema.giftVouchers.status, 'pending_payment'),
+            ),
+          )
+          .returning();
+        if (voucher?.recipientEmail) {
+          const value = (voucher.initialValueHellers / 100).toLocaleString('cs-CZ');
+          try {
+            await this.email.enqueue({
+              tenantId,
+              templateCode: 'custom',
+              recipient: voucher.recipientEmail,
+              vars: {
+                __customSubject: `Dárkový poukaz na ${value} ${voucher.currency}`,
+                __customBody:
+                  `Byl vám darován poukaz v hodnotě ${value} ${voucher.currency}.\n` +
+                  `Kód poukazu: ${voucher.code}`,
+              },
+            });
+          } catch {
+            // e-mail nesmí shodit zpracování webhooku
+          }
+        }
+      }
 
       return { paymentId: payment.id, status: event.status };
     });
@@ -572,6 +750,46 @@ export class PaymentsService {
         });
       }
 
+      // Reálný strh přes bránu — u plateb krytých bránou zavolej provider.refund()
+      // (vč. mock = dev simulace brány). Manuální platby (hotovost/terminál/QR)
+      // se vrací mimo systém → jen evidence.
+      const GATEWAY_METHODS = new Set([...ONLINE_METHODS, 'mock']);
+      let gatewayRefundId: string | null = null;
+      if (GATEWAY_METHODS.has(original.methodType)) {
+        if (!original.externalId) {
+          throw new BadRequestException({
+            error: {
+              code: 'NO_EXTERNAL_ID',
+              message: 'Platba nemá ID transakce u brány — nelze refundovat přes bránu.',
+            },
+          });
+        }
+        const [method] = await tx
+          .select({ config: schema.paymentMethods.config })
+          .from(schema.paymentMethods)
+          .where(
+            and(
+              eq(schema.paymentMethods.tenantId, tenantId),
+              eq(schema.paymentMethods.methodType, original.methodType),
+            ),
+          )
+          .limit(1);
+        const provider = this.providers.get(original.methodType);
+        const result = await provider.refund(
+          { externalId: original.externalId, amountHellers: refundAmount, reason: dto.reason },
+          (method?.config ?? {}) as Record<string, unknown>,
+        );
+        if (result.status === 'failed') {
+          throw new BadRequestException({
+            error: {
+              code: 'REFUND_GATEWAY_FAILED',
+              message: 'Brána refundaci odmítla. Zkuste to znovu nebo vraťte ručně.',
+            },
+          });
+        }
+        gatewayRefundId = result.externalId;
+      }
+
       // Vytvor refund zaznam (zaporna castka jako konvence)
       const [refund] = await tx
         .insert(schema.payments)
@@ -586,6 +804,7 @@ export class PaymentsService {
           status: 'refunded',
           description: dto.reason ? `Refund: ${dto.reason}` : 'Refund',
           refundedFromPaymentId: original.id,
+          externalId: gatewayRefundId,
           recordedBy: userId,
           paidAt: new Date(),
         })
@@ -603,7 +822,12 @@ export class PaymentsService {
         tenantId,
         paymentId: refund!.id,
         eventType: 'refund',
-        payload: { originalPaymentId: original.id, reason: dto.reason, by: userId },
+        payload: {
+          originalPaymentId: original.id,
+          reason: dto.reason,
+          by: userId,
+          gatewayRefundId,
+        },
         verified: true,
       });
 

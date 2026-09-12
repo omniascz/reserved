@@ -1,10 +1,17 @@
 import 'reflect-metadata';
+import { initSentry } from './sentry.js';
+
+// Sentry musí být inicializován co nejdřív, aby zachytil i bootstrap chyby.
+initSentry();
+
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import type { NestExpressApplication } from '@nestjs/platform-express';
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import express from 'express';
 import { AppModule } from './app.module.js';
 import { AuthExceptionFilter } from './auth/auth-exception.filter.js';
+import { SentryExceptionFilter } from './sentry.filter.js';
 
 async function bootstrap(): Promise<void> {
   // V dev módu povolíme volání z file:// (demo.html) a libovolného localhostu
@@ -22,25 +29,41 @@ async function bootstrap(): Promise<void> {
 
   // Raw body capture pro webhook endpointy (Stripe potrebuje pro signature).
   // Pro non-webhook routes pouzijeme standardní JSON parser.
+  const rawBodyCapture = (
+    req: express.Request & { rawBody?: Buffer },
+    _res: express.Response,
+    next: express.NextFunction,
+  ): void => {
+    req.rawBody = req.body as Buffer;
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (req as any).body = JSON.parse(req.rawBody.toString('utf8'));
+    } catch {
+      // Pokud neni JSON, nech original Buffer
+    }
+    next();
+  };
+  app.use('/api/v1/payments/webhooks', express.raw({ type: '*/*', limit: '1mb' }), rawBodyCapture);
+  app.use('/api/v1/platform/webhooks', express.raw({ type: '*/*', limit: '1mb' }), rawBodyCapture);
+
+  // Local uploads — image binary PUT, max 6 MB
   app.use(
-    '/api/v1/payments/webhooks',
-    express.raw({ type: '*/*', limit: '1mb' }),
+    '/api/v1/admin/uploads/local',
+    express.raw({ type: 'image/*', limit: '6mb' }),
     (
       req: express.Request & { rawBody?: Buffer },
       _res: express.Response,
       next: express.NextFunction,
     ) => {
-      // Ulozit raw + paralelně parsovat na JSON pro standardni @Body() decorator
       req.rawBody = req.body as Buffer;
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (req as any).body = JSON.parse(req.rawBody.toString('utf8'));
-      } catch {
-        // Pokud neni JSON, nech original Buffer
-      }
       next();
     },
   );
+
+  // Statické serving pro local uploads (dev mode fallback)
+  const uploadsDir = process.env.UPLOADS_DIR ?? `${process.cwd()}/uploads`;
+  app.use('/uploads', express.static(uploadsDir));
+
   // Standardni body parser pro vsechny ostatni routes
   app.use(express.json({ limit: '2mb' }));
   app.use(express.urlencoded({ extended: true, limit: '2mb' }));
@@ -53,12 +76,63 @@ async function bootstrap(): Promise<void> {
       transform: true,
     }),
   );
-  app.useGlobalFilters(new AuthExceptionFilter());
+  // Pořadí filterů: SentryExceptionFilter je "catch-all" pro neočekávané chyby,
+  // AuthExceptionFilter zachytává 401/403 → Sentry je nedostane (HttpException).
+  app.useGlobalFilters(new SentryExceptionFilter(), new AuthExceptionFilter());
 
-  const port = Number(process.env.API_PORT ?? 3001);
+  // ─── Swagger / OpenAPI ─────────────────────────────────────────────────
+  // V dev modu je vystaveno na /api-docs (Swagger UI) a /api-docs-json (raw).
+  // V produkci by se mohlo skrýt nebo přesunout za auth.
+  if (isDev) {
+    const swaggerConfig = new DocumentBuilder()
+      .setTitle('Reserved API')
+      .setDescription(
+        'Multi-tenant booking SaaS API. Tři autentizační režimy:\n' +
+          '1. **JWT** (admin endpointy `/admin/*`, portal `/portal/*`, master `/platform/*`)\n' +
+          '2. **API Key** (`/external/v1/*` — Bearer rsk_xxx)\n' +
+          '3. **Anonymní** (`/public/:slug/*` — pro booking widget)',
+      )
+      .setVersion('1.0')
+      .addServer(`http://localhost:${process.env.API_PORT ?? 4010}`)
+      .addBearerAuth(
+        {
+          type: 'http',
+          scheme: 'bearer',
+          bearerFormat: 'JWT',
+          description: 'Admin JWT (z POST /auth/login) — pro `/admin/*` endpointy',
+        },
+        'jwt',
+      )
+      .addBearerAuth(
+        {
+          type: 'http',
+          scheme: 'bearer',
+          bearerFormat: 'rsk_*',
+          description:
+            'API klíč ve formátu `rsk_<32hex>` — pro `/external/v1/*` endpointy. ' +
+            'Vygeneruj v admin studiu na stránce /api-keys.',
+        },
+        'api-key',
+      )
+      .build();
+
+    const document = SwaggerModule.createDocument(app, swaggerConfig);
+    SwaggerModule.setup('api-docs', app, document, {
+      jsonDocumentUrl: 'api-docs-json',
+      swaggerOptions: {
+        persistAuthorization: true,
+      },
+    });
+  }
+
+  const port = Number(process.env.API_PORT ?? 4010);
   await app.listen(port);
   // eslint-disable-next-line no-console
   console.log(`Reserved API listening on http://localhost:${port}`);
+  if (isDev) {
+    // eslint-disable-next-line no-console
+    console.log(`OpenAPI docs: http://localhost:${port}/api-docs`);
+  }
 }
 
 bootstrap().catch((err) => {

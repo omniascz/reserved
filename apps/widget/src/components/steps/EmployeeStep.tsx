@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useT } from '@/i18n/I18nProvider';
 import { listEmployees, type PublicEmployee, type PublicService } from '@/lib/api';
 
 export function EmployeeStep({
@@ -16,34 +17,36 @@ export function EmployeeStep({
   onPick: (employee: PublicEmployee) => void;
   onBack: () => void;
 }) {
+  const t = useT();
   const [employees, setEmployees] = useState<PublicEmployee[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     listEmployees(slug, branchId)
       .then(setEmployees)
-      .catch((e) => setError(e?.message ?? 'Chyba'));
-  }, [slug, branchId]);
+      .catch((e) => setError(e?.message ?? t('contact.genericError')));
+  }, [slug, branchId, t]);
 
   if (error) return <div className="text-red-600">{error}</div>;
-  if (!employees) return <div className="text-slate-400">Načítám…</div>;
+  if (!employees) return <div className="text-slate-400">{t('loading')}</div>;
 
   return (
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-2">
         <div>
-          <h2 className="text-xl font-bold">Vyber specialistu</h2>
+          <h2 className="text-xl font-bold">{t('employee.title')}</h2>
           <p className="text-sm text-slate-500 mt-1">
-            Pro službu <span className="font-medium text-slate-700">{service.name}</span>
+            {t('employee.forService')}{' '}
+            <span className="font-medium text-slate-700">{service.name}</span>
           </p>
         </div>
         <button onClick={onBack} className="text-sm text-slate-500 hover:text-slate-900">
-          ← Zpět
+          {t('common.back')}
         </button>
       </div>
 
       {employees.length === 0 ? (
-        <div className="text-slate-500 text-center py-8">Tuto službu zatím nikdo nenabízí.</div>
+        <div className="text-slate-500 text-center py-8">{t('employee.none')}</div>
       ) : (
         <div className="grid sm:grid-cols-2 gap-3">
           {employees.map((e) => (

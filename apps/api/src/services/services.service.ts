@@ -6,6 +6,8 @@ import { and, asc, eq, isNull } from 'drizzle-orm';
 import { schema } from '@reserved/db';
 import { type AppRole, type TenantContext } from '@reserved/rls-multitenancy';
 import { DbService } from '../db/db.service.js';
+import { OnboardingService } from '../onboarding/onboarding.service.js';
+import { SERVICE_ARCHETYPES, resolveCapacity } from './archetypes.js';
 import type {
   CreateServiceCategoryDto,
   CreateServiceDto,
@@ -32,7 +34,10 @@ function assertCanManage(role: AppRole): void {
 
 @Injectable()
 export class ServicesService {
-  constructor(@Inject(DbService) private readonly dbService: DbService) {}
+  constructor(
+    @Inject(DbService) private readonly dbService: DbService,
+    @Inject(OnboardingService) private readonly onboarding: OnboardingService,
+  ) {}
 
   // ─── Kategorie ────────────────────────────────────────────────────────
 
@@ -162,31 +167,41 @@ export class ServicesService {
 
   async createService(tenantId: string, userId: string, role: AppRole, dto: CreateServiceDto) {
     assertCanManage(role);
-    return this.dbService.withRlsContext(ctxFor(tenantId, userId, role), async (tx) => {
-      const [row] = await tx
-        .insert(schema.services)
-        .values({
-          tenantId,
-          categoryId: dto.categoryId ?? null,
-          name: dto.name,
-          description: dto.description ?? null,
-          durationMinutes: dto.durationMinutes,
-          bufferAfterMinutes: dto.bufferAfterMinutes,
-          bufferBeforeMinutes: dto.bufferBeforeMinutes,
-          priceHellers: dto.priceHellers,
-          currency: dto.currency,
-          color: dto.color ?? null,
-          imageUrl: dto.imageUrl ?? null,
-          isPublic: dto.isPublic,
-          depositPercent: dto.depositPercent ?? null,
-          capacity: dto.capacity,
-          sortOrder: dto.sortOrder,
-          isOnline: dto.isOnline,
-          defaultOnlineMeetingUrl: dto.defaultOnlineMeetingUrl ?? null,
-        })
-        .returning();
-      return row;
-    });
+    const created = await this.dbService.withRlsContext(
+      ctxFor(tenantId, userId, role),
+      async (tx) => {
+        const [row] = await tx
+          .insert(schema.services)
+          .values({
+            tenantId,
+            categoryId: dto.categoryId ?? null,
+            name: dto.name,
+            description: dto.description ?? null,
+            durationMinutes: dto.durationMinutes,
+            bufferAfterMinutes: dto.bufferAfterMinutes,
+            bufferBeforeMinutes: dto.bufferBeforeMinutes,
+            priceHellers: dto.priceHellers,
+            currency: dto.currency,
+            color: dto.color ?? null,
+            imageUrl: dto.imageUrl ?? null,
+            isPublic: dto.isPublic,
+            depositPercent: dto.depositPercent ?? null,
+            // Kapacita: explicitní hodnota > default archetypu > 1.
+            capacity: resolveCapacity(dto.archetype, dto.capacity),
+            archetype: dto.archetype ?? null,
+            sortOrder: dto.sortOrder,
+            isOnline: dto.isOnline,
+            defaultOnlineMeetingUrl: dto.defaultOnlineMeetingUrl ?? null,
+          })
+          .returning();
+        return row;
+      },
+    );
+
+    // Onboarding auto-mark: prvni sluzba vytvorena
+    void this.onboarding.markStep(tenantId, 'firstServiceCreated').catch(() => undefined);
+
+    return created;
   }
 
   async updateService(
@@ -217,7 +232,13 @@ export class ServicesService {
           ...(dto.imageUrl !== undefined ? { imageUrl: dto.imageUrl } : {}),
           ...(dto.isPublic !== undefined ? { isPublic: dto.isPublic } : {}),
           ...(dto.depositPercent !== undefined ? { depositPercent: dto.depositPercent } : {}),
-          ...(dto.capacity !== undefined ? { capacity: dto.capacity } : {}),
+          // Kapacita: explicitní hodnota, jinak (při změně archetypu) default archetypu.
+          ...(dto.capacity !== undefined
+            ? { capacity: dto.capacity }
+            : dto.archetype
+              ? { capacity: SERVICE_ARCHETYPES[dto.archetype].defaultCapacity }
+              : {}),
+          ...(dto.archetype !== undefined ? { archetype: dto.archetype } : {}),
           ...(dto.sortOrder !== undefined ? { sortOrder: dto.sortOrder } : {}),
           ...(dto.isOnline !== undefined ? { isOnline: dto.isOnline } : {}),
           ...(dto.defaultOnlineMeetingUrl !== undefined

@@ -10,6 +10,7 @@ import {
   Inject,
   NotFoundException,
   Param,
+  ParseUUIDPipe,
   Post,
   Query,
 } from '@nestjs/common';
@@ -23,6 +24,20 @@ import { DbService } from '../db/db.service.js';
 import { AvailabilityService } from '../availability/availability.service.js';
 import { BookingsService } from '../bookings/bookings.service.js';
 import { ConfirmBookingSchema, type ConfirmBookingDto } from '../bookings/dto/booking.dto.js';
+import { ClassSessionsService } from '../class-sessions/class-sessions.service.js';
+import {
+  JoinClassSessionSchema,
+  type JoinClassSessionDto,
+} from '../class-sessions/dto/class-session.dto.js';
+import { ReviewsService } from '../reviews/reviews.service.js';
+import { SubmitReviewSchema, type SubmitReviewDto } from '../reviews/dto/review.dto.js';
+import { ReferralsService } from '../referrals/referrals.service.js';
+import { ChallengesService } from '../challenges/challenges.service.js';
+import { VouchersService } from '../vouchers/vouchers.service.js';
+import { IntakeService } from '../intake/intake.service.js';
+import { SubmitFormSchema, type SubmitFormDto } from '../intake/dto/intake.dto.js';
+import { SmartService } from '../smart/smart.service.js';
+import { RespondConfirmationSchema, type RespondConfirmationDto } from '../smart/dto/smart.dto.js';
 import { DrizzleTenantLookup } from '../tenant/tenant-lookup.service.js';
 import { randomBytes } from 'node:crypto';
 
@@ -39,18 +54,34 @@ export class PublicController {
     @Inject(DrizzleTenantLookup) private readonly tenantLookup: DrizzleTenantLookup,
     @Inject(AvailabilityService) private readonly availability: AvailabilityService,
     @Inject(BookingsService) private readonly bookings: BookingsService,
+    @Inject(ClassSessionsService) private readonly classSessions: ClassSessionsService,
+    @Inject(ReviewsService) private readonly reviews: ReviewsService,
+    @Inject(VouchersService) private readonly vouchers: VouchersService,
+    @Inject(IntakeService) private readonly intake: IntakeService,
+    @Inject(SmartService) private readonly smart: SmartService,
+    @Inject(ReferralsService) private readonly referrals: ReferralsService,
+    @Inject(ChallengesService) private readonly challenges: ChallengesService,
   ) {}
 
-  /** GET /api/v1/public/:slug — info o tenant (název, currency, timezone). */
+  /** GET /api/v1/public/:slug — info o tenant (název + theme + currency, timezone). */
   @Public()
   @Get()
   async info(@Param('slug') slug: string) {
     const tenant = await this.resolveTenant(slug);
+    // Načti theme z DB — používá widget pro CSS variables.
+    const themeRow = await this.dbService.withRlsContext(serviceContext(tenant.id), async (tx) => {
+      const rows = await tx
+        .select({ theme: schema.tenants.theme })
+        .from(schema.tenants)
+        .where(eq(schema.tenants.id, tenant.id))
+        .limit(1);
+      return rows[0];
+    });
     return {
       data: {
         slug: tenant.slug,
         name: tenant.name,
-        // Pro UI nepotřebujeme všechno — schválně vrátíme jen veřejně vhodné.
+        theme: (themeRow?.theme ?? {}) as Record<string, unknown>,
       },
     };
   }
@@ -214,6 +245,45 @@ export class PublicController {
 
   // (availability query nyní volitelně přijímá branchId — viz availability.service.ts)
 
+  /** GET /api/v1/public/:slug/availability-days?serviceId=...&month=YYYY-MM&employeeId=...
+   *  Měsíční přehled dostupnosti pro vkládací kalendář (sprint 10.18). */
+  @Public()
+  @Get('availability-days')
+  async availabilityDays(
+    @Param('slug') slug: string,
+    @Query('serviceId') serviceId: string,
+    @Query('month') month: string,
+    @Query('employeeId') employeeId?: string,
+  ) {
+    const tenant = await this.resolveTenant(slug);
+    if (!serviceId || !/^[0-9a-f-]{36}$/i.test(serviceId)) {
+      throw new BadRequestException({
+        error: { code: 'INVALID_SERVICE_ID', message: 'serviceId je povinné a musí být UUID.' },
+      });
+    }
+    if (!month || !/^\d{4}-\d{2}$/.test(month)) {
+      throw new BadRequestException({
+        error: { code: 'INVALID_MONTH', message: 'month musí být ve formátu YYYY-MM.' },
+      });
+    }
+    const tenantTz = await this.dbService.withRlsContext(serviceContext(tenant.id), async (tx) => {
+      const rows = await tx
+        .select({ timezone: schema.tenants.timezone })
+        .from(schema.tenants)
+        .where(eq(schema.tenants.id, tenant.id))
+        .limit(1);
+      return rows[0]?.timezone ?? 'Europe/Prague';
+    });
+    const data = await this.availability.availableDays({
+      tenantId: tenant.id,
+      serviceId,
+      employeeId: employeeId ?? null,
+      month,
+      timezone: tenantTz,
+    });
+    return { data };
+  }
+
   /** POST /api/v1/public/:slug/holds — zamkne slot na 10 min. */
   @Public()
   @Post('holds')
@@ -346,6 +416,249 @@ export class PublicController {
         status: booking.status,
       },
     };
+  }
+
+  // ─── Skupinové lekce (sprint 10.0) ──────────────────────────────────
+
+  /** GET /api/v1/public/:slug/class-sessions?serviceId=&from=&to= — otevřené lekce s volnými místy. */
+  @Public()
+  @Get('class-sessions')
+  async listClassSessions(
+    @Param('slug') slug: string,
+    @Query('serviceId') serviceId?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ) {
+    const tenant = await this.resolveTenant(slug);
+    const data = await this.classSessions.listOpenPublic(tenant.id, { serviceId, from, to });
+    return { data };
+  }
+
+  /** GET /api/v1/public/:slug/class-sessions/:id/spots — mapa míst v sále (spot booking). */
+  @Public()
+  @Get('class-sessions/:id/spots')
+  async classSessionSpots(@Param('slug') slug: string, @Param('id') id: string) {
+    const tenant = await this.resolveTenant(slug);
+    return { data: await this.classSessions.sessionSpots(tenant.id, id) };
+  }
+
+  /** GET /api/v1/public/:slug/class-sessions/:id/price — aktuální (dynamická) cena lekce. */
+  @Public()
+  @Get('class-sessions/:id/price')
+  async classSessionPrice(@Param('slug') slug: string, @Param('id') id: string) {
+    const tenant = await this.resolveTenant(slug);
+    return { data: await this.classSessions.quoteSessionPrice(tenant.id, id) };
+  }
+
+  /** POST /api/v1/public/:slug/class-sessions/:id/join — self-service přihlášení do lekce. */
+  @Public()
+  @Post('class-sessions/:id/join')
+  @HttpCode(201)
+  async joinClassSession(
+    @Param('slug') slug: string,
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(JoinClassSessionSchema)) dto: JoinClassSessionDto,
+  ) {
+    const tenant = await this.resolveTenant(slug);
+    const booking = await this.classSessions.joinPublic(tenant.id, id, dto);
+    return {
+      data: {
+        id: booking.id,
+        referenceCode: booking.referenceCode,
+        startsAt: booking.startsAt,
+        endsAt: booking.endsAt,
+        status: booking.status,
+      },
+    };
+  }
+
+  /** POST /api/v1/public/:slug/class-sessions/:id/waitlist — pořadník na plnou lekci. */
+  @Public()
+  @Post('class-sessions/:id/waitlist')
+  @HttpCode(201)
+  async joinWaitlist(
+    @Param('slug') slug: string,
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(JoinClassSessionSchema)) dto: JoinClassSessionDto,
+  ) {
+    const tenant = await this.resolveTenant(slug);
+    const entry = await this.classSessions.joinWaitlistPublic(tenant.id, id, dto);
+    return { data: { id: entry.id, position: entry.position, status: entry.status } };
+  }
+
+  // ─── Recenze (sprint 10.6) ──────────────────────────────────────────
+
+  /** POST /api/v1/public/:slug/reviews — odeslání recenze k rezervaci. */
+  @Public()
+  @Post('reviews')
+  @HttpCode(201)
+  async submitReview(
+    @Param('slug') slug: string,
+    @Body(new ZodValidationPipe(SubmitReviewSchema)) dto: SubmitReviewDto,
+  ) {
+    const tenant = await this.resolveTenant(slug);
+    const review = await this.reviews.submitPublic(tenant.id, dto);
+    return {
+      data: {
+        id: review.id,
+        rating: review.rating,
+        status: review.status,
+        boostToGoogle: review.boostToGoogle,
+        googleReviewUrl: review.googleReviewUrl,
+      },
+    };
+  }
+
+  /** GET /api/v1/public/:slug/reviews?serviceId=… — publikované recenze + průměr. */
+  @Public()
+  @Get('reviews')
+  async listReviews(@Param('slug') slug: string, @Query('serviceId') serviceId: string) {
+    const tenant = await this.resolveTenant(slug);
+    if (!serviceId || !/^[0-9a-f-]{36}$/i.test(serviceId)) {
+      throw new BadRequestException({
+        error: { code: 'INVALID_SERVICE_ID', message: 'serviceId je povinné a musí být UUID.' },
+      });
+    }
+    const data = await this.reviews.publicForService(tenant.id, serviceId);
+    return { data };
+  }
+
+  /** GET /api/v1/public/:slug/challenges — aktivní výzvy. */
+  @Public()
+  @Get('challenges')
+  async listChallenges(@Param('slug') slug: string) {
+    const tenant = await this.resolveTenant(slug);
+    return { data: await this.challenges.listPublic(tenant.id) };
+  }
+
+  /** GET /api/v1/public/:slug/challenges/:id/leaderboard — žebříček výzvy. */
+  @Public()
+  @Get('challenges/:id/leaderboard')
+  async challengeLeaderboard(@Param('slug') slug: string, @Param('id') id: string) {
+    const tenant = await this.resolveTenant(slug);
+    return { data: await this.challenges.leaderboard(tenant.id, id) };
+  }
+
+  /** POST /api/v1/public/:slug/challenges/:id/enroll — klient se zapíše do výzvy. */
+  @Public()
+  @Post('challenges/:id/enroll')
+  async enrollChallenge(
+    @Param('slug') slug: string,
+    @Param('id') id: string,
+    @Body(
+      new ZodValidationPipe(
+        z.object({
+          customerEmail: z.string().email().max(255),
+          customerName: z.string().min(1).max(200),
+          customerId: z.string().uuid().optional().nullable(),
+        }),
+      ),
+    )
+    dto: { customerEmail: string; customerName: string; customerId?: string | null },
+  ) {
+    const tenant = await this.resolveTenant(slug);
+    return { data: await this.challenges.enroll(tenant.id, id, dto) };
+  }
+
+  /** POST /api/v1/public/:slug/referral/redeem — uplatnění doporučovacího kódu novým klientem. */
+  @Public()
+  @Post('referral/redeem')
+  async redeemReferral(
+    @Param('slug') slug: string,
+    @Body(
+      new ZodValidationPipe(
+        z.object({
+          code: z.string().min(3).max(32),
+          refereeEmail: z.string().email().max(255),
+          refereeCustomerId: z.string().uuid().optional().nullable(),
+        }),
+      ),
+    )
+    dto: { code: string; refereeEmail: string; refereeCustomerId?: string | null },
+  ) {
+    const tenant = await this.resolveTenant(slug);
+    return { data: await this.referrals.redeem(tenant.id, dto) };
+  }
+
+  /** GET /api/v1/public/:slug/vouchers/:code — ověření dárkového poukazu (zůstatek/platnost). */
+  @Public()
+  @Get('vouchers/:code')
+  async getVoucher(@Param('slug') slug: string, @Param('code') code: string) {
+    const tenant = await this.resolveTenant(slug);
+    const data = await this.vouchers.getByCode(tenant.id, code);
+    return { data };
+  }
+
+  /** POST /api/v1/public/:slug/vouchers/purchase — online nákup dárkového poukazu. */
+  @Public()
+  @Post('vouchers/purchase')
+  async purchaseVoucher(
+    @Param('slug') slug: string,
+    @Body(
+      new ZodValidationPipe(
+        z.object({
+          valueHellers: z.number().int().min(100).max(10_000_000),
+          currency: z.string().length(3).default('CZK'),
+          recipientName: z.string().max(200).optional().nullable(),
+          recipientEmail: z.string().email().max(255).optional().nullable(),
+          purchaserEmail: z.string().email().max(255),
+          methodType: z
+            .enum(['stripe', 'gopay', 'mock', 'comgate', 'thepay', 'payu', 'gpwebpay'])
+            .default('mock'),
+        }),
+      ),
+    )
+    dto: {
+      valueHellers: number;
+      currency: string;
+      recipientName?: string | null;
+      recipientEmail?: string | null;
+      purchaserEmail: string;
+      methodType: 'stripe' | 'gopay' | 'mock' | 'comgate' | 'thepay' | 'payu' | 'gpwebpay';
+    },
+  ) {
+    const tenant = await this.resolveTenant(slug);
+    return { data: await this.vouchers.purchaseOnline(tenant.id, dto) };
+  }
+
+  // ─── Intake formuláře (sprint 10.10) ────────────────────────────────
+
+  /** GET /api/v1/public/:slug/intake-forms?serviceId=… — aktivní formuláře. */
+  @Public()
+  @Get('intake-forms')
+  async listIntakeForms(@Param('slug') slug: string, @Query('serviceId') serviceId?: string) {
+    const tenant = await this.resolveTenant(slug);
+    const data = await this.intake.publicForms(tenant.id, serviceId);
+    return { data };
+  }
+
+  /** POST /api/v1/public/:slug/intake-forms/:id/submit — vyplnění formuláře. */
+  @Public()
+  @Post('intake-forms/:id/submit')
+  @HttpCode(201)
+  async submitIntakeForm(
+    @Param('slug') slug: string,
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(SubmitFormSchema)) dto: SubmitFormDto,
+  ) {
+    const tenant = await this.resolveTenant(slug);
+    const data = await this.intake.submitPublic(tenant.id, id, dto);
+    return { data };
+  }
+
+  // ─── Smart vrstva: potvrzení účasti (sprint 10.13) ──────────────────
+
+  /** POST /api/v1/public/:slug/confirm/:token — klient potvrdí nebo odmítne účast. */
+  @Public()
+  @Post('confirm/:token')
+  async respondConfirmation(
+    @Param('slug') slug: string,
+    @Param('token', ParseUUIDPipe) token: string,
+    @Body(new ZodValidationPipe(RespondConfirmationSchema)) dto: RespondConfirmationDto,
+  ) {
+    const tenant = await this.resolveTenant(slug);
+    const data = await this.smart.respondByToken(tenant.id, token, dto.action);
+    return { data };
   }
 
   // ─── Helpers ──────────────────────────────────────────────────────────

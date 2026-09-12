@@ -10,11 +10,13 @@ import {
   createServiceCategory,
   deleteService,
   getAccessToken,
+  listServiceArchetypes,
   listServiceCategories,
   listServicesFull,
   updateService,
   type AdminServiceCategory,
   type AdminServiceFull,
+  type ServiceArchetypeSpec,
 } from '@/lib/api';
 
 interface FormState {
@@ -29,6 +31,7 @@ interface FormState {
   color: string;
   isPublic: boolean;
   capacity: number;
+  archetype: string;
   sortOrder: number;
   isActive: boolean;
 }
@@ -45,6 +48,7 @@ const EMPTY_FORM: FormState = {
   color: '#3b82f6',
   isPublic: true,
   capacity: 1,
+  archetype: '',
   sortOrder: 0,
   isActive: true,
 };
@@ -59,6 +63,7 @@ export default function ServicesPage() {
   const router = useRouter();
   const [services, setServices] = useState<AdminServiceFull[]>([]);
   const [categories, setCategories] = useState<AdminServiceCategory[]>([]);
+  const [archetypes, setArchetypes] = useState<ServiceArchetypeSpec[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState<FormState | null>(null);
@@ -72,9 +77,14 @@ export default function ServicesPage() {
   const reload = useCallback(async () => {
     setLoading(true);
     try {
-      const [s, c] = await Promise.all([listServicesFull(), listServiceCategories()]);
+      const [s, c, a] = await Promise.all([
+        listServicesFull(),
+        listServiceCategories(),
+        listServiceArchetypes(),
+      ]);
       setServices(s);
       setCategories(c);
+      setArchetypes(a);
     } catch (e) {
       if (e instanceof AdminApiError && e.status === 401) {
         clearAuth();
@@ -108,6 +118,7 @@ export default function ServicesPage() {
       color: s.color ?? '#3b82f6',
       isPublic: s.isPublic,
       capacity: s.capacity,
+      archetype: s.archetype ?? '',
       sortOrder: s.sortOrder,
       isActive: s.isActive,
     });
@@ -128,6 +139,7 @@ export default function ServicesPage() {
         color: editing.color || null,
         isPublic: editing.isPublic,
         capacity: editing.capacity,
+        archetype: editing.archetype || null,
         sortOrder: editing.sortOrder,
       };
       if (editing.id) {
@@ -331,6 +343,35 @@ export default function ServicesPage() {
                     onChange={(e) => setEditing({ ...editing, color: e.target.value })}
                     className="w-full border border-slate-300 rounded px-1 py-1 h-10"
                   />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Typ služby (archetyp)</label>
+                  <select
+                    value={editing.archetype}
+                    onChange={(e) => {
+                      const id = e.target.value;
+                      const spec = archetypes.find((a) => a.id === id);
+                      // Výběr archetypu předvyplní kapacitu jeho defaultem.
+                      setEditing({
+                        ...editing,
+                        archetype: id,
+                        capacity: spec ? spec.defaultCapacity : editing.capacity,
+                      });
+                    }}
+                    className="w-full border border-slate-300 rounded px-3 py-2"
+                  >
+                    <option value="">Bez archetypu (klasická služba)</option>
+                    {archetypes.map((a) => (
+                      <option key={a.id} value={a.id}>
+                        {a.label}
+                      </option>
+                    ))}
+                  </select>
+                  {editing.archetype && (
+                    <p className="text-xs text-slate-500 mt-1">
+                      {archetypes.find((a) => a.id === editing.archetype)?.description}
+                    </p>
+                  )}
                 </div>
                 <div>
                   <label className="block text-sm font-medium mb-1">Kapacita (skupinová)</label>

@@ -30,6 +30,8 @@ export const AdminCreateBookingSchema = z.object({
   internalNote: z.string().max(2000).optional().nullable(),
   /** Skipnout email confirmation (admin např. volá telefonicky). */
   skipEmail: z.boolean().default(false),
+  /** Motor 1 (10.21): zdroje, které rezervace zamkne (místnost, technika…). */
+  resourceIds: z.array(z.string().uuid()).max(20).default([]),
 });
 export type AdminCreateBookingDto = z.infer<typeof AdminCreateBookingSchema>;
 

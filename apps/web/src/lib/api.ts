@@ -1,6 +1,6 @@
 // API klient pro admin endpointy. JWT token v paměti + localStorage.
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api/v1';
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4010/api/v1';
 
 const TOKEN_KEY = 'reserved_access_token';
 const REFRESH_KEY = 'reserved_refresh_token';
@@ -28,6 +28,24 @@ export function clearAuth(): void {
 export function getTenantSlug(): string | null {
   if (typeof window === 'undefined') return null;
   return localStorage.getItem(TENANT_KEY);
+}
+
+/**
+ * Dekoduje JWT a vrati impersonatedBy claim (UUID master admina), pokud existuje.
+ * Pouziva se k zobrazeni impersonace banneru.
+ */
+export function getImpersonatedBy(): string | null {
+  const token = getAccessToken();
+  if (!token) return null;
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return null;
+    const payloadJson = atob(parts[1]!.replace(/-/g, '+').replace(/_/g, '/'));
+    const payload = JSON.parse(payloadJson) as { impersonatedBy?: string };
+    return payload.impersonatedBy ?? null;
+  } catch {
+    return null;
+  }
 }
 
 export class AdminApiError extends Error {
@@ -201,9 +219,26 @@ export interface AdminServiceFull extends AdminService {
   isPublic: boolean;
   depositPercent: number | null;
   capacity: number;
+  /** Archetyp služby (sprint 10.1) — NULL = bez archetypu. */
+  archetype: string | null;
   sortOrder: number;
   isActive: boolean;
   createdAt: string;
+}
+
+// ─── Archetypy služeb (sprint 10.1) ───────────────────────────────────
+
+export interface ServiceArchetypeSpec {
+  id: string;
+  label: string;
+  description: string;
+  defaultCapacity: number;
+  group: boolean;
+}
+
+export async function listServiceArchetypes(): Promise<ServiceArchetypeSpec[]> {
+  const { data } = await fetchApi<{ data: ServiceArchetypeSpec[] }>(`/admin/services/archetypes`);
+  return data;
 }
 
 export interface AdminServiceCategory {
@@ -241,6 +276,7 @@ export async function createService(input: {
   isPublic?: boolean;
   depositPercent?: number | null;
   capacity?: number;
+  archetype?: string | null;
   sortOrder?: number;
 }): Promise<AdminServiceFull> {
   const { data } = await fetchApi<{ data: AdminServiceFull }>(`/admin/services`, {
@@ -856,6 +892,35 @@ export async function getReportOverview(
   const { data } = await fetchApi<{ data: ReportOverviewWithCompare }>(
     `/admin/reports/overview?${qs}`,
   );
+  return data;
+}
+
+export interface ClassUtilization {
+  sessions: number;
+  totalCapacity: number;
+  totalBooked: number;
+  fillRatePct: number;
+  present: number;
+  noShow: number;
+  attendanceRatePct: number;
+}
+
+export async function getClassUtilization(filters: ReportFilters): Promise<ClassUtilization> {
+  const qs = buildReportQuery(filters);
+  const { data } = await fetchApi<{ data: ClassUtilization }>(
+    `/admin/reports/class-utilization?${qs}`,
+  );
+  return data;
+}
+
+export interface MrrReport {
+  activeSubscriptions: number;
+  mrrHellers: number;
+  arrHellers: number;
+}
+
+export async function getMrr(): Promise<MrrReport> {
+  const { data } = await fetchApi<{ data: MrrReport }>(`/admin/reports/mrr`);
   return data;
 }
 
@@ -1787,6 +1852,631 @@ export async function testWebhook(id: string): Promise<{
 export async function listWebhookDeliveries(id: string): Promise<AdminWebhookDelivery[]> {
   const { data } = await fetchApi<{ data: AdminWebhookDelivery[] }>(
     `/admin/webhooks/${id}/deliveries`,
+  );
+  return data;
+}
+
+// ─── API keys (external integrace) ────────────────────────────────────
+
+export const API_KEY_SCOPES = [
+  'bookings:read',
+  'bookings:write',
+  'customers:read',
+  'customers:write',
+  'services:read',
+  'employees:read',
+  'availability:read',
+  'branches:read',
+  'webhooks:read',
+] as const;
+export type AdminApiKeyScope = (typeof API_KEY_SCOPES)[number] | '*';
+
+export interface AdminApiKey {
+  id: string;
+  name: string;
+  keyPrefix: string;
+  scopes: AdminApiKeyScope[];
+  lastUsedAt: string | null;
+  usageCount: number;
+  expiresAt: string | null;
+  revokedAt: string | null;
+  createdAt: string;
+}
+
+export interface AdminApiKeyCreated extends AdminApiKey {
+  /** PLNÝ KLÍČ — vrátí se pouze pri create, nikdy víc. */
+  rawKey: string;
+}
+
+export async function listApiKeys(): Promise<AdminApiKey[]> {
+  const { data } = await fetchApi<{ data: AdminApiKey[] }>(`/admin/api-keys`);
+  return data;
+}
+
+export async function createApiKey(input: {
+  name: string;
+  scopes?: AdminApiKeyScope[];
+  expiresAt?: string | null;
+}): Promise<AdminApiKeyCreated> {
+  const { data } = await fetchApi<{ data: AdminApiKeyCreated }>(`/admin/api-keys`, {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+  return data;
+}
+
+export async function revokeApiKey(id: string): Promise<void> {
+  await fetchApi(`/admin/api-keys/${id}`, { method: 'DELETE' });
+}
+
+// ─── Notification settings ────────────────────────────────────────────
+
+export interface NotificationSettings {
+  reminderHoursBefore: number;
+  primaryChannel: 'email' | 'sms';
+  smsEnabled: boolean;
+}
+
+export async function getNotificationSettings(): Promise<NotificationSettings> {
+  const { data } = await fetchApi<{ data: NotificationSettings }>(`/admin/settings/notifications`);
+  return data;
+}
+
+export async function updateNotificationSettings(
+  input: Partial<NotificationSettings>,
+): Promise<NotificationSettings> {
+  const { data } = await fetchApi<{ data: NotificationSettings }>(`/admin/settings/notifications`, {
+    method: 'PATCH',
+    body: JSON.stringify(input),
+  });
+  return data;
+}
+
+// ─── Platform billing (Pavla platí Reserved) ──────────────────────────
+
+export interface PlatformPlan {
+  id: string;
+  key: string;
+  name: string;
+  description: string | null;
+  monthlyPriceHellers: number;
+  yearlyPriceHellers: number;
+  currency: string;
+  stripeMonthlyPriceId: string | null;
+  stripeYearlyPriceId: string | null;
+  trialDays: number;
+  limits: Record<string, unknown>;
+  features: Record<string, boolean>;
+  sortOrder: number;
+}
+
+export interface BillingStatus {
+  tenantId: string;
+  plan: string;
+  planName: string | null;
+  status: string;
+  trialEndsAt: string | null;
+  currentPeriodEnd: string | null;
+  cancelAtPeriodEnd: boolean;
+  hasPaymentMethod: boolean;
+  stripeCustomerId: string | null;
+  stripeSubscriptionId: string | null;
+}
+
+export async function listBillingPlans(): Promise<PlatformPlan[]> {
+  const { data } = await fetchApi<{ data: PlatformPlan[] }>(`/admin/billing/plans`);
+  return data;
+}
+
+export async function getBillingStatus(): Promise<BillingStatus> {
+  const { data } = await fetchApi<{ data: BillingStatus }>(`/admin/billing/status`);
+  return data;
+}
+
+export async function createBillingCheckout(input: {
+  planKey: string;
+  interval: 'monthly' | 'yearly';
+}): Promise<{ checkoutUrl: string; sessionId: string }> {
+  const { data } = await fetchApi<{ data: { checkoutUrl: string; sessionId: string } }>(
+    `/admin/billing/checkout`,
+    { method: 'POST', body: JSON.stringify(input) },
+  );
+  return data;
+}
+
+export async function createBillingPortal(returnUrl?: string): Promise<{ portalUrl: string }> {
+  const { data } = await fetchApi<{ data: { portalUrl: string } }>(`/admin/billing/portal`, {
+    method: 'POST',
+    body: JSON.stringify({ returnUrl }),
+  });
+  return data;
+}
+
+export async function cancelBillingSubscription(
+  atPeriodEnd = true,
+): Promise<{ canceled: true; effectiveAt: 'period_end' | 'immediate' }> {
+  const { data } = await fetchApi<{
+    data: { canceled: true; effectiveAt: 'period_end' | 'immediate' };
+  }>(`/admin/billing/cancel`, { method: 'POST', body: JSON.stringify({ atPeriodEnd }) });
+  return data;
+}
+
+export async function resumeBillingSubscription(): Promise<{ resumed: true }> {
+  const { data } = await fetchApi<{ data: { resumed: true } }>(`/admin/billing/resume`, {
+    method: 'POST',
+  });
+  return data;
+}
+
+// ─── Registrace nového tenanta ────────────────────────────────────────
+
+export interface RegisterInput {
+  tenantSlug: string;
+  tenantName: string;
+  email: string;
+  password: string;
+  firstName: string;
+  lastName: string;
+  phone?: string;
+  currency?: 'CZK' | 'EUR' | 'USD';
+  locale?: string;
+}
+
+export interface RegisterResult {
+  tenantId: string;
+  userId: string;
+  tokens: {
+    accessToken: string;
+    refreshToken: string;
+    expiresIn: number;
+  };
+}
+
+export async function registerTenant(input: RegisterInput): Promise<RegisterResult> {
+  const res = await fetch(`${API_BASE}/auth/register`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new AdminApiError(
+      res.status,
+      body?.error?.code ?? 'REGISTER_FAILED',
+      body?.error?.message ?? 'Registrace selhala.',
+    );
+  }
+  return res.json();
+}
+
+// ─── Onboarding ───────────────────────────────────────────────────────
+
+export type OnboardingStep =
+  | 'emailVerified'
+  | 'firstServiceCreated'
+  | 'workingHoursSet'
+  | 'teamInvited'
+  | 'paymentsConnected'
+  | 'firstBookingReceived';
+
+export interface OnboardingChecklist {
+  emailVerified: boolean;
+  firstServiceCreated: boolean;
+  workingHoursSet: boolean;
+  teamInvited: boolean;
+  paymentsConnected: boolean;
+  firstBookingReceived: boolean;
+  completedAt: string | null;
+  startedAt: string | null;
+  completedCount: number;
+  totalCount: number;
+  progressPercent: number;
+}
+
+export async function getOnboardingChecklist(): Promise<OnboardingChecklist> {
+  const { data } = await fetchApi<{ data: OnboardingChecklist }>(`/admin/onboarding/checklist`);
+  return data;
+}
+
+export async function markOnboardingStep(step: OnboardingStep): Promise<OnboardingChecklist> {
+  const { data } = await fetchApi<{ data: OnboardingChecklist }>(`/admin/onboarding/checklist`, {
+    method: 'PATCH',
+    body: JSON.stringify({ step }),
+  });
+  return data;
+}
+
+// ─── Custom doména (Sprint 8.0-1) ──────────────────────────────────────
+
+export interface CustomDomainStatus {
+  customDomain: string | null;
+  verifiedAt: string | null;
+  verificationToken: string | null;
+  verificationRecord: string | null;
+  dnsTarget: string;
+}
+
+export async function getCustomDomain(): Promise<CustomDomainStatus> {
+  const { data } = await fetchApi<{ data: CustomDomainStatus }>(`/admin/custom-domain`);
+  return data;
+}
+
+export async function setCustomDomain(domain: string): Promise<CustomDomainStatus> {
+  const { data } = await fetchApi<{ data: CustomDomainStatus }>(`/admin/custom-domain`, {
+    method: 'PUT',
+    body: JSON.stringify({ domain }),
+  });
+  return data;
+}
+
+export async function verifyCustomDomain(): Promise<CustomDomainStatus> {
+  const { data } = await fetchApi<{ data: CustomDomainStatus }>(`/admin/custom-domain/verify`, {
+    method: 'POST',
+  });
+  return data;
+}
+
+export async function removeCustomDomain(): Promise<void> {
+  await fetchApi<void>(`/admin/custom-domain`, { method: 'DELETE' });
+}
+
+// ─── No-show risk score (Sprint 8.0-2) ─────────────────────────────────
+
+export type RiskLevel = 'low' | 'medium' | 'high';
+
+export interface NoShowRisk {
+  score: number;
+  level: RiskLevel;
+  reasons: string[];
+  stats: {
+    totalBookings: number;
+    completedBookings: number;
+    noShowCount: number;
+    cancelledByCustomerCount: number;
+  };
+}
+
+export async function getNoShowRisk(customerId: string): Promise<NoShowRisk> {
+  const { data } = await fetchApi<{ data: NoShowRisk }>(
+    `/admin/customers/${customerId}/no-show-risk`,
+  );
+  return data;
+}
+
+// ─── Katalog public profile (Sprint 8.0-4) ─────────────────────────────
+
+export interface CatalogProfile {
+  listedInCatalog: boolean;
+  publicDescription: string | null;
+  publicCity: string | null;
+  publicAddress: string | null;
+  publicPhotos: string[];
+  publicBusinessHours: Record<string, string>;
+}
+
+export async function getCatalogProfile(): Promise<CatalogProfile> {
+  const { data } = await fetchApi<{ data: CatalogProfile }>(`/admin/catalog-profile`);
+  return data;
+}
+
+export async function updateCatalogProfile(
+  patch: Partial<CatalogProfile>,
+): Promise<CatalogProfile> {
+  const { data } = await fetchApi<{ data: CatalogProfile }>(`/admin/catalog-profile`, {
+    method: 'PATCH',
+    body: JSON.stringify(patch),
+  });
+  return data;
+}
+
+// ─── Tenant theme (Sprint 8.1) ─────────────────────────────────────────
+
+export interface TenantTheme {
+  primaryColor?: string;
+  borderRadius?: 'none' | 'sm' | 'md' | 'lg' | 'xl';
+  logoUrl?: string;
+  fontFamily?: 'system' | 'serif' | 'sans';
+  backgroundColor?: string;
+  customCss?: string;
+}
+
+export async function getTheme(): Promise<TenantTheme> {
+  const { data } = await fetchApi<{ data: TenantTheme }>(`/admin/theme`);
+  return data;
+}
+
+export async function updateTheme(
+  patch: TenantTheme & {
+    primaryColor?: string | null;
+    borderRadius?: TenantTheme['borderRadius'] | null;
+    logoUrl?: string | null;
+    fontFamily?: TenantTheme['fontFamily'] | null;
+    backgroundColor?: string | null;
+    customCss?: string | null;
+  },
+): Promise<TenantTheme> {
+  const { data } = await fetchApi<{ data: TenantTheme }>(`/admin/theme`, {
+    method: 'PATCH',
+    body: JSON.stringify(patch),
+  });
+  return data;
+}
+
+// ─── Photo upload (Sprint 8.2-C) ───────────────────────────────────────
+
+export interface UploadSignResult {
+  uploadUrl: string;
+  publicUrl: string;
+  storage: 's3' | 'local';
+  method?: 'PUT' | 'POST';
+}
+
+export async function signUpload(
+  kind: 'logo' | 'catalog-photo' | 'service-image',
+  contentType: string,
+  fileSize?: number,
+): Promise<UploadSignResult> {
+  const { data } = await fetchApi<{ data: UploadSignResult }>(`/admin/uploads/sign`, {
+    method: 'POST',
+    body: JSON.stringify({ kind, contentType, fileSize }),
+  });
+  return data;
+}
+
+export async function uploadFile(
+  file: File,
+  kind: 'logo' | 'catalog-photo' | 'service-image',
+): Promise<string> {
+  const sign = await signUpload(kind, file.type, file.size);
+  const res = await fetch(sign.uploadUrl, {
+    method: sign.method ?? 'PUT',
+    headers: { 'Content-Type': file.type },
+    body: file,
+  });
+  if (!res.ok) {
+    throw new Error(`Upload selhal (HTTP ${res.status}).`);
+  }
+  return sign.publicUrl;
+}
+
+// ─── Tenant site (Sprint 9.0) ──────────────────────────────────────────
+
+export type SiteTemplate = 'elegant' | 'bold' | 'fresh';
+
+export interface SiteContent {
+  hero?: {
+    headline?: string;
+    subheadline?: string;
+    coverPhotoUrl?: string;
+    ctaText?: string;
+  };
+  about?: {
+    headline?: string;
+    text?: string;
+    photoUrl?: string;
+  };
+  team?: {
+    headline?: string;
+    members?: Array<{ name: string; role?: string; photoUrl?: string; bio?: string }>;
+  };
+  gallery?: {
+    headline?: string;
+    photos?: string[];
+  };
+  testimonials?: {
+    headline?: string;
+    items?: Array<{ author: string; text: string }>;
+  };
+  faq?: {
+    headline?: string;
+    items?: Array<{ q: string; a: string }>;
+  };
+  contact?: {
+    headline?: string;
+    showAddress?: boolean;
+    showHours?: boolean;
+    showPhone?: boolean;
+    phone?: string;
+    email?: string;
+    mapEmbedUrl?: string;
+  };
+  enabledSections?: string[];
+}
+
+export interface SiteSettings {
+  template: SiteTemplate | null;
+  enabled: boolean;
+  content: SiteContent;
+}
+
+export async function getSiteSettings(): Promise<SiteSettings> {
+  const { data } = await fetchApi<{ data: SiteSettings }>(`/admin/site`);
+  return data;
+}
+
+export async function updateSiteSettings(
+  patch: Partial<SiteSettings> & { template?: SiteTemplate | null },
+): Promise<SiteSettings> {
+  const { data } = await fetchApi<{ data: SiteSettings }>(`/admin/site`, {
+    method: 'PATCH',
+    body: JSON.stringify(patch),
+  });
+  return data;
+}
+
+// ─── Kiosk self-check-in (access control) ────────────────────────────
+export type AccessValidateResult =
+  | {
+      granted: true;
+      grantId: string;
+      kind: string;
+      customerName: string | null;
+      usesRemaining: number | null;
+    }
+  | { granted: false; reason: string };
+
+export async function validateAccessCode(code: string): Promise<AccessValidateResult> {
+  const { data } = await fetchApi<{ data: AccessValidateResult }>(`/admin/access/validate`, {
+    method: 'POST',
+    body: JSON.stringify({ code }),
+  });
+  return data;
+}
+
+// ─── Restaurace: rezervace stolů (sprint 10.23) ──────────────────────
+
+export interface TableOverviewItem {
+  id: string;
+  name: string;
+  branchId: string | null;
+  seats: number;
+  x: number | null;
+  y: number | null;
+  shape: string | null;
+  status: 'free' | 'occupied';
+  reservationId: string | null;
+  freeAt: string | null;
+}
+
+export interface AdminTable {
+  id: string;
+  name: string;
+  branchId: string;
+  type: string;
+  isActive: boolean;
+  metadata: { seats?: number; x?: number; y?: number; shape?: string };
+}
+
+/** Stoly = resources typu 'table'. */
+export async function listTables(): Promise<AdminTable[]> {
+  const { data } = await fetchApi<{ data: AdminTable[] }>(`/admin/resources`);
+  return data.filter((r) => r.type === 'table');
+}
+
+export async function createTable(input: {
+  branchId: string;
+  name: string;
+  seats: number;
+  x?: number;
+  y?: number;
+  shape?: 'round' | 'square' | 'rect';
+}): Promise<AdminTable> {
+  const { data } = await fetchApi<{ data: AdminTable }>(`/admin/resources`, {
+    method: 'POST',
+    body: JSON.stringify({
+      branchId: input.branchId,
+      name: input.name,
+      type: 'table',
+      metadata: { seats: input.seats, x: input.x, y: input.y, shape: input.shape },
+    }),
+  });
+  return data;
+}
+
+export async function updateTable(
+  id: string,
+  patch: { name?: string; isActive?: boolean; metadata?: AdminTable['metadata'] },
+): Promise<AdminTable> {
+  const { data } = await fetchApi<{ data: AdminTable }>(`/admin/resources/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(patch),
+  });
+  return data;
+}
+
+/** Uloží pozici stolu na půdorysu (merge do metadata). */
+export async function updateTablePosition(id: string, x: number, y: number): Promise<AdminTable> {
+  return updateTable(id, { metadata: { x, y } });
+}
+
+export async function deleteTable(id: string): Promise<void> {
+  await fetchApi(`/admin/resources/${id}`, { method: 'DELETE' });
+}
+
+export interface TableReservation {
+  id: string;
+  branchId: string | null;
+  resourceId: string | null;
+  servicePeriodId: string | null;
+  customerName: string;
+  customerPhone: string | null;
+  startsAt: string;
+  endsAt: string;
+  partySize: number;
+  seatingPref: string | null;
+  occasion: string | null;
+  depositHellers: number;
+  currency: string;
+  status: string;
+  note: string | null;
+}
+
+/** Půdorysný přehled stolů k danému okamžiku (default teď). */
+export async function getTableOverview(opts?: {
+  at?: string;
+  branchId?: string;
+}): Promise<TableOverviewItem[]> {
+  const params = new URLSearchParams();
+  if (opts?.at) params.append('at', opts.at);
+  if (opts?.branchId) params.append('branchId', opts.branchId);
+  const { data } = await fetchApi<{ data: TableOverviewItem[] }>(
+    `/admin/table-reservations/overview?${params.toString()}`,
+  );
+  return data;
+}
+
+export async function listTableReservations(status?: string): Promise<TableReservation[]> {
+  const params = new URLSearchParams();
+  if (status) params.append('status', status);
+  const { data } = await fetchApi<{ data: TableReservation[] }>(
+    `/admin/table-reservations?${params.toString()}`,
+  );
+  return data;
+}
+
+export async function createTableReservation(input: {
+  resourceId?: string;
+  branchId?: string;
+  servicePeriodId?: string;
+  customerName: string;
+  customerPhone?: string;
+  startsAt: string;
+  partySize: number;
+  turnMinutes?: number;
+  seatingPref?: string;
+  occasion?: string;
+  note?: string;
+}): Promise<TableReservation & { tables: string[] }> {
+  const { data } = await fetchApi<{ data: TableReservation & { tables: string[] } }>(
+    `/admin/table-reservations`,
+    { method: 'POST', body: JSON.stringify(input) },
+  );
+  return data;
+}
+
+export async function walkInTableReservation(input: {
+  partySize: number;
+  resourceId?: string;
+  branchId?: string;
+  servicePeriodId?: string;
+  customerName?: string;
+  seatingPref?: string;
+}): Promise<TableReservation & { tables: string[] }> {
+  const { data } = await fetchApi<{ data: TableReservation & { tables: string[] } }>(
+    `/admin/table-reservations/walk-in`,
+    { method: 'POST', body: JSON.stringify(input) },
+  );
+  return data;
+}
+
+/** Změna stavu rezervace: seat | complete | no-show | cancel. */
+export async function setTableReservationStatus(
+  id: string,
+  action: 'seat' | 'complete' | 'no-show' | 'cancel',
+): Promise<TableReservation> {
+  const { data } = await fetchApi<{ data: TableReservation }>(
+    `/admin/table-reservations/${id}/${action}`,
+    { method: 'POST' },
   );
   return data;
 }

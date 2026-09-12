@@ -2,11 +2,13 @@ import { Module } from '@nestjs/common';
 import { BundlePacksModule } from '../bundle-packs/bundle-packs.module.js';
 import { CreditPacksModule } from '../credit-packs/credit-packs.module.js';
 import { GoogleCalendarModule } from '../google-calendar/google-calendar.module.js';
+import { LoyaltyModule } from '../loyalty/loyalty.module.js';
 import { SubscriptionsModule } from '../subscriptions/subscriptions.module.js';
 import { TimePacksModule } from '../time-packs/time-packs.module.js';
 import { CustomersModule } from '../customers/customers.module.js';
 import { DbModule } from '../db/db.module.js';
 import { EmailModule } from '../email/email.module.js';
+import { OnboardingModule } from '../onboarding/onboarding.module.js';
 import { RulesModule } from '../rules/rules.module.js';
 import { BookingsController } from './bookings.controller.js';
 import { BookingsService } from './bookings.service.js';
@@ -22,7 +24,9 @@ import { BookingsService } from './bookings.service.js';
     TimePacksModule,
     SubscriptionsModule,
     GoogleCalendarModule,
+    OnboardingModule,
     RulesModule,
+    LoyaltyModule,
   ],
   controllers: [BookingsController],
   providers: [BookingsService],

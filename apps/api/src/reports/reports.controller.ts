@@ -125,4 +125,28 @@ export class ReportsController {
       data: await this.svc.creditPacksSummary(user.tenantId, user.sub, user.role),
     };
   }
+
+  // ─── Hloubka D (sprint 10.28) ────────────────────────────────────────
+
+  @Get('class-utilization')
+  async classUtilization(
+    @CurrentUser() user: AccessTokenPayload,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('branchId') branchId?: string,
+  ) {
+    return {
+      data: await this.svc.classUtilization(
+        user.tenantId,
+        user.sub,
+        user.role,
+        parseFilters(from, to, branchId),
+      ),
+    };
+  }
+
+  @Get('mrr')
+  async mrr(@CurrentUser() user: AccessTokenPayload) {
+    return { data: await this.svc.mrr(user.tenantId, user.sub, user.role) };
+  }
 }

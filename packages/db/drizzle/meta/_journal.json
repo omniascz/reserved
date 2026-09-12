@@ -288,6 +288,314 @@
       "when": 1778778700000,
       "tag": "0040_rls_webhooks",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1779215793150,
+      "tag": "0041_platform_admin",
+      "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1779221952340,
+      "tag": "0042_rls_platform_admin",
+      "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1779221952346,
+      "tag": "0043_api_keys",
+      "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1779221952350,
+      "tag": "0044_rls_api_keys",
+      "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1779225377656,
+      "tag": "0045_platform_billing",
+      "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "7",
+      "when": 1779256677000,
+      "tag": "0046_custom_domain_verification",
+      "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1779257679000,
+      "tag": "0047_marketplace_v1",
+      "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1779258711000,
+      "tag": "0048_tenant_theme",
+      "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "7",
+      "when": 1779272012000,
+      "tag": "0049_tenant_site",
+      "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1781338348000,
+      "tag": "0050_class_sessions",
+      "breakpoints": true
+    },
+    {
+      "idx": 51,
+      "version": "7",
+      "when": 1781338382000,
+      "tag": "0051_service_archetype",
+      "breakpoints": true
+    },
+    {
+      "idx": 52,
+      "version": "7",
+      "when": 1781338382001,
+      "tag": "0052_resources_ems",
+      "breakpoints": true
+    },
+    {
+      "idx": 53,
+      "version": "7",
+      "when": 1781343186000,
+      "tag": "0053_class_session_waitlist",
+      "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1781344082000,
+      "tag": "0054_reviews",
+      "breakpoints": true
+    },
+    {
+      "idx": 55,
+      "version": "7",
+      "when": 1781344879000,
+      "tag": "0055_marketing_campaigns",
+      "breakpoints": true
+    },
+    {
+      "idx": 56,
+      "version": "7",
+      "when": 1781348208000,
+      "tag": "0056_loyalty",
+      "breakpoints": true
+    },
+    {
+      "idx": 57,
+      "version": "7",
+      "when": 1781348739000,
+      "tag": "0057_gift_vouchers",
+      "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "7",
+      "when": 1781349335000,
+      "tag": "0058_intake_forms",
+      "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "7",
+      "when": 1781352100000,
+      "tag": "0059_smart_confirmations",
+      "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "7",
+      "when": 1781353353000,
+      "tag": "0060_booking_series",
+      "breakpoints": true
+    },
+    {
+      "idx": 61,
+      "version": "7",
+      "when": 1781356482000,
+      "tag": "0061_commission_rules",
+      "breakpoints": true
+    },
+    {
+      "idx": 62,
+      "version": "7",
+      "when": 1781358195000,
+      "tag": "0062_content_items",
+      "breakpoints": true
+    },
+    {
+      "idx": 63,
+      "version": "7",
+      "when": 1781366670000,
+      "tag": "0063_pos",
+      "breakpoints": true
+    },
+    {
+      "idx": 64,
+      "version": "7",
+      "when": 1781368539000,
+      "tag": "0064_class_session_employee_overlap",
+      "breakpoints": true
+    },
+    {
+      "idx": 65,
+      "version": "7",
+      "when": 1781372055000,
+      "tag": "0065_booking_resources",
+      "breakpoints": true
+    },
+    {
+      "idx": 66,
+      "version": "7",
+      "when": 1781375254000,
+      "tag": "0066_stays",
+      "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "7",
+      "when": 1781376017000,
+      "tag": "0067_logistics_jobs",
+      "breakpoints": true
+    },
+    {
+      "idx": 68,
+      "version": "7",
+      "when": 1781377344000,
+      "tag": "0068_class_recurrences",
+      "breakpoints": true
+    },
+    {
+      "idx": 69,
+      "version": "7",
+      "when": 1781377694000,
+      "tag": "0069_courses",
+      "breakpoints": true
+    },
+    {
+      "idx": 70,
+      "version": "7",
+      "when": 1781380125000,
+      "tag": "0070_payment_connections",
+      "breakpoints": true
+    },
+    {
+      "idx": 71,
+      "version": "7",
+      "when": 1781465178000,
+      "tag": "0071_access_grants",
+      "breakpoints": true
+    },
+    {
+      "idx": 72,
+      "version": "7",
+      "when": 1781466106000,
+      "tag": "0072_class_conditions_spots",
+      "breakpoints": true
+    },
+    {
+      "idx": 73,
+      "version": "7",
+      "when": 1781510245000,
+      "tag": "0073_payouts",
+      "breakpoints": true
+    },
+    {
+      "idx": 74,
+      "version": "7",
+      "when": 1781513019000,
+      "tag": "0074_referrals",
+      "breakpoints": true
+    },
+    {
+      "idx": 75,
+      "version": "7",
+      "when": 1781514895000,
+      "tag": "0075_loyalty_tiers_rewards",
+      "breakpoints": true
+    },
+    {
+      "idx": 76,
+      "version": "7",
+      "when": 1781517307000,
+      "tag": "0076_voucher_online_purchase",
+      "breakpoints": true
+    },
+    {
+      "idx": 77,
+      "version": "7",
+      "when": 1781524370000,
+      "tag": "0077_challenges",
+      "breakpoints": true
+    },
+    {
+      "idx": 78,
+      "version": "7",
+      "when": 1781526309000,
+      "tag": "0078_makeup_credits",
+      "breakpoints": true
+    },
+    {
+      "idx": 79,
+      "version": "7",
+      "when": 1781526725000,
+      "tag": "0079_orders",
+      "breakpoints": true
+    },
+    {
+      "idx": 80,
+      "version": "7",
+      "when": 1781527241000,
+      "tag": "0080_appointment_records",
+      "breakpoints": true
+    },
+    {
+      "idx": 81,
+      "version": "7",
+      "when": 1782230044000,
+      "tag": "0081_service_periods",
+      "breakpoints": true
+    },
+    {
+      "idx": 82,
+      "version": "7",
+      "when": 1782230044001,
+      "tag": "0082_table_reservations",
+      "breakpoints": true
+    },
+    {
+      "idx": 83,
+      "version": "7",
+      "when": 1782230044002,
+      "tag": "0083_table_reservation_tables",
+      "breakpoints": true
+    },
+    {
+      "idx": 84,
+      "version": "7",
+      "when": 1782230044003,
+      "tag": "0084_table_combinations",
+      "breakpoints": true
     }
   ]
 }

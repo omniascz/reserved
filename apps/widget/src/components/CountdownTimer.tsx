@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useT } from '@/i18n/I18nProvider';
 
 export function CountdownTimer({
   expiresAt,
@@ -9,6 +10,7 @@ export function CountdownTimer({
   expiresAt: string;
   onExpire?: () => void;
 }) {
+  const t = useT();
   const [remainingMs, setRemainingMs] = useState<number>(
     Math.max(0, new Date(expiresAt).getTime() - Date.now()),
   );
@@ -35,10 +37,10 @@ export function CountdownTimer({
       className={`text-xs ${expired ? 'text-red-600 font-bold' : 'text-slate-600'} pt-2 border-t border-brand-200`}
     >
       {expired ? (
-        <>⏱ Termín už není rezervovaný — vrať se prosím a vyber znovu.</>
+        <>{t('timer.expired')}</>
       ) : (
         <>
-          ⏱ Slot je pro tebe zamknutý ještě{' '}
+          {t('timer.lockedFor')}{' '}
           <span className="font-mono font-bold">
             {min}:{sec.toString().padStart(2, '0')}
           </span>

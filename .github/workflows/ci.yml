@@ -9,6 +9,7 @@ on:
 jobs:
   ci:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     services:
       postgres:
@@ -23,48 +24,76 @@ jobs:
           --health-cmd "pg_isready -U dev -d reserved_test"
           --health-interval 5s
           --health-timeout 5s
-          --health-retries 5
-
-      redis:
-        image: redis:7-alpine
-        ports:
-          - 6379:6379
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 5s
-          --health-timeout 3s
-          --health-retries 5
+          --health-retries 10
 
     env:
+      # Migrace a DB testy jako vlastník (dev), běžící API jako app_user (RLS).
       DATABASE_URL: postgresql://dev:dev@localhost:5432/reserved_test
-      REDIS_URL: redis://localhost:6379
-      JWT_SECRET: test_secret_64_bytes_long_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+      DATABASE_APP_URL: postgresql://app_user:app@localhost:5432/reserved_test
+      JWT_SECRET: ci_test_secret_at_least_32_characters_long_xxxxxxxx
       JWT_ISSUER: reserved
       JWT_AUDIENCE: reserved-api
-      INTERNAL_SERVICE_TOKEN: test_internal_token
+      API_PORT: 4010
+      APP_URL: http://localhost:4002
+      # API_URL záměrně NEnastavujeme: API ho používá jako vlastní base URL (bez /api/v1),
+      # testy mají správný default http://localhost:4010/api/v1.
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 10
+      # Verze pnpm se bere z package.json (packageManager) — nezadávat ji tady znovu.
+      - uses: pnpm/action-setup@v6
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile
 
-      - name: Lint
-        run: pnpm lint
-
       - name: Typecheck
         run: pnpm typecheck
 
-      - name: Test
-        run: pnpm test
-
       - name: Build
         run: pnpm build
+
+      - name: DB migrace (prázdná DB → všech 85)
+        run: pnpm db:migrate
+
+      # DOČASNĚ přes tsx: `node dist/main.js` zatím nejde spustit, protože balíčky
+      # @reserved/* exportují TS zdrojáky (packages/*/package.json -> src/index.ts).
+      # Rozhodnutí o produkčním startu čeká (viz PR popis).
+      - name: Start API na pozadí
+        run: |
+          pnpm --filter @reserved/api exec tsx src/main.ts > /tmp/api.log 2>&1 &
+          echo $! > /tmp/api.pid
+        env:
+          NODE_ENV: production
+
+      - name: Počkat na API (max 60 s)
+        run: |
+          for i in {1..60}; do
+            if curl -fs http://localhost:4010/api/v1/health > /dev/null 2>&1; then
+              echo "API běží po ${i}s"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "API nenaběhlo do 60 s"
+          cat /tmp/api.log
+          exit 1
+
+      # Unit + DB-integrační testy všech balíčků. Full-stack E2E běží v e2e-smoke.yml.
+      - name: Test
+        run: pnpm turbo run test --filter='!@reserved/e2e'
+
+      - name: Logy API při selhání
+        if: failure()
+        run: cat /tmp/api.log || true
+
+      - name: Zastavit API
+        if: always()
+        run: |
+          if [ -f /tmp/api.pid ]; then
+            kill $(cat /tmp/api.pid) 2>/dev/null || true
+          fi

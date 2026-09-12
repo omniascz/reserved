@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useT } from '@/i18n/I18nProvider';
 import {
   confirmBooking,
   type AvailableSlot,
@@ -32,6 +33,7 @@ export function ContactStep({
   onConfirm: (confirmation: BookingConfirmation) => void;
   onBack: () => void;
 }) {
+  const t = useT();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
@@ -62,12 +64,12 @@ export function ContactStep({
       if (e instanceof ReservedApiError) {
         if (e.code === 'HOLD_EXPIRED') {
           setExpired(true);
-          setError('Časový limit pro dokončení rezervace vypršel. Vyber termín znovu.');
+          setError(t('contact.holdExpired'));
         } else {
           setError(e.message);
         }
       } else {
-        setError(e instanceof Error ? e.message : 'Chyba');
+        setError(e instanceof Error ? e.message : t('contact.genericError'));
       }
     } finally {
       setSubmitting(false);
@@ -77,9 +79,9 @@ export function ContactStep({
   return (
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-2">
-        <h2 className="text-xl font-bold">Tvoje údaje</h2>
+        <h2 className="text-xl font-bold">{t('contact.title')}</h2>
         <button onClick={onBack} className="text-sm text-slate-500 hover:text-slate-900">
-          ← Zpět
+          {t('common.back')}
         </button>
       </div>
 
@@ -114,7 +116,7 @@ export function ContactStep({
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1" htmlFor="name">
-            Jméno a příjmení *
+            {t('contact.name')}
           </label>
           <input
             id="name"
@@ -128,7 +130,7 @@ export function ContactStep({
         </div>
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1" htmlFor="email">
-            Email *
+            {t('contact.email')}
           </label>
           <input
             id="email"
@@ -141,7 +143,7 @@ export function ContactStep({
         </div>
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1" htmlFor="phone">
-            Telefon (volitelně)
+            {t('contact.phone')}
           </label>
           <input
             id="phone"
@@ -154,7 +156,7 @@ export function ContactStep({
         </div>
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1" htmlFor="note">
-            Poznámka (volitelně)
+            {t('contact.note')}
           </label>
           <textarea
             id="note"
@@ -170,12 +172,10 @@ export function ContactStep({
           disabled={submitting || expired}
           className="w-full bg-brand-600 hover:bg-brand-700 text-white font-semibold py-3 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition"
         >
-          {submitting ? 'Potvrzuji…' : 'Potvrdit rezervaci'}
+          {submitting ? t('contact.submitting') : t('contact.submit')}
         </button>
 
-        <p className="text-xs text-slate-500 text-center">
-          Klikem na Potvrdit souhlasíš se zpracováním osobních údajů pro účely rezervace.
-        </p>
+        <p className="text-xs text-slate-500 text-center">{t('contact.gdpr')}</p>
       </form>
     </div>
   );

@@ -24,7 +24,8 @@ import {
 import { and, asc, desc, eq, gt, inArray, isNull, or, sql } from 'drizzle-orm';
 import { schema } from '@reserved/db';
 import { type AppRole, serviceContext, type TenantContext } from '@reserved/rls-multitenancy';
-import { DbService } from '../db/db.service.js';
+import { DbService, type Database } from '../db/db.service.js';
+import { extractCancellationPolicy, resolveRollover } from '../settings/cancellation-policy.js';
 import type {
   AdjustCreditsDto,
   AllocateCreditPackDto,
@@ -222,8 +223,83 @@ export class CreditPacksService {
         })
         .returning();
 
+      // Rollover: přenes nevyčerpané kredity z expirovaných programů zákazníka
+      // na tento nový nákup (dle storno politiky). Zdrojové balíčky se uzavřou.
+      await this.applyRollover(tx, tenantId, customerId, allocated!);
+
       return allocated!;
     });
+  }
+
+  /**
+   * Přenese nevyčerpané kredity z EXPIROVANÝCH balíčků zákazníka na nově
+   * koupený balíček. Respektuje storno politiku (zapnuto? max? prodloužení
+   * platnosti?). Zdrojové (propadlé) balíčky se vynulují a uzavřou jako
+   * `rolled_over`, ať se nepřenesou podruhé.
+   */
+  private async applyRollover(
+    tx: Database,
+    tenantId: string,
+    customerId: string,
+    newPack: { id: string },
+  ): Promise<void> {
+    const [tenant] = await tx
+      .select({ settings: schema.tenants.settings })
+      .from(schema.tenants)
+      .where(eq(schema.tenants.id, tenantId))
+      .limit(1);
+    const policy = extractCancellationPolicy(tenant?.settings);
+    if (!policy.rolloverEnabled) return;
+
+    // Propadlé balíčky se zbytkem kreditů (validUntil v minulosti), kromě nového.
+    const sources = await tx
+      .select({
+        id: schema.customerCreditPacks.id,
+        creditsRemaining: schema.customerCreditPacks.creditsRemaining,
+      })
+      .from(schema.customerCreditPacks)
+      .where(
+        and(
+          eq(schema.customerCreditPacks.tenantId, tenantId),
+          eq(schema.customerCreditPacks.customerId, customerId),
+          eq(schema.customerCreditPacks.status, 'active'),
+          gt(schema.customerCreditPacks.creditsRemaining, 0),
+          sql`${schema.customerCreditPacks.validUntil} IS NOT NULL AND ${schema.customerCreditPacks.validUntil} < now()`,
+          sql`${schema.customerCreditPacks.id} <> ${newPack.id}`,
+        ),
+      )
+      .orderBy(asc(schema.customerCreditPacks.validUntil));
+    if (sources.length === 0) return;
+
+    const unused = sources.reduce((sum, p) => sum + p.creditsRemaining, 0);
+    const { credits, extendDays } = resolveRollover(policy, { unusedCredits: unused });
+    if (credits <= 0) return;
+
+    // Přičti přenesené kredity na nový balíček + případně prodluž platnost.
+    await tx
+      .update(schema.customerCreditPacks)
+      .set({
+        creditsRemaining: sql`${schema.customerCreditPacks.creditsRemaining} + ${credits}`,
+        creditsAtPurchase: sql`${schema.customerCreditPacks.creditsAtPurchase} + ${credits}`,
+        validUntil:
+          extendDays > 0
+            ? sql`CASE WHEN ${schema.customerCreditPacks.validUntil} IS NULL THEN NULL ELSE ${schema.customerCreditPacks.validUntil} + (${extendDays} * interval '1 day') END`
+            : schema.customerCreditPacks.validUntil,
+        note: sql`coalesce(${schema.customerCreditPacks.note}, '') || ${` [+${credits} přeneseno z předchozího programu]`}`,
+        updatedAt: new Date(),
+      })
+      .where(eq(schema.customerCreditPacks.id, newPack.id));
+
+    // Uzavři zdrojové (propadlé) balíčky — ať se nepřenesou znovu.
+    await tx
+      .update(schema.customerCreditPacks)
+      .set({ creditsRemaining: 0, status: 'rolled_over', updatedAt: new Date() })
+      .where(
+        inArray(
+          schema.customerCreditPacks.id,
+          sources.map((s) => s.id),
+        ),
+      );
   }
 
   /**
@@ -447,7 +523,10 @@ export class CreditPacksService {
           sql`${schema.customerCreditPacks.corporateAccountId} ASC NULLS FIRST`,
           // Pak FIFO podle expirace.
           asc(schema.customerCreditPacks.validUntil),
-        );
+        )
+        // Row-lock: zabrání dvojímu odečtu stejného kreditu při souběžných
+        // rezervacích. Druhá transakce počká a přečte aktualizovaný zůstatek.
+        .for('update');
 
       // 2. Najdi prvni co matchne service+branch
       for (const alloc of candidates) {
@@ -535,12 +614,26 @@ export class CreditPacksService {
         .limit(1);
       if (existingRefund) return null;
 
+      // Načti balíček pod zámkem — rozhodneme, zda ho re-aktivovat.
+      const [alloc] = await tx
+        .select({
+          validUntil: schema.customerCreditPacks.validUntil,
+        })
+        .from(schema.customerCreditPacks)
+        .where(eq(schema.customerCreditPacks.id, originalUse.customerCreditPackId))
+        .limit(1)
+        .for('update');
+      // Expirovaný balíček NEoživujeme na 'active' — kredit vrátíme do evidence, ale
+      // nesmí se tvářit jako použitelný (deduct ho stejně filtruje dle validUntil).
+      const isExpired = alloc?.validUntil != null && alloc.validUntil.getTime() <= Date.now();
+
       // Add credits back
       await tx
         .update(schema.customerCreditPacks)
         .set({
           creditsRemaining: sql`${schema.customerCreditPacks.creditsRemaining} + ${originalUse.creditsDeducted}`,
-          status: 'active', // re-activate i kdyz byl used_up
+          // Re-aktivuj jen neexpirovaný (used_up → active); expirovaný necháme být.
+          ...(isExpired ? {} : { status: 'active' as const }),
           updatedAt: new Date(),
         })
         .where(eq(schema.customerCreditPacks.id, originalUse.customerCreditPackId));
@@ -582,7 +675,8 @@ export class CreditPacksService {
           ),
         )
         .orderBy(asc(schema.customerCreditPacks.validUntil))
-        .limit(1);
+        .limit(1)
+        .for('update'); // row-lock proti souběžnému odečtu
 
       if (!alloc) return null;
 

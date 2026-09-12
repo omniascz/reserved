@@ -265,4 +265,40 @@ export class AvailabilityService {
       return results;
     });
   }
+
+  /**
+   * Měsíční přehled dostupnosti (sprint 10.18) — pro vkládací kalendář.
+   * Pro každý den měsíce spočítá počet volných slotů (napříč zaměstnanci).
+   * Jeden request místo ~30 z klienta.
+   */
+  async availableDays(input: {
+    tenantId: string;
+    serviceId: string;
+    employeeId?: string | null;
+    branchId?: string | null;
+    month: string; // YYYY-MM
+    timezone: string;
+  }): Promise<Array<{ date: string; slotCount: number }>> {
+    const [yStr, mStr] = input.month.split('-');
+    const y = Number(yStr);
+    const m = Number(mStr); // 1-based
+    // Date.UTC(y, m, 0) = poslední den měsíce m (m jako 0-based index = další měsíc, den 0).
+    const daysInMonth = new Date(Date.UTC(y, m, 0)).getUTCDate();
+
+    const out: Array<{ date: string; slotCount: number }> = [];
+    for (let d = 1; d <= daysInMonth; d++) {
+      const date = `${input.month}-${String(d).padStart(2, '0')}`;
+      const perEmp = await this.query({
+        tenantId: input.tenantId,
+        serviceId: input.serviceId,
+        employeeId: input.employeeId ?? null,
+        branchId: input.branchId ?? null,
+        date,
+        timezone: input.timezone,
+      });
+      const slotCount = perEmp.reduce((sum, e) => sum + e.slots.length, 0);
+      out.push({ date, slotCount });
+    }
+    return out;
+  }
 }

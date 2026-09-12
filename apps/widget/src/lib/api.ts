@@ -1,7 +1,7 @@
 // API klient pro Reserved public endpointy.
 // Žádný auth — tenant identifikován slug-em v URL.
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api/v1';
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4010/api/v1';
 
 export interface ApiError {
   code: string;
@@ -46,9 +46,19 @@ async function fetchApi<T>(path: string, init?: RequestInit): Promise<T> {
 
 // ─── Tenant info ──────────────────────────────────────────────────────
 
+export interface TenantTheme {
+  primaryColor?: string;
+  borderRadius?: 'none' | 'sm' | 'md' | 'lg' | 'xl';
+  logoUrl?: string;
+  fontFamily?: 'system' | 'serif' | 'sans';
+  backgroundColor?: string;
+  customCss?: string;
+}
+
 export interface TenantInfo {
   slug: string;
   name: string;
+  theme?: TenantTheme;
 }
 
 export async function getTenantInfo(slug: string): Promise<TenantInfo> {
@@ -127,6 +137,26 @@ export interface AvailabilityForEmployee {
   slots: AvailableSlot[];
 }
 
+/** Měsíční přehled dostupnosti (sprint 10.18) — počet volných slotů per den. */
+export interface AvailableDay {
+  date: string; // YYYY-MM-DD
+  slotCount: number;
+}
+
+export async function getAvailableDays(
+  slug: string,
+  serviceId: string,
+  month: string, // YYYY-MM
+  employeeId?: string,
+): Promise<AvailableDay[]> {
+  const params = new URLSearchParams({ serviceId, month });
+  if (employeeId) params.append('employeeId', employeeId);
+  const { data } = await fetchApi<{ data: AvailableDay[] }>(
+    `/public/${slug}/availability-days?${params.toString()}`,
+  );
+  return data;
+}
+
 export async function getAvailability(
   slug: string,
   serviceId: string,
@@ -186,5 +216,96 @@ export async function confirmBooking(
     method: 'POST',
     body: JSON.stringify(input),
   });
+  return data;
+}
+
+// ─── Skupinové lekce (sprint 10.0) ────────────────────────────────────
+
+export interface PublicClassSession {
+  id: string;
+  serviceId: string;
+  branchId: string;
+  employeeId: string | null;
+  employeeName: string | null;
+  startsAt: string;
+  endsAt: string;
+  capacity: number;
+  bookedCount: number;
+  freeSpots: number;
+}
+
+export async function listClassSessions(
+  slug: string,
+  serviceId: string,
+  range?: { from?: string; to?: string },
+): Promise<PublicClassSession[]> {
+  const params = new URLSearchParams({ serviceId });
+  if (range?.from) params.append('from', range.from);
+  if (range?.to) params.append('to', range.to);
+  const { data } = await fetchApi<{ data: PublicClassSession[] }>(
+    `/public/${slug}/class-sessions?${params.toString()}`,
+  );
+  return data;
+}
+
+export async function joinClassSession(
+  slug: string,
+  sessionId: string,
+  input: {
+    customerName: string;
+    customerEmail: string;
+    customerPhone?: string | null;
+    customerNote?: string | null;
+    spotLabel?: string | null;
+  },
+): Promise<BookingConfirmation> {
+  const { data } = await fetchApi<{ data: BookingConfirmation }>(
+    `/public/${slug}/class-sessions/${sessionId}/join`,
+    { method: 'POST', body: JSON.stringify(input) },
+  );
+  return data;
+}
+
+export interface SessionSpots {
+  spotCount: number;
+  taken: string[];
+  free: string[];
+}
+
+/** Mapa míst v sále (spot booking) — která jsou volná/obsazená. */
+export async function getSessionSpots(slug: string, sessionId: string): Promise<SessionSpots> {
+  const { data } = await fetchApi<{ data: SessionSpots }>(
+    `/public/${slug}/class-sessions/${sessionId}/spots`,
+  );
+  return data;
+}
+
+/** Rozvrh (sprint 10.17) — všechny otevřené lekce v období, napříč službami. */
+export async function listAllClassSessions(
+  slug: string,
+  range: { from: string; to: string },
+): Promise<PublicClassSession[]> {
+  const params = new URLSearchParams({ from: range.from, to: range.to });
+  const { data } = await fetchApi<{ data: PublicClassSession[] }>(
+    `/public/${slug}/class-sessions?${params.toString()}`,
+  );
+  return data;
+}
+
+export interface WaitlistEntry {
+  id: string;
+  position: number;
+  status: string;
+}
+
+export async function joinClassWaitlist(
+  slug: string,
+  sessionId: string,
+  input: { customerName: string; customerEmail: string; customerPhone?: string | null },
+): Promise<WaitlistEntry> {
+  const { data } = await fetchApi<{ data: WaitlistEntry }>(
+    `/public/${slug}/class-sessions/${sessionId}/waitlist`,
+    { method: 'POST', body: JSON.stringify(input) },
+  );
   return data;
 }
