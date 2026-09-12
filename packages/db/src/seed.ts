@@ -13,6 +13,9 @@ import {
   serviceCategories,
   customers,
   bookings,
+  classSessions,
+  classSessionWaitlist,
+  resources,
 } from './schema/index.js';
 
 const DEMO_EMAIL = 'admin@demo.local';
@@ -372,7 +375,378 @@ async function seed(): Promise<void> {
   console.log(`  Rezervace:   ${pastCount} v minulosti (dokončené) + ${futureCount} v budoucnu`);
   console.log(`  Login:       ${DEMO_EMAIL}  /  ${DEMO_PASSWORD}`);
   console.log(`  Admin:       http://localhost:4002  (tenant: demo)\n`);
+  await seedFitness();
   process.exit(0);
+}
+
+const FITNESS_EMAIL = 'admin@fitness.local';
+const FITNESS_PASSWORD = 'fitness123';
+const FITNESS_TENANT_SLUG = 'fitness';
+
+/** Krátký kód rezervace do lekce — stejný formát jako API (L-XXXX-XXXX). */
+function lessonCode(): string {
+  const part = () =>
+    randomBytes(2)
+      .toString('hex')
+      .toUpperCase()
+      .replace(/[0OIL1]/g, 'X');
+  return `L-${part()}-${part()}`;
+}
+
+/**
+ * Druhý demo tenant: fitness/EMS studio se skupinovými lekcemi.
+ * Tenant `demo` (kadeřnictví) zůstává beze změny.
+ *
+ * Vytvoří stav, na kterém jde kliknout všechno z admin UI lekcí:
+ *   - poloprázdnou skupinovou lekci
+ *   - plnou lekci s pořadníkem
+ *   - EMS lekci na konkrétním přístroji
+ *   - minulou lekci s vyplněnou docházkou (přišel / nepřišel)
+ */
+async function seedFitness(): Promise<void> {
+  console.log('Seeding fitness demo data...');
+
+  const [tenant] = await db
+    .insert(tenants)
+    .values({
+      slug: FITNESS_TENANT_SLUG,
+      name: 'Fitness Demo',
+      plan: 'business',
+      status: 'active',
+      businessType: 'fitness',
+    })
+    .returning();
+  if (!tenant) throw new Error('Failed to insert fitness tenant');
+
+  const [branch] = await db
+    .insert(branches)
+    .values({
+      tenantId: tenant.id,
+      name: 'Studio Karlín',
+      slug: 'karlin',
+      city: 'Praha',
+    })
+    .returning();
+  if (!branch) throw new Error('Failed to insert fitness branch');
+
+  const passwordHash = await argon2.hash(FITNESS_PASSWORD, {
+    type: argon2.argon2id,
+    memoryCost: 19456,
+    timeCost: 2,
+    parallelism: 1,
+  });
+  await db.insert(users).values({
+    tenantId: tenant.id,
+    email: FITNESS_EMAIL,
+    firstName: 'Fitness',
+    lastName: 'Admin',
+    role: 'owner',
+    isActive: true,
+    passwordHash,
+  });
+
+  const [category] = await db
+    .insert(serviceCategories)
+    .values({ tenantId: tenant.id, name: 'Skupinové lekce', sortOrder: 0 })
+    .returning();
+
+  // Skupinová služba (kapacita 12) + EMS služba na přístroj (kapacita 1).
+  const [trx] = await db
+    .insert(services)
+    .values({
+      tenantId: tenant.id,
+      categoryId: category?.id ?? null,
+      name: 'TRX skupinová lekce',
+      description: 'Kruhový trénink na závěsném systému, maximálně 12 lidí.',
+      durationMinutes: 55,
+      bufferBeforeMinutes: 0,
+      bufferAfterMinutes: 5,
+      priceHellers: 25000,
+      currency: 'CZK',
+      color: '#0ea5e9',
+      isPublic: true,
+      capacity: 12,
+      archetype: 'skupinova_lekce',
+      sortOrder: 0,
+      isActive: true,
+    })
+    .returning();
+  if (!trx) throw new Error('Failed to insert TRX service');
+
+  const [ems] = await db
+    .insert(services)
+    .values({
+      tenantId: tenant.id,
+      categoryId: category?.id ?? null,
+      name: 'EMS trénink',
+      description: 'Dvacetiminutový trénink na EMS přístroji, jeden klient na stroj.',
+      durationMinutes: 20,
+      bufferBeforeMinutes: 5,
+      bufferAfterMinutes: 10,
+      priceHellers: 60000,
+      currency: 'CZK',
+      color: '#f97316',
+      isPublic: true,
+      capacity: 1,
+      archetype: 'ems_pristrojovy',
+      sortOrder: 1,
+      isActive: true,
+    })
+    .returning();
+  if (!ems) throw new Error('Failed to insert EMS service');
+
+  const [marek] = await db
+    .insert(employees)
+    .values({
+      tenantId: tenant.id,
+      firstName: 'Marek',
+      lastName: 'Trenér',
+      email: 'marek@fitness.local',
+      title: 'Hlavní trenér',
+      color: '#22c55e',
+      isPublic: true,
+      acceptsOnlineBookings: true,
+      sortOrder: 0,
+      isActive: true,
+    })
+    .returning();
+  if (!marek) throw new Error('Failed to insert fitness employee');
+
+  await db
+    .insert(employeeBranches)
+    .values({ tenantId: tenant.id, employeeId: marek.id, branchId: branch.id, isPrimary: true });
+  await db.insert(employeeServices).values([
+    { tenantId: tenant.id, employeeId: marek.id, serviceId: trx.id },
+    { tenantId: tenant.id, employeeId: marek.id, serviceId: ems.id },
+  ]);
+  await db.insert(employeeWorkingHours).values(
+    WEEKDAYS.map((dayOfWeek) => ({
+      tenantId: tenant.id,
+      employeeId: marek.id,
+      branchId: branch.id,
+      dayOfWeek,
+      startTime: '08:00:00',
+      endTime: '20:00:00',
+      isActive: true,
+    })),
+  );
+
+  // Dva EMS přístroje — bez nich nelze EMS lekci vypsat.
+  const machineRows = await db
+    .insert(resources)
+    .values([
+      { tenantId: tenant.id, branchId: branch.id, name: 'EMS přístroj #1', type: 'ems_machine' },
+      { tenantId: tenant.id, branchId: branch.id, name: 'EMS přístroj #2', type: 'ems_machine' },
+    ])
+    .returning();
+  const machineOne = machineRows[0];
+  if (!machineOne) throw new Error('Failed to insert EMS machines');
+
+  const customerRows = (await db
+    .insert(customers)
+    .values([
+      {
+        tenantId: tenant.id,
+        firstName: 'Klára',
+        lastName: 'Veselá',
+        email: 'klara@fitness.local',
+        phone: '+420611111111',
+      },
+      {
+        tenantId: tenant.id,
+        firstName: 'Tomáš',
+        lastName: 'Horák',
+        email: 'tomas.horak@fitness.local',
+        phone: '+420612222222',
+      },
+      {
+        tenantId: tenant.id,
+        firstName: 'Nikola',
+        lastName: 'Králová',
+        email: 'nikola@fitness.local',
+        phone: '+420613333333',
+      },
+      {
+        tenantId: tenant.id,
+        firstName: 'Radek',
+        lastName: 'Pokorný',
+        email: 'radek@fitness.local',
+        phone: '+420614444444',
+      },
+      {
+        tenantId: tenant.id,
+        firstName: 'Zuzana',
+        lastName: 'Marková',
+        email: 'zuzana@fitness.local',
+        phone: '+420615555555',
+      },
+      {
+        tenantId: tenant.id,
+        firstName: 'Ondřej',
+        lastName: 'Beneš',
+        email: 'ondrej@fitness.local',
+        phone: '+420616666666',
+      },
+    ])
+    .returning()) as SeedCustomer[];
+  const [klara, tomasH, nikola, radek, zuzana, ondrej] = customerRows;
+  if (!klara || !tomasH || !nikola || !radek || !zuzana || !ondrej) {
+    throw new Error('Failed to insert fitness customers');
+  }
+
+  // Zúžení typu z `if (!tenant) throw` se do vnořené funkce nepřenese, proto
+  // si id vytáhneme do proměnných, které nejsou volitelné.
+  const tenantId = tenant.id;
+  const branchId = branch.id;
+
+  /** Vypíše lekci a přihlásí do ní dané klienty (booking = účastník). */
+  async function createSession(opts: {
+    service: SeedService;
+    startsAt: Date;
+    capacity: number;
+    employeeId: string | null;
+    resourceId: string | null;
+    status: 'open' | 'completed';
+    participants: Array<{
+      customer: SeedCustomer;
+      status: 'confirmed' | 'completed' | 'no_show';
+    }>;
+  }): Promise<string> {
+    const endsAt = new Date(opts.startsAt.getTime() + opts.service.durationMinutes * 60_000);
+    const bufferStartsAt = new Date(
+      opts.startsAt.getTime() - opts.service.bufferBeforeMinutes * 60_000,
+    );
+    const bufferEndsAt = new Date(endsAt.getTime() + opts.service.bufferAfterMinutes * 60_000);
+
+    const [session] = await db
+      .insert(classSessions)
+      .values({
+        tenantId,
+        branchId,
+        serviceId: opts.service.id,
+        employeeId: opts.employeeId,
+        resourceId: opts.resourceId,
+        startsAt: opts.startsAt,
+        endsAt,
+        bufferStartsAt,
+        bufferEndsAt,
+        capacity: opts.capacity,
+        bookedCount: opts.participants.length,
+        status: opts.status,
+      })
+      .returning();
+    if (!session) throw new Error('Failed to insert class session');
+
+    if (opts.participants.length > 0) {
+      await db.insert(bookings).values(
+        opts.participants.map((p) => ({
+          tenantId,
+          branchId,
+          serviceId: opts.service.id,
+          employeeId: opts.employeeId,
+          sessionId: session.id,
+          customerId: p.customer.id,
+          customerName: `${p.customer.firstName} ${p.customer.lastName}`,
+          customerEmail: p.customer.email,
+          customerPhone: p.customer.phone,
+          startsAt: opts.startsAt,
+          endsAt,
+          bufferStartsAt,
+          bufferEndsAt,
+          status: p.status,
+          pricePaidHellers: opts.service.priceHellers,
+          currency: opts.service.currency,
+          referenceCode: lessonCode(),
+          completedAt: p.status === 'completed' ? endsAt : null,
+          metadata: { source: 'seed', kind: 'class_session' },
+        })),
+      );
+    }
+    return session.id;
+  }
+
+  // 1. Poloprázdná skupinová lekce (4 z 12).
+  await createSession({
+    service: trx,
+    startsAt: workdayAt(2, 17),
+    capacity: 12,
+    employeeId: marek.id,
+    resourceId: null,
+    status: 'open',
+    participants: [
+      { customer: klara, status: 'confirmed' },
+      { customer: tomasH, status: 'confirmed' },
+      { customer: nikola, status: 'confirmed' },
+      { customer: radek, status: 'confirmed' },
+    ],
+  });
+
+  // 2. Plná lekce (3 z 3) + pořadník se třemi čekajícími.
+  const fullSessionId = await createSession({
+    service: trx,
+    startsAt: workdayAt(4, 18),
+    capacity: 3,
+    employeeId: marek.id,
+    resourceId: null,
+    status: 'open',
+    participants: [
+      { customer: klara, status: 'confirmed' },
+      { customer: tomasH, status: 'confirmed' },
+      { customer: nikola, status: 'confirmed' },
+    ],
+  });
+  await db.insert(classSessionWaitlist).values(
+    [radek, zuzana, ondrej].map((c, i) => ({
+      tenantId: tenant.id,
+      sessionId: fullSessionId,
+      customerId: c.id,
+      customerName: `${c.firstName} ${c.lastName}`,
+      customerEmail: c.email,
+      customerPhone: c.phone,
+      position: i + 1,
+      status: 'waiting',
+    })),
+  );
+
+  // 3. EMS lekce na přístroji #1 — bez trenéra, kapacita 1, obsazená.
+  await createSession({
+    service: ems,
+    startsAt: workdayAt(3, 9),
+    capacity: 1,
+    employeeId: null,
+    resourceId: machineOne.id,
+    status: 'open',
+    participants: [{ customer: zuzana, status: 'confirmed' }],
+  });
+
+  // 4. Minulá lekce s vyplněnou docházkou: dva přišli, jeden ne.
+  await createSession({
+    service: trx,
+    startsAt: workdayAt(-7, 17),
+    capacity: 12,
+    employeeId: marek.id,
+    resourceId: null,
+    status: 'completed',
+    participants: [
+      { customer: klara, status: 'completed' },
+      { customer: tomasH, status: 'completed' },
+      { customer: nikola, status: 'no_show' },
+    ],
+  });
+
+  console.log(`\n✓ Fitness seed OK`);
+  console.log(`  Tenant:      ${tenant.slug} (${tenant.id})`);
+  console.log(`  Pobočka:     ${branch.name}`);
+  console.log(
+    `  Služby:      TRX skupinová lekce (55 min, kap. 12) · EMS trénink (20 min, kap. 1)`,
+  );
+  console.log(`  Trenér:      Marek Trenér — po–pá 8–20`);
+  console.log(`  Přístroje:   EMS přístroj #1, #2`);
+  console.log(`  Klienti:     ${customerRows.length}`);
+  console.log(`  Lekce:       poloprázdná (4/12) · plná (3/3) + 3 v pořadníku ·`);
+  console.log(`               EMS na přístroji #1 (1/1) · minulá s docházkou (2 přišli, 1 ne)`);
+  console.log(`  Login:       ${FITNESS_EMAIL}  /  ${FITNESS_PASSWORD}`);
+  console.log(`  Admin:       http://localhost:4002  (tenant: fitness)\n`);
 }
 
 seed().catch((err) => {
