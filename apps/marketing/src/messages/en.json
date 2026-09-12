@@ -392,5 +392,41 @@
       "dataBox": "Data box ID:"
     },
     "billingNote": "(Placeholder details — production will use the registered company info.)"
+  },
+  "legalTerms": {
+    "title": "Terms of Service",
+    "subtitle": "General terms and conditions of the Reserved service.",
+    "placeholderNote": "This page is a prepared heading structure. The legal text must be supplied before the site goes live.",
+    "sections": {
+      "provider": "Provider and scope of these terms",
+      "definitions": "Definitions",
+      "contract": "Formation, duration and trial period",
+      "prices": "Pricing, invoicing and payment terms",
+      "providerObligations": "Provider rights and obligations",
+      "customerObligations": "Customer rights and obligations",
+      "availability": "Service availability, support and SLA",
+      "personalData": "Personal data processing and data processing agreement",
+      "liability": "Liability and its limitations",
+      "termination": "Termination and data deletion",
+      "changes": "Changes to these terms",
+      "final": "Final provisions and governing law"
+    }
+  },
+  "legalPrivacy": {
+    "title": "Privacy Policy",
+    "subtitle": "How we process personal data (GDPR).",
+    "placeholderNote": "This page is a prepared heading structure. The legal text must be supplied before the site goes live.",
+    "sections": {
+      "controller": "Data controller",
+      "dataCategories": "Personal data we process",
+      "purposes": "Purposes and legal basis",
+      "processors": "Processors and sub-processors",
+      "retention": "Data retention periods",
+      "rights": "Data subject rights (access, rectification, erasure, portability)",
+      "cookies": "Cookies and consent",
+      "thirdCountries": "Transfers to third countries",
+      "security": "Data security",
+      "contact": "Contact and right to lodge a complaint"
+    }
   }
 }

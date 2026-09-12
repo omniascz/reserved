@@ -6,7 +6,16 @@ import type { MetadataRoute } from 'next';
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://reserved.cz';
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4010/api/v1';
 
-const STATIC_PATHS = ['', '/cenik', '/funkce', '/o-nas', '/kontakt', '/katalog'];
+const STATIC_PATHS = [
+  '',
+  '/cenik',
+  '/funkce',
+  '/o-nas',
+  '/kontakt',
+  '/katalog',
+  '/pravni/obchodni-podminky',
+  '/pravni/gdpr',
+];
 const VERTICALS = ['barber', 'fitness', 'ems', 'kurty', 'ordinace'];
 
 interface CatalogListing {

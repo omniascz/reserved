@@ -13,7 +13,12 @@ import { BadRequestException } from '@nestjs/common';
 import { CurrentUser } from '../auth/decorators/current-user.decorator.js';
 import type { AccessTokenPayload } from '../auth/auth.types.js';
 import { ZodValidationPipe } from '../auth/zod-validation.pipe.js';
-import { SetCommissionSchema, type SetCommissionDto } from './dto/payroll.dto.js';
+import {
+  GeneratePayoutSchema,
+  SetCommissionSchema,
+  type GeneratePayoutDto,
+  type SetCommissionDto,
+} from './dto/payroll.dto.js';
 import { PayrollService } from './payroll.service.js';
 
 @Controller('admin/payroll')
@@ -71,20 +76,13 @@ export class PayrollController {
   @Post('payouts/generate')
   async generate(
     @CurrentUser() user: AccessTokenPayload,
-    @Body() body: { from?: string; to?: string; employeeId?: string },
+    @Body(new ZodValidationPipe(GeneratePayoutSchema)) dto: GeneratePayoutDto,
   ) {
-    const fromDate = new Date(body.from ?? '');
-    const toDate = new Date(body.to ?? '');
-    if (Number.isNaN(fromDate.getTime()) || Number.isNaN(toDate.getTime())) {
-      throw new BadRequestException({
-        error: { code: 'INVALID_RANGE', message: 'from a to musí být platná ISO data.' },
-      });
-    }
     return {
       data: await this.svc.generatePayout(user.tenantId, user.sub, user.role, {
-        from: fromDate,
-        to: toDate,
-        employeeId: body.employeeId || undefined,
+        from: new Date(dto.from),
+        to: new Date(dto.to),
+        employeeId: dto.employeeId || undefined,
       }),
     };
   }

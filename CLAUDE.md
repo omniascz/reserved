@@ -58,9 +58,17 @@ Provozní pravidla:
 - `drizzle-kit generate` musí hlásit **„No schema changes"**. Když něco vygeneruje, rozešlo se
   `schema/*.ts` se snapshotem — zkontroluj to, než cokoli commitneš.
 - Nová migrace = SQL soubor + záznam v `drizzle/meta/_journal.json` (jinak ji `db:migrate` nespustí).
-- Pozn.: 87 starších cizích klíčů má v DB jméno od Postgresu (`*_fkey`), zatímco drizzle je
-  pojmenovává po svém (`*_tenant_id_tenants_id_fk`). Definice jsou shodné, ale generovaná migrace
-  nad těmito tabulkami by je mohla chtít přejmenovat — pak SQL zkontroluj ručně.
+  ⚠️ **87 cizích klíčů má názvy vygenerované Postgresem (`*_fkey`), ne drizzle konvenci**
+  (`*_tenant_id_tenants_id_fk`). Vznikly tím, že migrace zapisují `REFERENCES` přímo u sloupce.
+  **Definice jsou správné** — odkazy, `ON DELETE` i cílové tabulky sedí; liší se jen jména.
+
+Drizzle o těch jmenech neví, takže vygenerovaná migrace nad těmito tabulkami může chtít cizí
+klíče **zahodit a vytvořit znovu pod jiným jménem**. Takové přejmenování je zbytečné, při běhu
+drží zámky a u velkých tabulek může znamenat odstávku.
+
+**Nikdy nespouštěj vygenerovanou migraci bez přečtení SQL.** Když obsahuje `DROP CONSTRAINT`
+nebo `ADD CONSTRAINT` u cizího klíče, který se věcně nemění, příslušné příkazy z migrace smaž
+(nebo FK pojmenuj ve `schema/*.ts` přes `foreignKey({ name: '…' })` tak, aby odpovídal DB).
 
 ## Lokální porty
 
