@@ -392,5 +392,41 @@
       "dataBox": "Datová schránka:"
     },
     "billingNote": "(Údaje jsou placeholder — produkce vyplní reálnou s.r.o. po zápisu do OR.)"
+  },
+  "legalTerms": {
+    "title": "Obchodní podmínky",
+    "subtitle": "Všeobecné obchodní podmínky služby Reserved.",
+    "placeholderNote": "Tato stránka je připravená struktura nadpisů. Právní text dodá provozovatel — bez něj nesmí web jít do produkce.",
+    "sections": {
+      "provider": "Poskytovatel a předmět podmínek",
+      "definitions": "Definice pojmů",
+      "contract": "Vznik, trvání a zkušební období smlouvy",
+      "prices": "Ceny, fakturace a platební podmínky",
+      "providerObligations": "Práva a povinnosti poskytovatele",
+      "customerObligations": "Práva a povinnosti zákazníka",
+      "availability": "Dostupnost služby, podpora a SLA",
+      "personalData": "Zpracování osobních údajů a zpracovatelská smlouva",
+      "liability": "Odpovědnost za škodu a její omezení",
+      "termination": "Ukončení smlouvy a výmaz dat",
+      "changes": "Změny obchodních podmínek",
+      "final": "Závěrečná ustanovení a rozhodné právo"
+    }
+  },
+  "legalPrivacy": {
+    "title": "Ochrana osobních údajů",
+    "subtitle": "Zásady zpracování osobních údajů (GDPR).",
+    "placeholderNote": "Tato stránka je připravená struktura nadpisů. Právní text dodá provozovatel — bez něj nesmí web jít do produkce.",
+    "sections": {
+      "controller": "Správce osobních údajů",
+      "dataCategories": "Jaké osobní údaje zpracováváme",
+      "purposes": "Účely a právní základ zpracování",
+      "processors": "Zpracovatelé a subdodavatelé",
+      "retention": "Doba uchování údajů",
+      "rights": "Práva subjektu údajů (přístup, oprava, výmaz, přenositelnost)",
+      "cookies": "Cookies a souhlas s jejich užitím",
+      "thirdCountries": "Předávání údajů do třetích zemí",
+      "security": "Zabezpečení údajů",
+      "contact": "Kontakt a stížnost u ÚOOÚ"
+    }
   }
 }
