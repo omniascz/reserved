@@ -1,4 +1,13 @@
-import { pgTable, uuid, integer, varchar, timestamp, index } from 'drizzle-orm/pg-core';
+import {
+  pgTable,
+  uuid,
+  integer,
+  varchar,
+  timestamp,
+  index,
+  uniqueIndex,
+} from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 import { tenants } from './tenants.js';
 import { employees } from './employees.js';
 import { services } from './services.js';
@@ -29,6 +38,13 @@ export const commissionRules = pgTable(
   (table) => ({
     tenantIdx: index('commission_rules_tenant_idx').on(table.tenantId),
     employeeIdx: index('commission_rules_employee_idx').on(table.employeeId),
+    /** Jedno výchozí pravidlo na zaměstnance a jeden override na službu (migrace 0061). */
+    defaultUidx: uniqueIndex('commission_rules_default_uidx')
+      .on(table.tenantId, table.employeeId)
+      .where(sql`service_id IS NULL`),
+    serviceUidx: uniqueIndex('commission_rules_service_uidx')
+      .on(table.tenantId, table.employeeId, table.serviceId)
+      .where(sql`service_id IS NOT NULL`),
   }),
 );
 

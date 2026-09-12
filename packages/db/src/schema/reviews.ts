@@ -6,6 +6,7 @@ import {
   integer,
   timestamp,
   index,
+  uniqueIndex,
   check,
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
@@ -44,6 +45,8 @@ export const reviews = pgTable(
     serviceIdx: index('reviews_service_idx').on(table.tenantId, table.serviceId, table.status),
     employeeIdx: index('reviews_employee_idx').on(table.tenantId, table.employeeId, table.status),
     ratingRange: check('reviews_rating_range', sql`${table.rating} >= 1 AND ${table.rating} <= 5`),
+    /** BYZNYS PRAVIDLO: jedna recenze na rezervaci (migrace 0054). */
+    bookingUniq: uniqueIndex('reviews_booking_uniq').on(table.bookingId),
   }),
 );
 

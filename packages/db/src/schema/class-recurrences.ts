@@ -7,10 +7,13 @@ import {
   date,
   timestamp,
   index,
+  foreignKey,
 } from 'drizzle-orm/pg-core';
 import { tenants } from './tenants.js';
 import { services } from './services.js';
 import { employees } from './employees.js';
+import { branches } from './branches.js';
+import { resources } from './resources.js';
 
 // Opakovaný rozvrh skupinových lekcí (sprint 10.25). Pravidlo „každé Po/St/Pá
 // 18:00 na 3 měsíce" → vygeneruje class_sessions (každá nese recurrence_id).
@@ -43,6 +46,17 @@ export const classRecurrences = pgTable(
   },
   (table) => ({
     tenantIdx: index('class_recurrences_tenant_idx').on(table.tenantId),
+    /** FK se jmény dle DB (migrace 0068). */
+    resourceFk: foreignKey({
+      columns: [table.resourceId],
+      foreignColumns: [resources.id],
+      name: 'class_recurrences_resource_id_fkey',
+    }).onDelete('set null'),
+    branchFk: foreignKey({
+      columns: [table.branchId],
+      foreignColumns: [branches.id],
+      name: 'class_recurrences_branch_id_fkey',
+    }).onDelete('set null'),
   }),
 );
 

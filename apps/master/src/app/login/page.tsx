@@ -6,7 +6,8 @@ import { login, setAuth, MasterApiError } from '@/lib/api';
 
 export default function LoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState('omniascz@gmail.com');
+  // Předplnění jen z dev-login proměnné — žádný konkrétní účet v kódu.
+  const [email, setEmail] = useState(process.env.NEXT_PUBLIC_DEV_LOGIN_EMAIL ?? '');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);

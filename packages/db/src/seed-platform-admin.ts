@@ -1,6 +1,9 @@
 // Idempotentni seed pro prvniho master admina (provozovatele platformy).
-// Spustit: DATABASE_URL=... pnpm --filter @reserved/db exec tsx src/seed-platform-admin.ts
+// Spustit:
+//   DATABASE_URL=... PLATFORM_ADMIN_EMAIL=... PLATFORM_ADMIN_PASSWORD=... \
+//     pnpm --filter @reserved/db exec tsx src/seed-platform-admin.ts
 //
+// E-mail ani heslo NEJSOU v kodu — bez nich seed skonci chybou (zadne defaulty).
 // Pouziva service role aby obesel RLS policy na platform_admins.
 
 import * as argon2 from 'argon2';
@@ -8,8 +11,20 @@ import { eq } from 'drizzle-orm';
 import { db } from './client.js';
 import { platformAdmins } from './schema/index.js';
 
-const ADMIN_EMAIL = process.env.PLATFORM_ADMIN_EMAIL ?? 'omniascz@gmail.com';
-const ADMIN_PASSWORD = process.env.PLATFORM_ADMIN_PASSWORD ?? 'reserved2026';
+/** Povinna env promenna — bez ni seed skonci chybou (zadny default v kodu). */
+function requireEnv(name: string): string {
+  const value = process.env[name];
+  if (!value) {
+    console.error(
+      `Seed selhal: nastav ${name} (potreba jsou PLATFORM_ADMIN_EMAIL i PLATFORM_ADMIN_PASSWORD).`,
+    );
+    process.exit(1);
+  }
+  return value;
+}
+
+const ADMIN_EMAIL = requireEnv('PLATFORM_ADMIN_EMAIL');
+const ADMIN_PASSWORD = requireEnv('PLATFORM_ADMIN_PASSWORD');
 const ADMIN_FIRST_NAME = process.env.PLATFORM_ADMIN_FIRST_NAME ?? 'Provozovatel';
 const ADMIN_LAST_NAME = process.env.PLATFORM_ADMIN_LAST_NAME ?? 'Reserved';
 
@@ -47,8 +62,9 @@ async function main(): Promise<void> {
     }
   });
 
-  console.log(`\nMaster admin login: ${ADMIN_EMAIL}  /  ${ADMIN_PASSWORD}`);
-  console.log(`URL po dokonceni sprintu 5.1: http://localhost:3004\n`);
+  // Heslo zamerne NEvypisujeme.
+  console.log(`\nMaster admin: ${ADMIN_EMAIL} (heslo z PLATFORM_ADMIN_PASSWORD)`);
+  console.log(`Master admin bezi na http://localhost:4001\n`);
   process.exit(0);
 }
 

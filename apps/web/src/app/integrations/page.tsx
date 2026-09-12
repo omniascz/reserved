@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { Suspense, useCallback, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { NavHeader } from '@/components/NavHeader';
 import {
@@ -28,7 +28,7 @@ function formatDate(iso: string | null): string {
   });
 }
 
-export default function IntegrationsPage() {
+function IntegrationsContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [employees, setEmployees] = useState<AdminEmployee[]>([]);
@@ -304,5 +304,14 @@ export default function IntegrationsPage() {
         </section>
       </main>
     </div>
+  );
+}
+
+export default function IntegrationsPage() {
+  // useSearchParams() musí být uvnitř <Suspense>, jinak Next 14 stránku nepřerenderuje.
+  return (
+    <Suspense fallback={<p className="p-6 text-sm text-slate-500">Načítám…</p>}>
+      <IntegrationsContent />
+    </Suspense>
   );
 }

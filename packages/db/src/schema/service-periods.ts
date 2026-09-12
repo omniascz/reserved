@@ -8,7 +8,9 @@ import {
   jsonb,
   timestamp,
   index,
+  check,
 } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 import { tenants } from './tenants.js';
 import { branches } from './branches.js';
 
@@ -64,6 +66,7 @@ export const servicePeriods = pgTable(
   (table) => ({
     tenantIdx: index('service_periods_tenant_idx').on(table.tenantId),
     branchIdx: index('service_periods_branch_idx').on(table.branchId),
+    windowValid: check('service_periods_window_valid', sql`${table.endsAt} > ${table.startsAt}`),
   }),
 );
 

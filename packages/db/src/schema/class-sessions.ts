@@ -1,10 +1,21 @@
-import { pgTable, uuid, varchar, timestamp, integer, index, check } from 'drizzle-orm/pg-core';
+import {
+  pgTable,
+  uuid,
+  varchar,
+  timestamp,
+  integer,
+  index,
+  check,
+  foreignKey,
+} from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { tenants } from './tenants.js';
 import { branches } from './branches.js';
 import { services } from './services.js';
 import { employees } from './employees.js';
 import { resources } from './resources.js';
+import { classRecurrences } from './class-recurrences.js';
+import { courses } from './courses.js';
 
 // Sprint 10.0 — Skupinové lekce / kapacita >1.
 // Reference: MIGRACE-FITNESS.md, předloha Ticketarium fitness-slots/migrations/140_fitness_slots.sql
@@ -70,14 +81,30 @@ export const classSessions = pgTable(
   },
   (table) => ({
     tenantIdx: index('class_sessions_tenant_idx').on(table.tenantId),
-    lookupIdx: index('class_sessions_lookup_idx').on(
-      table.tenantId,
-      table.serviceId,
-      table.branchId,
-      table.startsAt,
-    ),
+    /** Částečný index — vypisujeme jen otevřené lekce (migrace 0050). */
+    lookupIdx: index('class_sessions_lookup_idx')
+      .on(table.tenantId, table.serviceId, table.branchId, table.startsAt)
+      .where(sql`status = 'open'`),
     employeeIdx: index('class_sessions_employee_idx').on(table.employeeId, table.startsAt),
     resourceIdx: index('class_sessions_resource_idx').on(table.resourceId, table.startsAt),
+    courseIdx: index('class_sessions_course_idx').on(table.courseId),
+    recurrenceIdx: index('class_sessions_recurrence_idx').on(table.recurrenceId),
+    /** FK se jmény dle DB (migrace 0068, 0069, 0072). */
+    recurrenceFk: foreignKey({
+      columns: [table.recurrenceId],
+      foreignColumns: [classRecurrences.id],
+      name: 'class_sessions_recurrence_id_fkey',
+    }).onDelete('set null'),
+    courseFk: foreignKey({
+      columns: [table.courseId],
+      foreignColumns: [courses.id],
+      name: 'class_sessions_course_id_fkey',
+    }).onDelete('set null'),
+    prerequisiteServiceFk: foreignKey({
+      columns: [table.prerequisiteServiceId],
+      foreignColumns: [services.id],
+      name: 'class_sessions_prerequisite_service_id_fkey',
+    }).onDelete('set null'),
     capacityPositive: check('class_sessions_capacity_positive', sql`${table.capacity} >= 1`),
     bookedCountRange: check(
       'class_sessions_booked_count_range',

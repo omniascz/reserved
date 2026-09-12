@@ -8,7 +8,9 @@ import {
   integer,
   jsonb,
   index,
+  check,
 } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 import { tenants } from './tenants.js';
 import { customers } from './customers.js';
 import { users } from './users.js';
@@ -116,6 +118,10 @@ export const customerCreditPacks = pgTable(
       table.status,
     ),
     validityIdx: index('customer_credit_packs_validity_idx').on(table.validUntil, table.status),
+    ownerCheck: check(
+      'customer_credit_packs_owner_check',
+      sql`(${table.customerId} IS NOT NULL AND ${table.corporateAccountId} IS NULL) OR (${table.customerId} IS NULL AND ${table.corporateAccountId} IS NOT NULL)`,
+    ),
   }),
 );
 

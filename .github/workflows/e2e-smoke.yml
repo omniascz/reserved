@@ -62,17 +62,19 @@ jobs:
       - name: DB migrace (prázdná DB → všech 85)
         run: pnpm db:migrate
 
-      # DOČASNĚ přes tsx: `node dist/main.js` zatím nejde spustit, protože balíčky
-      # @reserved/* exportují TS zdrojáky (packages/*/package.json -> src/index.ts).
-      # Rozhodnutí o produkčním startu čeká (viz PR popis).
-      - name: Start API na pozadí
+      # turbo sestaví i závislosti API (@reserved/db, rls-multitenancy, …)
+      - name: Build API
+        run: pnpm turbo run build --filter=@reserved/api
+
+      # E2E jedou proti API spuštěnému z dist (node dist/main.js), ne přes tsx.
+      - name: Start API z dist (produkční build)
         run: |
-          pnpm --filter @reserved/api exec tsx src/main.ts > /tmp/api.log 2>&1 &
+          pnpm --filter @reserved/api start > /tmp/api.log 2>&1 &
           echo $! > /tmp/api.pid
         env:
           NODE_ENV: production
 
-      - name: Počkat na API (max 60 s)
+      - name: Ověřit health API z dist (max 60 s)
         run: |
           for i in {1..60}; do
             if curl -fs http://localhost:4010/api/v1/health > /dev/null 2>&1; then

@@ -8,12 +8,16 @@ import {
   boolean,
   jsonb,
   index,
+  uniqueIndex,
+  foreignKey,
 } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 import { tenants } from './tenants.js';
 import { branches } from './branches.js';
 import { employees } from './employees.js';
 import { services } from './services.js';
 import { users } from './users.js';
+import { customers } from './customers.js';
 import { classSessions } from './class-sessions.js';
 import { bookingSeries } from './booking-series.js';
 
@@ -129,8 +133,30 @@ export const bookings = pgTable(
     refCodeIdx: index('bookings_ref_code_idx').on(table.referenceCode),
     branchIdx: index('bookings_branch_idx').on(table.branchId, table.startsAt),
     sessionIdx: index('bookings_session_idx').on(table.sessionId),
-    confirmationTokenIdx: index('bookings_confirmation_token_idx').on(table.confirmationToken),
     seriesIdx: index('bookings_series_idx').on(table.seriesId),
+    /** FK se jménem dle DB (migrace 0011); customer_id je nullable kvůli zpětné kompatibilitě. */
+    customerFk: foreignKey({
+      columns: [table.customerId],
+      foreignColumns: [customers.id],
+      name: 'bookings_customer_id_fk',
+    }).onDelete('set null'),
+    customerIdxV2: index('bookings_customer_idx_v2').on(table.customerId),
+    /** Jednorázový token potvrzení účasti — unikátní, dokud je vyplněný (migrace 0059). */
+    confirmationTokenUidx: uniqueIndex('bookings_confirmation_token_uidx')
+      .on(table.confirmationToken)
+      .where(sql`confirmation_token IS NOT NULL`),
+    /** BYZNYS PRAVIDLO: klient se do jedné lekce nepřihlásí dvakrát (migrace 0050). */
+    sessionCustomerUniq: uniqueIndex('bookings_session_customer_uniq')
+      .on(table.sessionId, table.customerId)
+      .where(
+        sql`session_id IS NOT NULL AND customer_id IS NOT NULL AND status NOT IN ('cancelled', 'no_show')`,
+      ),
+    /** BYZNYS PRAVIDLO: jedno místo v sále může mít jen jeden klient (migrace 0072). */
+    sessionSpotUniq: uniqueIndex('bookings_session_spot_uniq')
+      .on(table.sessionId, table.spotLabel)
+      .where(
+        sql`session_id IS NOT NULL AND spot_label IS NOT NULL AND status NOT IN ('cancelled', 'no_show')`,
+      ),
   }),
 );
 
