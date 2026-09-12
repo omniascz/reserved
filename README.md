@@ -119,7 +119,9 @@ GitHub Actions na push do `main` a na každý PR do `main`:
 
 ## Známá omezení
 
-- `node apps/api/dist/main.js` zatím nejde spustit: balíčky `@reserved/*` exportují TS zdrojáky.
-  Lokálně i v CI se API spouští přes `tsx`.
 - ESLint není nakonfigurovaný (`pnpm lint` neprojde) — v CI se lint nespouští.
-- `drizzle-kit generate` zatím vygeneruje diff, protože poslední snapshot je u migrace 0044.
+- Balíčky `@reserved/*` se konzumují jako sestavený `dist`, takže před vývojem musí být
+  jednou sestavené. `pnpm dev` i `pnpm test` to řeší samy (turbo staví závislosti předem);
+  po ruční změně balíčku spusť `pnpm build --filter=@reserved/<balíček>`.
+- Produkční běh API: `pnpm --filter @reserved/api build && pnpm --filter @reserved/api start`
+  (= `node dist/main.js`, čistý Node bez `tsx`).
