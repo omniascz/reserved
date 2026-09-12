@@ -19,6 +19,49 @@
 - **Testy:** Vitest — unit, DB-integrační (DB `reserved_test`) a full-stack E2E proti běžícímu API
   (`tests/e2e`). Žádný Playwright.
 
+## Schéma a migrace
+
+**Zdroj pravdy o struktuře DB jsou SQL migrace** (`packages/db/drizzle/*.sql`), ne `schema/*.ts`.
+Drizzle schéma a jeho snapshot popisují jen tu část, kterou drizzle umí vyjádřit.
+
+`schema/*.ts` + baseline snapshot (`drizzle/meta/0084_snapshot.json`) obsahují sloupce, cizí klíče,
+CHECK omezení, unikátní i částečné indexy. **Snapshot NEobsahuje:**
+
+- **9 indexů patřících k EXCLUDE omezením** (`bookings_no_overlap`, `slot_holds_no_overlap`,
+  `class_sessions_employee_no_overlap`, `class_sessions_resource_no_overlap`,
+  `booking_resources_no_overlap`, `stays_no_overlap`, `logistics_jobs_vehicle_no_overlap`,
+  `logistics_jobs_driver_no_overlap`, `table_reservation_tables_no_overlap`)
+- **9 EXCLUDE omezení** samotných — ochrana proti dvojí rezervaci na úrovni DB
+  (v migracích je 10 příkazů `EXCLUDE USING`, protože `bookings_no_overlap` migrace 0050 zahodí
+  a vytvoří znovu jako částečný)
+- **95 RLS politik** + `ENABLE/FORCE ROW LEVEL SECURITY` — izolace tenantů
+- **SQL funkce `app.current_role_or_null()` a `app.current_tenant_id_or_null()`**, na kterých RLS stojí
+- granty pro roli `app_user`
+
+⚠️ **Tyhle věci žijí JEN v SQL migracích. Když někdo vygeneruje schéma podle snapshotu (např.
+`drizzle-kit push` nebo „přegenerování od nuly"), tiše zmizí** — DB pak vypadá funkčně, ale
+přijde o ochranu proti dvojí rezervaci i o izolaci tenantů. Nové takové objekty proto vždy
+přidávej ruční SQL migrací.
+
+**Unikátní částečné indexy vynucují byznys pravidla a nesmí zmizet:**
+
+| Index                                    | Pravidlo                                        |
+| ---------------------------------------- | ----------------------------------------------- |
+| `bookings_session_customer_uniq`         | klient se do jedné lekce nepřihlásí dvakrát     |
+| `bookings_session_spot_uniq`             | jedno místo v sále může mít jen jeden klient    |
+| `class_session_waitlist_uniq`            | jeden e-mail je v pořadníku lekce nejvýš jednou |
+| `reviews_booking_uniq`                   | jedna recenze na rezervaci                      |
+| `loyalty_transactions_earn_booking_uniq` | body za rezervaci se připíšou jen jednou        |
+
+Provozní pravidla:
+
+- `drizzle-kit generate` musí hlásit **„No schema changes"**. Když něco vygeneruje, rozešlo se
+  `schema/*.ts` se snapshotem — zkontroluj to, než cokoli commitneš.
+- Nová migrace = SQL soubor + záznam v `drizzle/meta/_journal.json` (jinak ji `db:migrate` nespustí).
+- Pozn.: 87 starších cizích klíčů má v DB jméno od Postgresu (`*_fkey`), zatímco drizzle je
+  pojmenovává po svém (`*_tenant_id_tenants_id_fk`). Definice jsou shodné, ale generovaná migrace
+  nad těmito tabulkami by je mohla chtít přejmenovat — pak SQL zkontroluj ručně.
+
 ## Lokální porty
 
 API 4010 · master 4001 · web 4002 · portal 4003 · widget 4004 · marketing 4005 · tenant-site 4006 ·
