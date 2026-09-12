@@ -6,6 +6,7 @@ import {
   Inject,
   Param,
   ParseUUIDPipe,
+  Patch,
   Post,
   Query,
 } from '@nestjs/common';
@@ -16,11 +17,17 @@ import {
   CreateClassSessionSchema,
   CreateRecurrenceSchema,
   JoinClassSessionSchema,
+  ListClassSessionsQuerySchema,
+  ListRecurrencesQuerySchema,
   MarkAttendanceSchema,
+  UpdateClassSessionSchema,
   type CreateClassSessionDto,
   type CreateRecurrenceDto,
   type JoinClassSessionDto,
+  type ListClassSessionsQueryDto,
+  type ListRecurrencesQueryDto,
   type MarkAttendanceDto,
+  type UpdateClassSessionDto,
 } from './dto/class-session.dto.js';
 import { ClassSessionsService } from './class-sessions.service.js';
 
@@ -29,19 +36,26 @@ import { ClassSessionsService } from './class-sessions.service.js';
 export class ClassSessionsController {
   constructor(@Inject(ClassSessionsService) private readonly svc: ClassSessionsService) {}
 
+  /**
+   * Výpis lekcí. `status` výchozí 'open' = otevřené a nezaplněné (dosavadní
+   * chování); 'full' | 'cancelled' | 'completed' | 'all' zpřístupní i ostatní.
+   */
   @Get()
   async listOpen(
     @CurrentUser() user: AccessTokenPayload,
-    @Query('serviceId') serviceId?: string,
-    @Query('from') from?: string,
-    @Query('to') to?: string,
+    @Query(new ZodValidationPipe(ListClassSessionsQuerySchema)) query: ListClassSessionsQueryDto,
   ) {
-    const data = await this.svc.listOpen(user.tenantId, user.sub, user.role, {
-      serviceId,
-      from,
-      to,
-    });
+    const data = await this.svc.listOpen(user.tenantId, user.sub, user.role, query);
     return { data };
+  }
+
+  /** Výpis opakovaných rozvrhů. MUSÍ být nad @Get(':id'), jinak to spolkne UUID parametr. */
+  @Get('recurrences')
+  async listRecurrences(
+    @CurrentUser() user: AccessTokenPayload,
+    @Query(new ZodValidationPipe(ListRecurrencesQuerySchema)) query: ListRecurrencesQueryDto,
+  ) {
+    return { data: await this.svc.listRecurrences(user.tenantId, user.sub, user.role, query) };
   }
 
   @Get(':id')
@@ -64,6 +78,16 @@ export class ClassSessionsController {
   ) {
     const data = await this.svc.create(user.tenantId, user.sub, user.role, dto);
     return { data };
+  }
+
+  /** Editace vypsané lekce — čas, trenér, přístroj, kapacita, věk, prerekvizita. */
+  @Patch(':id')
+  async update(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(new ZodValidationPipe(UpdateClassSessionSchema)) dto: UpdateClassSessionDto,
+  ) {
+    return { data: await this.svc.update(user.tenantId, user.sub, user.role, id, dto) };
   }
 
   /** Opakovaný rozvrh — vygeneruje sérii lekcí (sprint 10.25). */

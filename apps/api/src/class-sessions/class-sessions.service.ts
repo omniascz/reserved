@@ -15,7 +15,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { and, asc, eq, gt, gte, isNull, isNotNull, lt, lte, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, gte, isNull, isNotNull, lt, lte, ne, sql } from 'drizzle-orm';
 import { schema } from '@reserved/db';
 import { type AppRole, type TenantContext, serviceContext } from '@reserved/rls-multitenancy';
 import type { Database } from '../db/db.service.js';
@@ -31,10 +31,13 @@ import { TimePacksService } from '../time-packs/time-packs.service.js';
 import { BundlePacksService } from '../bundle-packs/bundle-packs.service.js';
 import { CreditPacksService } from '../credit-packs/credit-packs.service.js';
 import { MakeupService } from '../makeup/makeup.service.js';
+import { EmailService } from '../email/email.service.js';
 import type {
+  ClassSessionListStatus,
   CreateClassSessionDto,
   CreateRecurrenceDto,
   JoinClassSessionDto,
+  UpdateClassSessionDto,
 } from './dto/class-session.dto.js';
 
 const MANAGE_ROLES: AppRole[] = ['owner', 'manager', 'employee', 'receptionist'];
@@ -72,6 +75,7 @@ export class ClassSessionsService {
     @Inject(BundlePacksService) private readonly bundlePacks: BundlePacksService,
     @Inject(CreditPacksService) private readonly creditPacks: CreditPacksService,
     @Inject(MakeupService) private readonly makeup: MakeupService,
+    @Inject(EmailService) private readonly email: EmailService,
   ) {}
 
   // ─── Permanentky / balíčky na lekce (sprint 10.12) ──────────────────
@@ -334,6 +338,423 @@ export class ClassSessionsService {
         }
         throw err;
       }
+    });
+  }
+
+  // ─── Editace vypsané lekce ──────────────────────────────────────────
+
+  /**
+   * Upraví vypsanou lekci (čas, trenér, přístroj, kapacita, věk, prerekvizita).
+   *
+   * Kolize (trenér, přístroj, pobočka) se vyhodnocují znovu v aplikaci — DB
+   * EXCLUDE omezení jsou jen pojistka a vracela by neurčitou 23P01.
+   *
+   * Při změně času se MUSÍ posunout i rezervace účastníků. To je bezpečné:
+   * `bookings_no_overlap` je od migrace 0050 částečný a platí jen pro
+   * `session_id IS NULL`, takže rezervace účastníků lekce pod něj nepadají
+   * (jinak by dvě lekce téhož trenéra v řadě shodily posun na 23P01).
+   */
+  async update(
+    tenantId: string,
+    userId: string,
+    role: AppRole,
+    sessionId: string,
+    dto: UpdateClassSessionDto,
+  ) {
+    assertCanManage(role);
+
+    const result = await this.dbService.withRlsContext(
+      ctxFor(tenantId, userId, role),
+      async (tx) => {
+        const [session] = await tx
+          .select()
+          .from(schema.classSessions)
+          .where(
+            and(
+              eq(schema.classSessions.id, sessionId),
+              eq(schema.classSessions.tenantId, tenantId),
+            ),
+          )
+          .limit(1);
+        if (!session) {
+          throw new NotFoundException({
+            error: { code: 'SESSION_NOT_FOUND', message: 'Lekce nenalezena.' },
+          });
+        }
+        if (session.status !== 'open') {
+          throw new BadRequestException({
+            error: {
+              code: 'SESSION_NOT_EDITABLE',
+              message:
+                session.status === 'cancelled'
+                  ? 'Zrušenou lekci nelze upravit. Vypiš novou.'
+                  : 'Dokončenou lekci nelze upravit.',
+            },
+          });
+        }
+
+        // Cílové hodnoty: co nepřišlo, zůstává. `null` = odebrat.
+        const employeeId =
+          dto.employeeId !== undefined ? dto.employeeId : (session.employeeId ?? null);
+        const resourceId =
+          dto.resourceId !== undefined ? dto.resourceId : (session.resourceId ?? null);
+        const capacity = dto.capacity ?? session.capacity;
+        const minAge = dto.minAge !== undefined ? dto.minAge : (session.minAge ?? null);
+        const maxAge = dto.maxAge !== undefined ? dto.maxAge : (session.maxAge ?? null);
+        const prerequisiteServiceId =
+          dto.prerequisiteServiceId !== undefined
+            ? dto.prerequisiteServiceId
+            : (session.prerequisiteServiceId ?? null);
+
+        // Kapacitu nelze snížit pod počet už přihlášených.
+        if (capacity < session.bookedCount) {
+          throw new BadRequestException({
+            error: {
+              code: 'CAPACITY_BELOW_BOOKED',
+              message: `Lekci už má zarezervováno ${session.bookedCount} klientů — kapacitu nelze snížit na ${capacity}.`,
+            },
+          });
+        }
+        // Stejné pravidlo jako při vypsání: skupinová lekce ≥ 2, kapacita 1 jen s přístrojem.
+        if (capacity < 2 && !resourceId) {
+          throw new BadRequestException({
+            error: {
+              code: 'CAPACITY_TOO_LOW',
+              message:
+                'Skupinová lekce potřebuje kapacitu ≥ 2. Kapacitu 1 lze nastavit jen lekci s přístrojem.',
+            },
+          });
+        }
+
+        const [service] = await tx
+          .select()
+          .from(schema.services)
+          .where(eq(schema.services.id, session.serviceId))
+          .limit(1);
+        if (!service) {
+          throw new NotFoundException({
+            error: { code: 'SERVICE_NOT_FOUND', message: 'Služba lekce nenalezena.' },
+          });
+        }
+
+        const timeChanged = dto.startsAt !== undefined;
+        const startsAt = timeChanged ? new Date(dto.startsAt!) : session.startsAt;
+        const endsAt = new Date(startsAt.getTime() + service.durationMinutes * 60_000);
+        const bufferStartsAt = new Date(startsAt.getTime() - service.bufferBeforeMinutes * 60_000);
+        const bufferEndsAt = new Date(endsAt.getTime() + service.bufferAfterMinutes * 60_000);
+
+        // Přístroj: ověř, že patří tenantovi a není smazaný.
+        let resourceBranchId: string | null = null;
+        if (resourceId) {
+          const [r] = await tx
+            .select({ branchId: schema.resources.branchId })
+            .from(schema.resources)
+            .where(
+              and(
+                eq(schema.resources.id, resourceId),
+                eq(schema.resources.tenantId, tenantId),
+                isNull(schema.resources.deletedAt),
+              ),
+            )
+            .limit(1);
+          if (!r) {
+            throw new NotFoundException({
+              error: { code: 'RESOURCE_NOT_FOUND', message: 'Přístroj/zdroj nenalezen.' },
+            });
+          }
+          resourceBranchId = r.branchId;
+        }
+        const branchId = resourceBranchId ?? session.branchId;
+
+        // ─── Kolize (stejná pravidla jako POST, ale bez sebe sama) ───
+        if (employeeId && !resourceId) {
+          const clash = await tx
+            .select({ id: schema.classSessions.id })
+            .from(schema.classSessions)
+            .where(
+              and(
+                eq(schema.classSessions.tenantId, tenantId),
+                eq(schema.classSessions.employeeId, employeeId),
+                eq(schema.classSessions.status, 'open'),
+                isNull(schema.classSessions.resourceId),
+                ne(schema.classSessions.id, sessionId),
+                lt(schema.classSessions.bufferStartsAt, bufferEndsAt),
+                gt(schema.classSessions.bufferEndsAt, bufferStartsAt),
+              ),
+            )
+            .limit(1);
+          if (clash.length > 0) {
+            throw new BadRequestException({
+              error: {
+                code: 'TRAINER_BUSY',
+                message: 'Tento trenér má v daném čase už vypsanou lekci. Vyber jiný čas.',
+              },
+            });
+          }
+        }
+
+        if (resourceId) {
+          const clash = await tx
+            .select({ id: schema.classSessions.id })
+            .from(schema.classSessions)
+            .where(
+              and(
+                eq(schema.classSessions.tenantId, tenantId),
+                eq(schema.classSessions.resourceId, resourceId),
+                eq(schema.classSessions.status, 'open'),
+                ne(schema.classSessions.id, sessionId),
+                lt(schema.classSessions.bufferStartsAt, bufferEndsAt),
+                gt(schema.classSessions.bufferEndsAt, bufferStartsAt),
+              ),
+            )
+            .limit(1);
+          if (clash.length > 0) {
+            throw new BadRequestException({
+              error: {
+                code: 'MACHINE_TAKEN',
+                message:
+                  'Tento přístroj má v daném čase už vypsanou lekci. Vyber jiný čas nebo přístroj.',
+              },
+            });
+          }
+        }
+
+        if (!resourceId) {
+          const [t] = await tx
+            .select({ settings: schema.tenants.settings })
+            .from(schema.tenants)
+            .where(eq(schema.tenants.id, tenantId))
+            .limit(1);
+          if (extractBookingRules(t?.settings).oneTrainingPerBranch) {
+            const overlap = await tx
+              .select({ id: schema.classSessions.id })
+              .from(schema.classSessions)
+              .where(
+                and(
+                  eq(schema.classSessions.tenantId, tenantId),
+                  eq(schema.classSessions.branchId, branchId),
+                  eq(schema.classSessions.status, 'open'),
+                  isNull(schema.classSessions.resourceId),
+                  ne(schema.classSessions.id, sessionId),
+                  lt(schema.classSessions.bufferStartsAt, bufferEndsAt),
+                  gt(schema.classSessions.bufferEndsAt, bufferStartsAt),
+                ),
+              )
+              .limit(1);
+            if (overlap.length > 0) {
+              throw new BadRequestException({
+                error: {
+                  code: 'BRANCH_BUSY',
+                  message: 'Provozovna má v tomto čase už vypsaný jiný trénink.',
+                },
+              });
+            }
+          }
+        }
+
+        // ─── Zápis ───────────────────────────────────────────────────
+        let updated;
+        try {
+          [updated] = await tx
+            .update(schema.classSessions)
+            .set({
+              employeeId,
+              resourceId,
+              branchId,
+              capacity,
+              minAge,
+              maxAge,
+              prerequisiteServiceId,
+              startsAt,
+              endsAt,
+              bufferStartsAt,
+              bufferEndsAt,
+              updatedAt: new Date(),
+            })
+            .where(eq(schema.classSessions.id, sessionId))
+            .returning();
+        } catch (err) {
+          // Pojistka: kdyby kolize proklouzla mezi kontrolou a zápisem (souběh).
+          const e = err as {
+            code?: string;
+            constraint_name?: string;
+            cause?: { code?: string; constraint_name?: string };
+          };
+          if ((e.code ?? e.cause?.code) === '23P01') {
+            const constraint = e.constraint_name ?? e.cause?.constraint_name ?? '';
+            throw new BadRequestException({
+              error: {
+                code: constraint.includes('employee') ? 'TRAINER_BUSY' : 'MACHINE_TAKEN',
+                message: 'Termín se mezitím obsadil. Zkus jiný čas.',
+              },
+            });
+          }
+          throw err;
+        }
+
+        // Posun rezervací účastníků — musí jít ruku v ruce se změnou času lekce,
+        // jinak by účastníkům zůstal starý termín v kalendáři i v připomínkách.
+        let movedParticipants: Array<{
+          id: string;
+          customerName: string;
+          customerEmail: string;
+          referenceCode: string;
+        }> = [];
+        if (timeChanged && startsAt.getTime() !== session.startsAt.getTime()) {
+          movedParticipants = await tx
+            .update(schema.bookings)
+            .set({ startsAt, endsAt, bufferStartsAt, bufferEndsAt, updatedAt: new Date() })
+            .where(
+              and(
+                eq(schema.bookings.tenantId, tenantId),
+                eq(schema.bookings.sessionId, sessionId),
+                sql`${schema.bookings.status} NOT IN ('cancelled', 'no_show')`,
+              ),
+            )
+            .returning({
+              id: schema.bookings.id,
+              customerName: schema.bookings.customerName,
+              customerEmail: schema.bookings.customerEmail,
+              referenceCode: schema.bookings.referenceCode,
+            });
+        }
+
+        return {
+          session: updated!,
+          movedParticipants,
+          oldStartsAt: session.startsAt,
+          serviceName: service.name,
+        };
+      },
+    );
+
+    // Notifikace až po commitu — používáme existující šablonu booking_rescheduled.
+    if (result.movedParticipants.length > 0) {
+      await this.notifyParticipantsOfReschedule(tenantId, result);
+    }
+
+    return result.session;
+  }
+
+  /** Pošle účastníkům e-mail o posunutém termínu (šablona booking_rescheduled). */
+  private async notifyParticipantsOfReschedule(
+    tenantId: string,
+    result: {
+      session: typeof schema.classSessions.$inferSelect;
+      movedParticipants: Array<{
+        id: string;
+        customerName: string;
+        customerEmail: string;
+        referenceCode: string;
+      }>;
+      oldStartsAt: Date;
+      serviceName: string;
+    },
+  ): Promise<void> {
+    const meta = await this.dbService.withRlsContext(serviceContext(tenantId), async (tx) => {
+      const [tenant] = await tx
+        .select({ name: schema.tenants.name })
+        .from(schema.tenants)
+        .where(eq(schema.tenants.id, tenantId))
+        .limit(1);
+      const employee = result.session.employeeId
+        ? (
+            await tx
+              .select({
+                firstName: schema.employees.firstName,
+                lastName: schema.employees.lastName,
+                displayName: schema.employees.displayName,
+              })
+              .from(schema.employees)
+              .where(eq(schema.employees.id, result.session.employeeId))
+              .limit(1)
+          )[0]
+        : undefined;
+      return { tenantName: tenant?.name ?? 'Reserved', employee };
+    });
+
+    const employeeName = meta.employee
+      ? (meta.employee.displayName ?? `${meta.employee.firstName} ${meta.employee.lastName}`.trim())
+      : 'Zaměstnanec';
+
+    for (const participant of result.movedParticipants) {
+      try {
+        await this.email.enqueue({
+          tenantId,
+          templateCode: 'booking_rescheduled',
+          recipient: participant.customerEmail,
+          relatedBookingId: participant.id,
+          vars: {
+            customerName: participant.customerName,
+            serviceName: result.serviceName,
+            employeeName,
+            tenantName: meta.tenantName,
+            startsAt: result.session.startsAt.toISOString(),
+            endsAt: result.session.endsAt.toISOString(),
+            referenceCode: participant.referenceCode,
+            oldStartsAt: result.oldStartsAt.toISOString(),
+          },
+        });
+      } catch {
+        // Nedoručený e-mail nesmí shodit už provedenou změnu lekce.
+      }
+    }
+  }
+
+  // ─── Opakované rozvrhy — výpis ──────────────────────────────────────
+
+  /** Rozvrhy s počtem vygenerovaných lekcí a rozsahem termínů. */
+  async listRecurrences(
+    tenantId: string,
+    userId: string,
+    role: AppRole,
+    filters: { status?: 'active' | 'cancelled' | 'all' } = {},
+  ) {
+    assertCanManage(role);
+    return this.dbService.withRlsContext(ctxFor(tenantId, userId, role), async (tx) => {
+      const conditions = [eq(schema.classRecurrences.tenantId, tenantId)];
+      const status = filters.status ?? 'all';
+      if (status !== 'all') {
+        conditions.push(eq(schema.classRecurrences.status, status));
+      }
+      const recurrences = await tx
+        .select()
+        .from(schema.classRecurrences)
+        .where(and(...conditions))
+        .orderBy(desc(schema.classRecurrences.createdAt));
+
+      if (recurrences.length === 0) return [];
+
+      const counts = await tx
+        .select({
+          recurrenceId: schema.classSessions.recurrenceId,
+          sessionCount: sql<number>`count(*)::int`,
+          openCount: sql<number>`count(*) filter (where ${schema.classSessions.status} = 'open')::int`,
+          cancelledCount: sql<number>`count(*) filter (where ${schema.classSessions.status} = 'cancelled')::int`,
+          firstSessionAt: sql<string | null>`min(${schema.classSessions.startsAt})`,
+          lastSessionAt: sql<string | null>`max(${schema.classSessions.startsAt})`,
+        })
+        .from(schema.classSessions)
+        .where(
+          and(
+            eq(schema.classSessions.tenantId, tenantId),
+            isNotNull(schema.classSessions.recurrenceId),
+          ),
+        )
+        .groupBy(schema.classSessions.recurrenceId);
+      const byId = new Map(counts.map((c) => [c.recurrenceId, c]));
+
+      return recurrences.map((r) => {
+        const c = byId.get(r.id);
+        return {
+          ...r,
+          sessionCount: c?.sessionCount ?? 0,
+          openCount: c?.openCount ?? 0,
+          cancelledCount: c?.cancelledCount ?? 0,
+          firstSessionAt: c?.firstSessionAt ?? null,
+          lastSessionAt: c?.lastSessionAt ?? null,
+        };
+      });
     });
   }
 
@@ -682,19 +1103,50 @@ export class ClassSessionsService {
     return rows[0];
   }
 
-  /** Otevřené lekce s volnými místy v daném období (pro výběr termínu). */
+  /**
+   * Lekce v daném období. Výchozí `status: 'open'` = otevřené a nezaplněné
+   * (dosavadní chování). Ostatní stavy zpřístupní i plné, zrušené a dokončené
+   * lekce — admin UI je potřebuje (u plné lekce se řeší pořadník).
+   */
   async listOpen(
     tenantId: string,
     userId: string,
     role: AppRole,
-    filters: { serviceId?: string; from?: string; to?: string },
+    filters: {
+      serviceId?: string;
+      from?: string;
+      to?: string;
+      status?: ClassSessionListStatus;
+      recurrenceId?: string;
+    },
   ) {
     return this.dbService.withRlsContext(ctxFor(tenantId, userId, role), async (tx) => {
-      const conditions = [
-        eq(schema.classSessions.tenantId, tenantId),
-        eq(schema.classSessions.status, 'open'),
-        sql`${schema.classSessions.bookedCount} < ${schema.classSessions.capacity}`,
-      ];
+      const conditions = [eq(schema.classSessions.tenantId, tenantId)];
+      switch (filters.status ?? 'open') {
+        case 'open':
+          conditions.push(
+            eq(schema.classSessions.status, 'open'),
+            sql`${schema.classSessions.bookedCount} < ${schema.classSessions.capacity}`,
+          );
+          break;
+        case 'full':
+          conditions.push(
+            eq(schema.classSessions.status, 'open'),
+            sql`${schema.classSessions.bookedCount} >= ${schema.classSessions.capacity}`,
+          );
+          break;
+        case 'cancelled':
+          conditions.push(eq(schema.classSessions.status, 'cancelled'));
+          break;
+        case 'completed':
+          conditions.push(eq(schema.classSessions.status, 'completed'));
+          break;
+        case 'all':
+          break;
+      }
+      if (filters.recurrenceId) {
+        conditions.push(eq(schema.classSessions.recurrenceId, filters.recurrenceId));
+      }
       if (filters.serviceId) {
         conditions.push(eq(schema.classSessions.serviceId, filters.serviceId));
       }

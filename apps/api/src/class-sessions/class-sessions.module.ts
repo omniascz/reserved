@@ -5,6 +5,7 @@ import { TimePacksModule } from '../time-packs/time-packs.module.js';
 import { BundlePacksModule } from '../bundle-packs/bundle-packs.module.js';
 import { CreditPacksModule } from '../credit-packs/credit-packs.module.js';
 import { MakeupModule } from '../makeup/makeup.module.js';
+import { EmailModule } from '../email/email.module.js';
 import { ClassSessionsController } from './class-sessions.controller.js';
 import { ClassSessionsService } from './class-sessions.service.js';
 
@@ -16,6 +17,7 @@ import { ClassSessionsService } from './class-sessions.service.js';
     BundlePacksModule,
     CreditPacksModule,
     MakeupModule,
+    EmailModule,
   ],
   controllers: [ClassSessionsController],
   providers: [ClassSessionsService],
