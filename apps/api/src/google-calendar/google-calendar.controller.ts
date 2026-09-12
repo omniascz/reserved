@@ -16,6 +16,8 @@ import type { Response } from 'express';
 import { CurrentUser } from '../auth/decorators/current-user.decorator.js';
 import { Public } from '../auth/decorators/public.decorator.js';
 import type { AccessTokenPayload } from '../auth/auth.types.js';
+import { ZodValidationPipe } from '../auth/zod-validation.pipe.js';
+import { SetInboundSchema, type SetInboundDto } from './dto/google-calendar.dto.js';
 import { GoogleCalendarService } from './google-calendar.service.js';
 
 @Controller('admin/integrations/google')
@@ -91,9 +93,9 @@ export class GoogleCalendarController {
   async setInbound(
     @CurrentUser() user: AccessTokenPayload,
     @Param('employeeId', ParseUUIDPipe) employeeId: string,
-    @Body() body: { enabled: boolean },
+    @Body(new ZodValidationPipe(SetInboundSchema)) dto: SetInboundDto,
   ) {
-    await this.svc.setInboundEnabled(user.tenantId, user.sub, user.role, employeeId, body.enabled);
+    await this.svc.setInboundEnabled(user.tenantId, user.sub, user.role, employeeId, dto.enabled);
     return { data: { ok: true } };
   }
 
