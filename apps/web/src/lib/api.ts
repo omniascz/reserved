@@ -2480,3 +2480,361 @@ export async function setTableReservationStatus(
   );
   return data;
 }
+
+// ─── Skupinové lekce (UI 1) ───────────────────────────────────────────
+
+export type ClassSessionListStatus = 'open' | 'full' | 'cancelled' | 'completed' | 'all';
+
+export interface AdminClassSession {
+  id: string;
+  branchId: string;
+  serviceId: string;
+  employeeId: string | null;
+  resourceId: string | null;
+  startsAt: string;
+  endsAt: string;
+  capacity: number;
+  bookedCount: number;
+  status: string;
+  recurrenceId: string | null;
+  courseId: string | null;
+  spotCount: number;
+  minAge: number | null;
+  maxAge: number | null;
+  prerequisiteServiceId: string | null;
+  cancelledAt: string | null;
+  createdAt: string;
+}
+
+export interface AdminClassParticipant {
+  bookingId: string;
+  customerName: string;
+  customerEmail: string;
+  status: string;
+}
+
+export interface AdminClassAttendance {
+  total: number;
+  present: number;
+  noShow: number;
+  pending: number;
+}
+
+export interface AdminWaitlistEntry {
+  id: string;
+  sessionId: string;
+  customerName: string;
+  customerEmail: string;
+  customerPhone: string | null;
+  position: number;
+  status: string;
+  createdAt: string;
+}
+
+export interface AdminClassSpots {
+  spotCount: number;
+  taken: string[];
+  free: string[];
+}
+
+export interface AdminClassRecurrence {
+  id: string;
+  serviceId: string;
+  employeeId: string | null;
+  resourceId: string | null;
+  branchId: string | null;
+  capacity: number | null;
+  daysOfWeek: number[];
+  time: string;
+  startDate: string;
+  endDate: string;
+  status: string;
+  createdAt: string;
+  sessionCount: number;
+  openCount: number;
+  cancelledCount: number;
+  firstSessionAt: string | null;
+  lastSessionAt: string | null;
+}
+
+export interface ClassSessionInput {
+  serviceId: string;
+  employeeId?: string | null;
+  resourceId?: string | null;
+  branchId?: string;
+  startsAt: string;
+  capacity?: number;
+  spotCount?: number;
+  minAge?: number | null;
+  maxAge?: number | null;
+  prerequisiteServiceId?: string | null;
+}
+
+/** Editace lekce — posílá se jen to, co se mění (PATCH). */
+export type ClassSessionPatch = Partial<{
+  startsAt: string;
+  employeeId: string | null;
+  resourceId: string | null;
+  capacity: number;
+  minAge: number | null;
+  maxAge: number | null;
+  prerequisiteServiceId: string | null;
+}>;
+
+export interface ClassJoinInput {
+  customerName: string;
+  customerEmail: string;
+  customerPhone?: string | null;
+  customerNote?: string | null;
+  spotLabel?: string | null;
+  useMakeupCredit?: boolean;
+}
+
+export async function listClassSessions(opts?: {
+  serviceId?: string;
+  from?: string;
+  to?: string;
+  status?: ClassSessionListStatus;
+  recurrenceId?: string;
+}): Promise<AdminClassSession[]> {
+  const params = new URLSearchParams();
+  if (opts?.serviceId) params.append('serviceId', opts.serviceId);
+  if (opts?.from) params.append('from', opts.from);
+  if (opts?.to) params.append('to', opts.to);
+  if (opts?.status) params.append('status', opts.status);
+  if (opts?.recurrenceId) params.append('recurrenceId', opts.recurrenceId);
+  const qs = params.toString();
+  const { data } = await fetchApi<{ data: AdminClassSession[] }>(
+    `/admin/class-sessions${qs ? `?${qs}` : ''}`,
+  );
+  return data;
+}
+
+export async function getClassSession(id: string): Promise<AdminClassSession> {
+  const { data } = await fetchApi<{ data: AdminClassSession }>(`/admin/class-sessions/${id}`);
+  return data;
+}
+
+export async function createClassSession(input: ClassSessionInput): Promise<AdminClassSession> {
+  const { data } = await fetchApi<{ data: AdminClassSession }>(`/admin/class-sessions`, {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+  return data;
+}
+
+export async function updateClassSession(
+  id: string,
+  patch: ClassSessionPatch,
+): Promise<AdminClassSession> {
+  const { data } = await fetchApi<{ data: AdminClassSession }>(`/admin/class-sessions/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(patch),
+  });
+  return data;
+}
+
+export async function cancelClassSession(id: string): Promise<AdminClassSession> {
+  const { data } = await fetchApi<{ data: AdminClassSession }>(
+    `/admin/class-sessions/${id}/cancel`,
+    { method: 'POST' },
+  );
+  return data;
+}
+
+export async function listClassParticipants(id: string): Promise<AdminClassParticipant[]> {
+  const { data } = await fetchApi<{ data: AdminClassParticipant[] }>(
+    `/admin/class-sessions/${id}/participants`,
+  );
+  return data;
+}
+
+export async function getClassAttendance(id: string): Promise<AdminClassAttendance> {
+  const { data } = await fetchApi<{ data: AdminClassAttendance }>(
+    `/admin/class-sessions/${id}/attendance`,
+  );
+  return data;
+}
+
+export async function markClassAttendance(
+  sessionId: string,
+  bookingId: string,
+  attended: boolean,
+): Promise<void> {
+  await fetchApi(`/admin/class-sessions/${sessionId}/participants/${bookingId}/attendance`, {
+    method: 'POST',
+    body: JSON.stringify({ attended }),
+  });
+}
+
+export async function joinClassSession(
+  sessionId: string,
+  input: ClassJoinInput,
+): Promise<{ id: string; referenceCode: string }> {
+  const { data } = await fetchApi<{ data: { id: string; referenceCode: string } }>(
+    `/admin/class-sessions/${sessionId}/join`,
+    { method: 'POST', body: JSON.stringify(input) },
+  );
+  return data;
+}
+
+export async function leaveClassSession(sessionId: string, bookingId: string): Promise<void> {
+  await fetchApi(`/admin/class-sessions/${sessionId}/participants/${bookingId}/leave`, {
+    method: 'POST',
+  });
+}
+
+export async function getClassSpots(id: string): Promise<AdminClassSpots> {
+  const { data } = await fetchApi<{ data: AdminClassSpots }>(`/admin/class-sessions/${id}/spots`);
+  return data;
+}
+
+export async function listClassWaitlist(id: string): Promise<AdminWaitlistEntry[]> {
+  const { data } = await fetchApi<{ data: AdminWaitlistEntry[] }>(
+    `/admin/class-sessions/${id}/waitlist`,
+  );
+  return data;
+}
+
+export async function addToClassWaitlist(
+  id: string,
+  input: ClassJoinInput,
+): Promise<AdminWaitlistEntry> {
+  const { data } = await fetchApi<{ data: AdminWaitlistEntry }>(
+    `/admin/class-sessions/${id}/waitlist`,
+    { method: 'POST', body: JSON.stringify(input) },
+  );
+  return data;
+}
+
+export async function removeFromClassWaitlist(
+  sessionId: string,
+  waitlistId: string,
+): Promise<void> {
+  await fetchApi(`/admin/class-sessions/${sessionId}/waitlist/${waitlistId}/leave`, {
+    method: 'POST',
+  });
+}
+
+export async function listClassRecurrences(
+  status?: 'active' | 'cancelled' | 'all',
+): Promise<AdminClassRecurrence[]> {
+  const qs = status ? `?status=${status}` : '';
+  const { data } = await fetchApi<{ data: AdminClassRecurrence[] }>(
+    `/admin/class-sessions/recurrences${qs}`,
+  );
+  return data;
+}
+
+export async function createClassRecurrence(input: {
+  serviceId: string;
+  employeeId?: string | null;
+  resourceId?: string | null;
+  branchId?: string | null;
+  capacity?: number;
+  daysOfWeek: number[];
+  time: string;
+  startDate: string;
+  endDate: string;
+}): Promise<{
+  recurrenceId: string;
+  requested: number;
+  created: number;
+  skipped: Array<{ startsAt: string; reason: string }>;
+}> {
+  const { data } = await fetchApi<{
+    data: {
+      recurrenceId: string;
+      requested: number;
+      created: number;
+      skipped: Array<{ startsAt: string; reason: string }>;
+    };
+  }>(`/admin/class-sessions/recurrences`, { method: 'POST', body: JSON.stringify(input) });
+  return data;
+}
+
+export async function cancelClassRecurrence(id: string): Promise<{ cancelledSessions: number }> {
+  const { data } = await fetchApi<{ data: { cancelledSessions: number } }>(
+    `/admin/class-sessions/recurrences/${id}/cancel`,
+    { method: 'POST' },
+  );
+  return data;
+}
+
+// ─── Zdroje / přístroje (EMS) ─────────────────────────────────────────
+
+export interface AdminResource {
+  id: string;
+  name: string;
+  branchId: string;
+  type: string;
+  isActive: boolean;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+}
+
+export async function listResources(): Promise<AdminResource[]> {
+  const { data } = await fetchApi<{ data: AdminResource[] }>(`/admin/resources`);
+  return data;
+}
+
+export async function createResource(input: {
+  branchId: string;
+  name: string;
+  type: string;
+}): Promise<AdminResource> {
+  const { data } = await fetchApi<{ data: AdminResource }>(`/admin/resources`, {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+  return data;
+}
+
+export async function updateResource(
+  id: string,
+  patch: { branchId?: string; name?: string; type?: string; isActive?: boolean },
+): Promise<AdminResource> {
+  const { data } = await fetchApi<{ data: AdminResource }>(`/admin/resources/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(patch),
+  });
+  return data;
+}
+
+export async function deleteResource(id: string): Promise<void> {
+  await fetchApi(`/admin/resources/${id}`, { method: 'DELETE' });
+}
+
+// ─── Náhrady (make-up credits) ────────────────────────────────────────
+
+export interface AdminMakeupCredit {
+  id: string;
+  customerId: string | null;
+  customerName: string;
+  customerEmail: string;
+  reason: string;
+  originBookingId: string | null;
+  status: string;
+  validUntil: string | null;
+  usedBookingId: string | null;
+  usedAt: string | null;
+  createdAt: string;
+}
+
+export async function listMakeupCredits(): Promise<AdminMakeupCredit[]> {
+  const { data } = await fetchApi<{ data: AdminMakeupCredit[] }>(`/admin/makeup-credits`);
+  return data;
+}
+
+export async function issueMakeupCredit(input: {
+  customerEmail: string;
+  customerName: string;
+  reason?: 'studio_cancelled' | 'client_cancelled' | 'admin_granted';
+  validDays?: number;
+}): Promise<AdminMakeupCredit> {
+  const { data } = await fetchApi<{ data: AdminMakeupCredit }>(`/admin/makeup-credits`, {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+  return data;
+}

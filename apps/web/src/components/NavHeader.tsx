@@ -33,6 +33,18 @@ const GROUPS: NavGroup[] = [
         description: 'Půdorys stolů, rezervace, walk-in',
         badge: 'new',
       },
+      {
+        href: '/class-sessions',
+        label: 'Lekce',
+        description: 'Skupinové lekce, obsazenost, pořadník',
+        badge: 'new',
+      },
+      {
+        href: '/makeup-credits',
+        label: 'Náhrady',
+        description: 'Náhradní vstupy za zrušené lekce',
+        badge: 'new',
+      },
       { href: '/customers', label: 'Zákazníci', description: 'CRM, historie, tagy, no-show risk' },
       { href: '/payments', label: 'Platby', description: 'Hotovost, terminál, Stripe, QR' },
     ],
@@ -54,6 +66,12 @@ const GROUPS: NavGroup[] = [
     label: 'Tým',
     items: [
       { href: '/employees', label: 'Zaměstnanci', description: 'Tým, pracovní doba' },
+      {
+        href: '/resources',
+        label: 'Přístroje',
+        description: 'EMS stroje, místnosti, vybavení',
+        badge: 'new',
+      },
       { href: '/branches', label: 'Pobočky', description: 'Více provozoven' },
       { href: '/blocks', label: 'Blokace', description: 'Dovolené, neplánované odstávky' },
       { href: '/holidays', label: 'Svátky', description: 'Státní svátky a custom' },
