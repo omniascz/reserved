@@ -491,4 +491,101 @@ describe('Admin správa skupinových lekcí (UI 1)', () => {
       expect(err).toMatch(/VALIDATION_FAILED|400/);
     });
   });
+
+  // ─── UI 1b: kolize účastníků + čas v minulosti ────────────────────────
+
+  describe('PATCH — kolize účastníků a nový čas v minulosti (UI 1b)', () => {
+    interface PatchResult {
+      startsAt: string;
+      participantConflicts: Array<{
+        bookingId: string;
+        customerName: string;
+        conflictingBookingId: string;
+        conflictStartsAt: string;
+      }>;
+    }
+
+    // Lekce bez trenéra, aby posun nezhavaroval na TRAINER_BUSY — testujeme
+    // kolizi KLIENTA, ne trenéra.
+    let sessionA: SessionRow;
+    let sessionB: SessionRow;
+    const clashEmail = 'kolizni@cls.local';
+
+    it('připraví dvě lekce se stejným klientem v obou', async () => {
+      sessionA = await createSession({
+        serviceId: groupServiceId,
+        startsAt: '2033-02-07T09:00:00.000Z',
+        capacity: 3,
+      });
+      sessionB = await createSession({
+        serviceId: groupServiceId,
+        startsAt: '2033-02-07T15:00:00.000Z',
+        capacity: 3,
+      });
+      for (const id of [sessionA.id, sessionB.id]) {
+        await apiCall(`/admin/class-sessions/${id}/join`, {
+          method: 'POST',
+          token,
+          body: JSON.stringify({ customerName: 'Kolizní Klient', customerEmail: clashEmail }),
+        });
+      }
+      expect(sessionA.id).not.toBe(sessionB.id);
+    });
+
+    it('posun NEBLOKUJE, ale vrátí participantConflicts se jménem klienta', async () => {
+      const res = await apiCall<{ data: PatchResult }>(`/admin/class-sessions/${sessionB.id}`, {
+        method: 'PATCH',
+        token,
+        body: JSON.stringify({ startsAt: '2033-02-07T09:30:00.000Z' }),
+      });
+      // posun skutečně proběhl
+      expect(new Date(res.data.startsAt).toISOString()).toBe('2033-02-07T09:30:00.000Z');
+      // a kolize je nahlášená
+      expect(res.data.participantConflicts).toHaveLength(1);
+      const conflict = res.data.participantConflicts[0]!;
+      expect(conflict.customerName).toBe('Kolizní Klient');
+      expect(new Date(conflict.conflictStartsAt).toISOString()).toBe('2033-02-07T09:00:00.000Z');
+      expect(conflict.conflictingBookingId).toBeTruthy();
+      expect(conflict.bookingId).not.toBe(conflict.conflictingBookingId);
+    });
+
+    it('posun do volného času vrátí prázdné participantConflicts', async () => {
+      const res = await apiCall<{ data: PatchResult }>(`/admin/class-sessions/${sessionB.id}`, {
+        method: 'PATCH',
+        token,
+        body: JSON.stringify({ startsAt: '2033-02-07T20:00:00.000Z' }),
+      });
+      expect(new Date(res.data.startsAt).toISOString()).toBe('2033-02-07T20:00:00.000Z');
+      expect(res.data.participantConflicts).toEqual([]);
+    });
+
+    it('ODMÍTNE nový začátek v minulosti (SESSION_STARTS_IN_PAST)', async () => {
+      const session = await createSession({
+        serviceId: groupServiceId,
+        startsAt: '2033-03-01T10:00:00.000Z',
+        capacity: 3,
+      });
+      const err = await expectFail(`/admin/class-sessions/${session.id}`, {
+        method: 'PATCH',
+        token,
+        body: JSON.stringify({ startsAt: '2020-01-01T10:00:00.000Z' }),
+      });
+      expect(err).toMatch(/SESSION_STARTS_IN_PAST/);
+
+      // lekce zůstala na původním čase
+      const after = await apiCall<{ data: SessionRow }>(`/admin/class-sessions/${session.id}`, {
+        token,
+      });
+      expect(new Date(after.data.startsAt).toISOString()).toBe('2033-03-01T10:00:00.000Z');
+    });
+
+    it('změna bez času (jen kapacita) minulost neřeší a projde', async () => {
+      const res = await apiCall<{ data: PatchResult & { capacity: number } }>(
+        `/admin/class-sessions/${sessionA.id}`,
+        { method: 'PATCH', token, body: JSON.stringify({ capacity: 7 }) },
+      );
+      expect(res.data.capacity).toBe(7);
+      expect(res.data.participantConflicts).toEqual([]);
+    });
+  });
 });

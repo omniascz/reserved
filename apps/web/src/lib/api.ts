@@ -2506,6 +2506,17 @@ export interface AdminClassSession {
   createdAt: string;
 }
 
+/**
+ * Účastník, který má v novém čase lekce jinou nezrušenou rezervaci.
+ * Posun lekce to neblokuje — provozovatel to má jen vidět.
+ */
+export interface ParticipantConflict {
+  bookingId: string;
+  customerName: string;
+  conflictingBookingId: string;
+  conflictStartsAt: string;
+}
+
 export interface AdminClassParticipant {
   bookingId: string;
   customerName: string;
@@ -2626,12 +2637,14 @@ export async function createClassSession(input: ClassSessionInput): Promise<Admi
 export async function updateClassSession(
   id: string,
   patch: ClassSessionPatch,
-): Promise<AdminClassSession> {
-  const { data } = await fetchApi<{ data: AdminClassSession }>(`/admin/class-sessions/${id}`, {
+): Promise<AdminClassSession & { participantConflicts: ParticipantConflict[] }> {
+  const { data } = await fetchApi<{
+    data: AdminClassSession & { participantConflicts?: ParticipantConflict[] };
+  }>(`/admin/class-sessions/${id}`, {
     method: 'PATCH',
     body: JSON.stringify(patch),
   });
-  return data;
+  return { ...data, participantConflicts: data.participantConflicts ?? [] };
 }
 
 export async function cancelClassSession(id: string): Promise<AdminClassSession> {
