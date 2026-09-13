@@ -14,6 +14,8 @@
     "lint": "turbo run lint",
     "test": "turbo run test",
     "test:watch": "turbo run test:watch",
+    "test:ui": "pnpm --filter @reserved/ui-tests ui",
+    "test:ui:report": "pnpm --filter @reserved/ui-tests ui:report",
     "typecheck": "turbo run typecheck",
     "clean": "turbo run clean && rm -rf node_modules",
     "db:generate": "pnpm --filter @reserved/db db:generate",

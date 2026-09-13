@@ -1,0 +1,18 @@
+{
+  "name": "@reserved/ui-tests",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "Playwright testy adminu a widgetu v prohlížeči (headless Chromium). ZÁMĚRNĚ nemá script `test` — nesmí se chytit do `turbo run test` a tím do CI; spouští se samostatně přes `pnpm test:ui`.",
+  "scripts": {
+    "ui": "playwright test",
+    "ui:headed": "playwright test --headed",
+    "ui:report": "playwright show-report",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.63.0",
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.0"
+  }
+}
