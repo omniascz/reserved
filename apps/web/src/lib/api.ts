@@ -2851,3 +2851,212 @@ export async function issueMakeupCredit(input: {
   });
   return data;
 }
+
+// ─── Vydané permanentky napříč typy (UI 2) ────────────────────────────
+
+export type PassType = 'credit' | 'bundle' | 'time';
+
+export type PassEffectiveStatus =
+  | 'active'
+  | 'expired'
+  | 'used_up'
+  | 'suspended'
+  | 'cancelled'
+  | 'refunded'
+  | 'rolled_over';
+
+export interface AdminPass {
+  id: string;
+  type: PassType;
+  customerId: string | null;
+  customerFirstName: string | null;
+  customerLastName: string | null;
+  customerEmail: string | null;
+  corporateAccountId: string | null;
+  packId: string | null;
+  packName: string | null;
+  balanceRemaining: number | null;
+  balanceTotal: number | null;
+  balanceLabel: string;
+  validFrom: string;
+  validUntil: string | null;
+  /** Stav uložený ve sloupci — může lhát (propadlá permanentka bývá 'active'). */
+  storedStatus: string;
+  /** Stav spočítaný z dat — tohle se ukazuje provozovateli. */
+  effectiveStatus: PassEffectiveStatus;
+  pricePaidHellers: number;
+  purchasedAt: string;
+  soldBy: string | null;
+  soldByName: string | null;
+  note: string | null;
+}
+
+export interface AdminPassDetail extends AdminPass {
+  snapshot: Record<string, unknown> | null;
+}
+
+export interface AdminPassList {
+  items: AdminPass[];
+  total: number;
+  limit: number;
+  offset: number;
+  hasMore: boolean;
+}
+
+export async function listPasses(opts?: {
+  type?: PassType;
+  status?: PassEffectiveStatus;
+  customerId?: string;
+  packId?: string;
+  search?: string;
+  expiringWithinDays?: number;
+  limit?: number;
+  offset?: number;
+}): Promise<AdminPassList> {
+  const params = new URLSearchParams();
+  if (opts?.type) params.append('type', opts.type);
+  if (opts?.status) params.append('status', opts.status);
+  if (opts?.customerId) params.append('customerId', opts.customerId);
+  if (opts?.packId) params.append('packId', opts.packId);
+  if (opts?.search) params.append('search', opts.search);
+  if (opts?.expiringWithinDays)
+    params.append('expiringWithinDays', String(opts.expiringWithinDays));
+  if (opts?.limit) params.append('limit', String(opts.limit));
+  if (opts?.offset) params.append('offset', String(opts.offset));
+  const qs = params.toString();
+  const { data } = await fetchApi<{ data: AdminPassList }>(`/admin/passes${qs ? `?${qs}` : ''}`);
+  return data;
+}
+
+export async function getPass(type: PassType, id: string): Promise<AdminPassDetail> {
+  const { data } = await fetchApi<{ data: AdminPassDetail }>(`/admin/passes/${type}/${id}`);
+  return data;
+}
+
+export async function suspendPass(type: PassType, id: string, note: string): Promise<void> {
+  await fetchApi(`/admin/passes/${type}/${id}/suspend`, {
+    method: 'POST',
+    body: JSON.stringify({ note }),
+  });
+}
+
+export async function resumePass(type: PassType, id: string, note: string): Promise<void> {
+  await fetchApi(`/admin/passes/${type}/${id}/resume`, {
+    method: 'POST',
+    body: JSON.stringify({ note }),
+  });
+}
+
+// ─── Dobití / prodloužení a historie pro všechny tři typy ─────────────
+
+/** Kreditová permanentka: ±kredity a/nebo prodloužení platnosti. */
+export async function adjustCreditPass(
+  allocationId: string,
+  patch: { creditsDelta?: number; extendDays?: number; note: string },
+): Promise<void> {
+  await fetchApi(`/admin/credit-packs/allocation/${allocationId}/adjust`, {
+    method: 'PATCH',
+    body: JSON.stringify(patch),
+  });
+}
+
+/** Bundle: ±kusy konkrétní služby a/nebo prodloužení platnosti. */
+export async function adjustBundlePass(
+  allocationId: string,
+  patch: { serviceId?: string; quantityDelta?: number; extendDays?: number; note: string },
+): Promise<void> {
+  await fetchApi(`/admin/bundle-packs/allocation/${allocationId}/adjust`, {
+    method: 'PATCH',
+    body: JSON.stringify(patch),
+  });
+}
+
+/** Časový balíček: ±použití a/nebo prodloužení platnosti. */
+export async function adjustTimePass(
+  allocationId: string,
+  patch: { bookingsUsedDelta?: number; extendDays?: number; note: string },
+): Promise<void> {
+  await fetchApi(`/admin/time-packs/allocation/${allocationId}/adjust`, {
+    method: 'PATCH',
+    body: JSON.stringify(patch),
+  });
+}
+
+export interface AdminBundleItemUse {
+  id: string;
+  bookingId: string | null;
+  serviceId: string | null;
+  quantityDeducted: number;
+  action: 'consumed' | 'refunded' | 'admin_adjustment' | 'cancelled';
+  note: string | null;
+  createdAt: string;
+}
+
+export interface AdminTimePackUse {
+  id: string;
+  bookingId: string | null;
+  serviceId: string | null;
+  usageDate: string;
+  action: 'consumed' | 'refunded' | 'admin_adjustment';
+  note: string | null;
+  createdAt: string;
+}
+
+export async function listBundleItemUses(allocationId: string): Promise<AdminBundleItemUse[]> {
+  const { data } = await fetchApi<{ data: AdminBundleItemUse[] }>(
+    `/admin/bundle-packs/allocation/${allocationId}/uses`,
+  );
+  return data;
+}
+
+export async function listTimePackUses(allocationId: string): Promise<AdminTimePackUse[]> {
+  const { data } = await fetchApi<{ data: AdminTimePackUse[] }>(
+    `/admin/time-packs/allocation/${allocationId}/uses`,
+  );
+  return data;
+}
+
+/** Sjednocený řádek historie čerpání — tři tabulky, jeden tvar pro UI. */
+export interface PassUseRow {
+  id: string;
+  bookingId: string | null;
+  action: string;
+  /** Kolik se strhlo (kladné) nebo vrátilo (záporné). U časových vždy ±1. */
+  amount: number;
+  note: string | null;
+  createdAt: string;
+}
+
+export async function listPassUses(type: PassType, allocationId: string): Promise<PassUseRow[]> {
+  if (type === 'credit') {
+    const rows = await listCreditUses(allocationId);
+    return rows.map((r) => ({
+      id: r.id,
+      bookingId: r.bookingId,
+      action: r.action,
+      amount: r.creditsDeducted,
+      note: r.note,
+      createdAt: r.createdAt,
+    }));
+  }
+  if (type === 'bundle') {
+    const rows = await listBundleItemUses(allocationId);
+    return rows.map((r) => ({
+      id: r.id,
+      bookingId: r.bookingId,
+      action: r.action,
+      amount: r.quantityDeducted,
+      note: r.note,
+      createdAt: r.createdAt,
+    }));
+  }
+  const rows = await listTimePackUses(allocationId);
+  return rows.map((r) => ({
+    id: r.id,
+    bookingId: r.bookingId,
+    action: r.action,
+    amount: r.action === 'refunded' ? -1 : r.action === 'consumed' ? 1 : 0,
+    note: r.note,
+    createdAt: r.createdAt,
+  }));
+}

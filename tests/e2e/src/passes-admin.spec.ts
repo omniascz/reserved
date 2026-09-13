@@ -47,6 +47,7 @@ interface PassItem {
   type: 'credit' | 'bundle' | 'time';
   customerId: string | null;
   customerEmail: string | null;
+  packId: string | null;
   packName: string | null;
   balanceRemaining: number | null;
   balanceTotal: number | null;
@@ -684,6 +685,51 @@ describe('Admin správa vydaných permanentek (UI 2)', () => {
       const adjustments = uses.data.filter((u) => u.action === 'admin_adjustment');
       expect(adjustments.length).toBeGreaterThanOrEqual(2);
       expect(adjustments.every((u) => u.serviceId === null)).toBe(true);
+    });
+  });
+
+  // ─── UI 2 část 2: filtr podle šablony ─────────────────────────────────
+
+  describe('GET /admin/passes?packId — filtr podle šablony', () => {
+    it('vrátí jen instance vydané z dané šablony a packId je v odpovědi', async () => {
+      // Druhá šablona téhož typu, ať je co odfiltrovat.
+      const otherTpl = await apiCall<{ data: { id: string } }>('/admin/credit-packs', {
+        method: 'POST',
+        token,
+        body: JSON.stringify({ name: 'Jina sablona', totalCredits: 2, priceHellers: 9000 }),
+      });
+      const otherAlloc = await apiCall<{ data: { id: string } }>(
+        `/admin/customers/${customerId}/credit-packs`,
+        { method: 'POST', token, body: JSON.stringify({ creditPackId: otherTpl.data.id }) },
+      );
+
+      const filtered = await apiCall<{ data: PassList }>(`/admin/passes?packId=${creditPackId}`, {
+        token,
+      });
+      expect(filtered.data.items.length).toBeGreaterThan(0);
+      expect(filtered.data.items.every((p) => p.packId === creditPackId)).toBe(true);
+      expect(filtered.data.items.some((p) => p.id === creditAllocationId)).toBe(true);
+      expect(filtered.data.items.some((p) => p.id === otherAlloc.data.id)).toBe(false);
+
+      // a druhá šablona vrátí svou instanci
+      const other = await apiCall<{ data: PassList }>(`/admin/passes?packId=${otherTpl.data.id}`, {
+        token,
+      });
+      expect(other.data.items.map((p) => p.id)).toContain(otherAlloc.data.id);
+    });
+
+    it('packId jde kombinovat s filtrem stavu', async () => {
+      const res = await apiCall<{ data: PassList }>(
+        `/admin/passes?packId=${creditPackId}&status=active`,
+        { token },
+      );
+      expect(res.data.items.every((p) => p.effectiveStatus === 'active')).toBe(true);
+      expect(res.data.items.every((p) => p.packId === creditPackId)).toBe(true);
+    });
+
+    it('neplatné packId odmítne Zod', async () => {
+      const err = await expectFail('/admin/passes?packId=neni-uuid', { token });
+      expect(err).toMatch(/VALIDATION_FAILED|400/);
     });
   });
 });

@@ -1,7 +1,9 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import Link from 'next/link';
 import {
+  adjustBundlePass,
   allocateBundlePack,
   listBundlePacks,
   listCustomerBundlePacks,
@@ -75,6 +77,30 @@ export function CustomerBundlePacks({ customerId }: { customerId: string }) {
       setSelectedTemplate('');
       setPriceOverride('');
       setNote('');
+      reload();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Chyba');
+    }
+  }
+
+  /** Dobití / oprava kusů u jedné položky. Poznámka povinná, vše jde do auditu. */
+  async function handleAdjust(alloc: AdminCustomerBundlePack) {
+    const first = alloc.itemsRemaining[0];
+    if (!first) return;
+    const input = window.prompt(
+      `Položka ${first.quantity}× — zadej změnu kusů (+1 přidá, -1 odebere):`,
+    );
+    if (!input) return;
+    const delta = Number(input.replace(/[+\s]/g, ''));
+    if (!Number.isInteger(delta) || delta === 0) return;
+    const reason = window.prompt('Poznámka (povinná):') ?? '';
+    if (!reason.trim()) return;
+    try {
+      await adjustBundlePass(alloc.id, {
+        serviceId: first.serviceId,
+        quantityDelta: delta,
+        note: reason.trim(),
+      });
       reload();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Chyba');
@@ -165,6 +191,7 @@ export function CustomerBundlePacks({ customerId }: { customerId: string }) {
               <th className="text-left py-2">Platnost</th>
               <th className="text-left py-2">Cena</th>
               <th className="text-left py-2">Status</th>
+              <th className="w-32"></th>
             </tr>
           </thead>
           <tbody>
@@ -192,6 +219,23 @@ export function CustomerBundlePacks({ customerId }: { customerId: string }) {
                     <span className={`px-2 py-0.5 rounded text-xs font-medium ${status.color}`}>
                       {status.label}
                     </span>
+                  </td>
+                  <td className="py-2 text-right whitespace-nowrap">
+                    {a.status === 'active' && (
+                      <button
+                        onClick={() => handleAdjust(a)}
+                        className="text-xs text-slate-500 hover:text-slate-900 mr-2"
+                        title="Dobít / opravit kusy"
+                      >
+                        Dobít
+                      </button>
+                    )}
+                    <Link
+                      href={`/passes/bundle-${a.id}`}
+                      className="text-xs text-brand-600 hover:underline"
+                    >
+                      Detail
+                    </Link>
                   </td>
                 </tr>
               );

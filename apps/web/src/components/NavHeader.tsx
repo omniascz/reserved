@@ -54,6 +54,12 @@ const GROUPS: NavGroup[] = [
     label: 'Nabídka',
     items: [
       { href: '/services', label: 'Služby', description: 'Cenník služeb' },
+      {
+        href: '/passes',
+        label: 'Vydané permanentky',
+        description: 'Kdo co má, zůstatky, pozastavení',
+        badge: 'new',
+      },
       { href: '/credit-packs', label: 'Permanentky', description: '10× vstup' },
       { href: '/bundle-packs', label: 'Bundle', description: 'Více služeb v balíčku' },
       { href: '/time-packs', label: 'Časové', description: 'Neomezeno na X dní' },

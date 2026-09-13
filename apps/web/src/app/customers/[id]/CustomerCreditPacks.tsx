@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import Link from 'next/link';
 import {
   adjustCreditAllocation,
   allocateCreditPack,
@@ -188,15 +189,23 @@ export function CustomerCreditPacks({ customerId }: { customerId: string }) {
                       {(a.pricePaidHellers / 100).toLocaleString('cs-CZ')} Kč
                     </div>
                   </div>
-                  {a.status === 'active' && (
-                    <button
-                      onClick={() => handleAdjust(a)}
-                      className="text-xs text-slate-500 hover:text-slate-900"
-                      title="Manuální úprava kreditu"
+                  <div className="flex items-center gap-2 whitespace-nowrap">
+                    {a.status === 'active' && (
+                      <button
+                        onClick={() => handleAdjust(a)}
+                        className="text-xs text-slate-500 hover:text-slate-900"
+                        title="Manuální úprava kreditu"
+                      >
+                        Dobít
+                      </button>
+                    )}
+                    <Link
+                      href={`/passes/credit-${a.id}`}
+                      className="text-xs text-brand-600 hover:underline"
                     >
-                      Upravit
-                    </button>
-                  )}
+                      Detail
+                    </Link>
+                  </div>
                 </div>
 
                 <div className="mt-2">

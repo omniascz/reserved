@@ -1,7 +1,9 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import Link from 'next/link';
 import {
+  adjustTimePass,
   allocateTimePack,
   listCustomerTimePacks,
   listTimePacks,
@@ -70,6 +72,24 @@ export function CustomerTimePacks({ customerId }: { customerId: string }) {
       setSelectedTemplate('');
       setPriceOverride('');
       setNote('');
+      reload();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Chyba');
+    }
+  }
+
+  /** U časového balíčku se „dobíjí" vrácením použití. Poznámka povinná. */
+  async function handleAdjust(alloc: AdminCustomerTimePack) {
+    const input = window.prompt(
+      `Využito ${alloc.bookingsUsed} z ${alloc.snapshotMaxBookingsPerPeriod ?? '∞'}. Kolik použití vrátit? (+1 vrátí jedno)`,
+    );
+    if (!input) return;
+    const delta = Number(input.replace(/[+\s]/g, ''));
+    if (!Number.isInteger(delta) || delta === 0) return;
+    const reason = window.prompt('Poznámka (povinná):') ?? '';
+    if (!reason.trim()) return;
+    try {
+      await adjustTimePass(alloc.id, { bookingsUsedDelta: -delta, note: reason.trim() });
       reload();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Chyba');
@@ -160,6 +180,7 @@ export function CustomerTimePacks({ customerId }: { customerId: string }) {
               <th className="text-left py-2">Platnost do</th>
               <th className="text-left py-2">Cena</th>
               <th className="text-left py-2">Status</th>
+              <th className="w-32"></th>
             </tr>
           </thead>
           <tbody>
@@ -184,6 +205,23 @@ export function CustomerTimePacks({ customerId }: { customerId: string }) {
                     <span className={`px-2 py-0.5 rounded text-xs font-medium ${status.color}`}>
                       {status.label}
                     </span>
+                  </td>
+                  <td className="py-2 text-right whitespace-nowrap">
+                    {a.status === 'active' && (
+                      <button
+                        onClick={() => handleAdjust(a)}
+                        className="text-xs text-slate-500 hover:text-slate-900 mr-2"
+                        title="Vrátit použití"
+                      >
+                        Dobít
+                      </button>
+                    )}
+                    <Link
+                      href={`/passes/time-${a.id}`}
+                      className="text-xs text-brand-600 hover:underline"
+                    >
+                      Detail
+                    </Link>
                   </td>
                 </tr>
               );
