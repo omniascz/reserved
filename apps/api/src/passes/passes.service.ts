@@ -383,20 +383,18 @@ export class PassesService {
           .update(schema.customerBundlePacks)
           .set({ status: newStatus, updatedAt: new Date() })
           .where(eq(schema.customerBundlePacks.id, id));
-        // bundle_item_uses.service_id je NOT NULL, a pozastavení se netýká jedné
-        // služby → bereme první službu ze snapshotu (reálné id, FK drží).
-        if (current.auditServiceId) {
-          await tx.insert(schema.bundleItemUses).values({
-            tenantId,
-            customerBundlePackId: id,
-            bookingId: null,
-            serviceId: current.auditServiceId,
-            quantityDeducted: 0,
-            action: 'admin_adjustment',
-            performedBy: userId,
-            note: auditNote,
-          });
-        }
+        // Pozastavení se netýká konkrétní služby → service_id je NULL (migrace
+        // 0085 sloupec zvolnila). Dřív se tu brala první služba ze snapshotu.
+        await tx.insert(schema.bundleItemUses).values({
+          tenantId,
+          customerBundlePackId: id,
+          bookingId: null,
+          serviceId: null,
+          quantityDeducted: 0,
+          action: 'admin_adjustment',
+          performedBy: userId,
+          note: auditNote,
+        });
       } else {
         await tx
           .update(schema.customerTimePacks)
@@ -422,7 +420,7 @@ export class PassesService {
     tenantId: string,
     type: PassType,
     id: string,
-  ): Promise<{ status: string; auditServiceId: string | null } | null> {
+  ): Promise<{ status: string } | null> {
     if (type === 'credit') {
       const [r] = await tx
         .select({ status: schema.customerCreditPacks.status })
@@ -434,14 +432,11 @@ export class PassesService {
           ),
         )
         .limit(1);
-      return r ? { status: r.status, auditServiceId: null } : null;
+      return r ? { status: r.status } : null;
     }
     if (type === 'bundle') {
       const [r] = await tx
-        .select({
-          status: schema.customerBundlePacks.status,
-          snapshotItems: schema.customerBundlePacks.snapshotItems,
-        })
+        .select({ status: schema.customerBundlePacks.status })
         .from(schema.customerBundlePacks)
         .where(
           and(
@@ -451,7 +446,7 @@ export class PassesService {
         )
         .limit(1);
       if (!r) return null;
-      return { status: r.status, auditServiceId: r.snapshotItems[0]?.serviceId ?? null };
+      return { status: r.status };
     }
     const [r] = await tx
       .select({ status: schema.customerTimePacks.status })
@@ -460,6 +455,6 @@ export class PassesService {
         and(eq(schema.customerTimePacks.id, id), eq(schema.customerTimePacks.tenantId, tenantId)),
       )
       .limit(1);
-    return r ? { status: r.status, auditServiceId: null } : null;
+    return r ? { status: r.status } : null;
   }
 }

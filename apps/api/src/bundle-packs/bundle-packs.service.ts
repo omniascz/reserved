@@ -407,22 +407,19 @@ export class BundlePacksService {
         })
         .where(eq(schema.customerBundlePacks.id, allocationId));
 
-      // Audit: service_id je NOT NULL, takže u samotného prodloužení bereme
-      // první službu ze snapshotu (reálné id — cizí klíč drží).
-      const snapshotFallback = (alloc.snapshotItems as BundleItem[])[0]?.serviceId ?? null;
-      const auditService = auditServiceId ?? snapshotFallback;
-      if (auditService) {
-        await tx.insert(schema.bundleItemUses).values({
-          tenantId,
-          customerBundlePackId: allocationId,
-          bookingId: null,
-          serviceId: auditService,
-          quantityDeducted: -quantityDelta, // delta=+1 -> deducted=-1 (refund); delta=-1 -> deducted=1 (consume)
-          action: 'admin_adjustment',
-          performedBy: userId,
-          note: dto.note,
-        });
-      }
+      // Audit: u samotného prodloužení platnosti není žádná služba, takže
+      // service_id zůstane NULL (migrace 0085). Dřív se tu brala první služba
+      // ze snapshotu, což bylo zavádějící.
+      await tx.insert(schema.bundleItemUses).values({
+        tenantId,
+        customerBundlePackId: allocationId,
+        bookingId: null,
+        serviceId: auditServiceId,
+        quantityDeducted: -quantityDelta, // delta=+1 -> deducted=-1 (refund); delta=-1 -> deducted=1 (consume)
+        action: 'admin_adjustment',
+        performedBy: userId,
+        note: dto.note,
+      });
 
       return { allocationId, items, validUntil: newValidUntil };
     });
@@ -505,7 +502,9 @@ export class BundlePacksService {
           .update(schema.customerBundlePacks)
           .set({
             itemsRemaining: items,
-            status: remainingTotal === 0 ? 'used_up' : 'active',
+            // Nikdy nepřepisuj jiný stav na 'active' — kandidáti sem chodí jen
+            // jako 'active', takže stačí řešit vyčerpání.
+            status: remainingTotal === 0 ? 'used_up' : alloc.status,
             updatedAt: new Date(),
           })
           .where(eq(schema.customerBundlePacks.id, alloc.id));
@@ -550,6 +549,10 @@ export class BundlePacksService {
         .limit(1);
 
       if (!originalUse) return null;
+      // Od migrace 0085 muze byt service_id NULL (rucni uprava, pozastaveni).
+      // Refundovat lze jen skutecne cerpani, ktere sluzbu vzdy nese.
+      const consumedServiceId = originalUse.serviceId;
+      if (!consumedServiceId) return null;
 
       const [existingRefund] = await tx
         .select({ id: schema.bundleItemUses.id })
@@ -572,23 +575,27 @@ export class BundlePacksService {
       if (!alloc) return null;
 
       const items = alloc.itemsRemaining as BundleItem[];
-      const idx = items.findIndex((i) => i.serviceId === originalUse.serviceId);
+      const idx = items.findIndex((i) => i.serviceId === consumedServiceId);
       if (idx === -1) {
         // Polozka uz neni ve snapshotu (template se zmenil — nepravdepodobne,
         // ale ochrana). Pridame zpet zakladni polozku.
-        items.push({ serviceId: originalUse.serviceId, quantity: originalUse.quantityDeducted });
+        items.push({ serviceId: consumedServiceId, quantity: originalUse.quantityDeducted });
       } else {
         items[idx] = {
-          serviceId: originalUse.serviceId,
+          serviceId: consumedServiceId,
           quantity: items[idx]!.quantity + originalUse.quantityDeducted,
         };
       }
 
+      // Pozastavený balíček zůstává pozastavený — jinak by šlo pozastavení obejít
+      // zrušením rezervace. Kus se vrátí do evidence, stav se nemění.
+      // (Oživení po platnosti tu zůstává jako dřív — zapsaný dluh, neřeším teď.)
+      const reactivate = alloc.status === 'used_up';
       await tx
         .update(schema.customerBundlePacks)
         .set({
           itemsRemaining: items,
-          status: 'active', // re-activate i kdyz byl used_up
+          ...(reactivate ? { status: 'active' as const } : {}),
           updatedAt: new Date(),
         })
         .where(eq(schema.customerBundlePacks.id, alloc.id));
@@ -597,7 +604,7 @@ export class BundlePacksService {
         tenantId: input.tenantId,
         customerBundlePackId: alloc.id,
         bookingId: input.bookingId,
-        serviceId: originalUse.serviceId,
+        serviceId: consumedServiceId,
         quantityDeducted: -originalUse.quantityDeducted, // zaporne = refund
         action: 'refunded',
         performedBy: input.performedBy,
@@ -605,7 +612,7 @@ export class BundlePacksService {
 
       return {
         allocationId: alloc.id,
-        serviceId: originalUse.serviceId,
+        serviceId: consumedServiceId,
         quantityRefunded: originalUse.quantityDeducted,
       };
     });

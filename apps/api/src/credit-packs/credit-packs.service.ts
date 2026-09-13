@@ -571,7 +571,9 @@ export class CreditPacksService {
           .update(schema.customerCreditPacks)
           .set({
             creditsRemaining: newRemaining,
-            status: newRemaining === 0 ? 'used_up' : 'active',
+            // Nikdy nepřepisuj jiný stav na 'active' — kandidáti sem chodí jen
+            // jako 'active', takže stačí řešit vyčerpání.
+            status: newRemaining === 0 ? 'used_up' : alloc.status,
             updatedAt: new Date(),
           })
           .where(eq(schema.customerCreditPacks.id, alloc.id));
@@ -634,6 +636,7 @@ export class CreditPacksService {
       const [alloc] = await tx
         .select({
           validUntil: schema.customerCreditPacks.validUntil,
+          status: schema.customerCreditPacks.status,
         })
         .from(schema.customerCreditPacks)
         .where(eq(schema.customerCreditPacks.id, originalUse.customerCreditPackId))
@@ -642,14 +645,17 @@ export class CreditPacksService {
       // Expirovaný balíček NEoživujeme na 'active' — kredit vrátíme do evidence, ale
       // nesmí se tvářit jako použitelný (deduct ho stejně filtruje dle validUntil).
       const isExpired = alloc?.validUntil != null && alloc.validUntil.getTime() <= Date.now();
+      // Pozastavený balíček zůstává pozastavený — jinak by šlo pozastavení obejít
+      // zrušením rezervace. Kredit se vrátí do evidence, stav se nemění.
+      const keepStatus = isExpired || alloc?.status !== 'used_up';
 
       // Add credits back
       await tx
         .update(schema.customerCreditPacks)
         .set({
           creditsRemaining: sql`${schema.customerCreditPacks.creditsRemaining} + ${originalUse.creditsDeducted}`,
-          // Re-aktivuj jen neexpirovaný (used_up → active); expirovaný necháme být.
-          ...(isExpired ? {} : { status: 'active' as const }),
+          // Re-aktivuj JEN vyčerpaný a neexpirovaný (used_up → active).
+          ...(keepStatus ? {} : { status: 'active' as const }),
           updatedAt: new Date(),
         })
         .where(eq(schema.customerCreditPacks.id, originalUse.customerCreditPackId));
@@ -703,7 +709,8 @@ export class CreditPacksService {
         .update(schema.customerCreditPacks)
         .set({
           creditsRemaining: newRemaining,
-          status: newRemaining === 0 ? 'used_up' : 'active',
+          // Penalizace bere jen 'active' balíčky, takže jiný stav nepřepisujeme.
+          status: newRemaining === 0 ? 'used_up' : alloc.status,
           updatedAt: new Date(),
         })
         .where(eq(schema.customerCreditPacks.id, alloc.id));

@@ -496,7 +496,9 @@ export class TimePacksService {
           .update(schema.customerTimePacks)
           .set({
             bookingsUsed: newUsed,
-            status: becomesUsedUp ? 'used_up' : 'active',
+            // Nikdy nepřepisuj jiný stav na 'active' — kandidáti sem chodí jen
+            // jako 'active', takže stačí řešit vyčerpání limitu.
+            status: becomesUsedUp ? 'used_up' : alloc.status,
             updatedAt: new Date(),
           })
           .where(eq(schema.customerTimePacks.id, alloc.id));
@@ -562,13 +564,15 @@ export class TimePacksService {
 
       const newUsed = Math.max(0, alloc.bookingsUsed - 1);
       const stillValid = alloc.validUntil > new Date();
+      // Re-aktivuj JEN vyčerpaný a neexpirovaný. Pozastavený zůstává pozastavený —
+      // jinak by šlo pozastavení obejít zrušením rezervace.
+      const reactivate = stillValid && alloc.status === 'used_up';
 
       await tx
         .update(schema.customerTimePacks)
         .set({
           bookingsUsed: newUsed,
-          // re-activate pokud byl used_up a po refundu se vejde do limitu + jeste neexpiroval
-          status: stillValid ? 'active' : alloc.status,
+          ...(reactivate ? { status: 'active' as const } : {}),
           updatedAt: new Date(),
         })
         .where(eq(schema.customerTimePacks.id, alloc.id));

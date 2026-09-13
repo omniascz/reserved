@@ -87,13 +87,48 @@ describe('Admin správa vydaných permanentek (UI 2)', () => {
     return res.data.id;
   }
 
-  /** Přihlásí klienta do lekce — tohle je cesta, která permanentku reálně čerpá. */
-  async function joinSession(sessionId: string): Promise<void> {
-    await apiCall(`/admin/class-sessions/${sessionId}/join`, {
+  /**
+   * Přihlásí klienta do lekce — tohle je cesta, která permanentku reálně čerpá.
+   * Vrací id rezervace, aby ji šlo zrušit (zrušení vrací permanentku zpět).
+   */
+  async function joinSession(sessionId: string, customerEmail = clientEmail): Promise<string> {
+    const res = await apiCall<{ data: { id: string } }>(`/admin/class-sessions/${sessionId}/join`, {
       method: 'POST',
       token,
-      body: JSON.stringify({ customerName: 'Pavel Permanentka', customerEmail: clientEmail }),
+      body: JSON.stringify({ customerName: 'Pavel Permanentka', customerEmail }),
     });
+    return res.data.id;
+  }
+
+  /** Zruší účast v lekci — tohle je cesta, která permanentku vrací (refund). */
+  async function leaveSession(sessionId: string, bookingId: string): Promise<void> {
+    await apiCall(`/admin/class-sessions/${sessionId}/participants/${bookingId}/leave`, {
+      method: 'POST',
+      token,
+    });
+  }
+
+  /** Založí dalšího klienta (vzniká až přihlášením do lekce) a vrátí jeho id. */
+  async function createCustomer(mail: string, startsAt: string): Promise<string> {
+    const session = await createSession(startsAt);
+    await joinSession(session, mail);
+    const customers = await apiCall<{ data: Array<{ id: string }> }>(
+      `/admin/customers?search=${encodeURIComponent(mail)}`,
+      { token },
+    );
+    return customers.data[0]!.id;
+  }
+
+  async function passState(
+    type: 'credit' | 'bundle' | 'time',
+    id: string,
+  ): Promise<{ stored: string; effective: string; remaining: number | null }> {
+    const res = await apiCall<{ data: PassItem }>(`/admin/passes/${type}/${id}`, { token });
+    return {
+      stored: res.data.storedStatus,
+      effective: res.data.effectiveStatus,
+      remaining: res.data.balanceRemaining,
+    };
   }
 
   async function creditBalance(): Promise<number> {
@@ -489,6 +524,166 @@ describe('Admin správa vydaných permanentek (UI 2)', () => {
       const row = uses.data.find((u) => u.action === 'admin_adjustment');
       expect(row).toBeDefined();
       expect(row?.serviceId).toBeNull();
+    });
+  });
+
+  // ─── 1b: refund nesmí oživit pozastavenou permanentku ─────────────────
+
+  describe('Zrušení rezervace neoživí pozastavenou permanentku', () => {
+    it('KREDITY: pozastavit → zrušit rezervaci → pořád suspended a nejde čerpat', async () => {
+      const mail = `refund-credit-${slug}@e2e.local`;
+      const cust = await createCustomer(mail, '2035-02-01T09:00:00.000Z');
+      const tpl = await apiCall<{ data: { id: string } }>('/admin/credit-packs', {
+        method: 'POST',
+        token,
+        body: JSON.stringify({ name: 'Refund kredity', totalCredits: 4, priceHellers: 1000 }),
+      });
+      const alloc = await apiCall<{ data: { id: string } }>(
+        `/admin/customers/${cust}/credit-packs`,
+        { method: 'POST', token, body: JSON.stringify({ creditPackId: tpl.data.id }) },
+      );
+      const passId = alloc.data.id;
+
+      // 1. čerpání přihlášením do lekce
+      const s1 = await createSession('2035-02-02T09:00:00.000Z');
+      const booking = await joinSession(s1, mail);
+      expect((await passState('credit', passId)).remaining).toBe(3);
+
+      // 2. pozastavit
+      await apiCall(`/admin/passes/credit/${passId}/suspend`, {
+        method: 'POST',
+        token,
+        body: JSON.stringify({ note: 'Klient si dal pauzu.' }),
+      });
+      expect((await passState('credit', passId)).stored).toBe('suspended');
+
+      // 3. zrušit tu rezervaci → kredit se vrátí, ale stav se NESMÍ změnit
+      await leaveSession(s1, booking);
+      const afterRefund = await passState('credit', passId);
+      expect(afterRefund.remaining).toBe(4); // kredit zpět v evidenci
+      expect(afterRefund.stored).toBe('suspended'); // DŘÍV tady bylo 'active'
+      expect(afterRefund.effective).toBe('suspended');
+
+      // 4. a pořád se nedá čerpat
+      const s2 = await createSession('2035-02-03T09:00:00.000Z');
+      await joinSession(s2, mail);
+      expect((await passState('credit', passId)).remaining).toBe(4);
+    });
+
+    it('ČASOVÝ: pozastavit → zrušit rezervaci → pořád suspended a nejde čerpat', async () => {
+      const mail = `refund-time-${slug}@e2e.local`;
+      const cust = await createCustomer(mail, '2035-03-01T09:00:00.000Z');
+      const tpl = await apiCall<{ data: { id: string } }>('/admin/time-packs', {
+        method: 'POST',
+        token,
+        body: JSON.stringify({
+          name: 'Refund casovy',
+          durationDays: 3650,
+          maxBookingsPerPeriod: 4,
+          priceHellers: 1000,
+        }),
+      });
+      const alloc = await apiCall<{ data: { id: string } }>(`/admin/customers/${cust}/time-packs`, {
+        method: 'POST',
+        token,
+        body: JSON.stringify({ timePackId: tpl.data.id }),
+      });
+      const passId = alloc.data.id;
+
+      const s1 = await createSession('2035-03-02T09:00:00.000Z');
+      const booking = await joinSession(s1, mail);
+      expect((await passState('time', passId)).remaining).toBe(3);
+
+      await apiCall(`/admin/passes/time/${passId}/suspend`, {
+        method: 'POST',
+        token,
+        body: JSON.stringify({ note: 'Pauza.' }),
+      });
+
+      await leaveSession(s1, booking);
+      const afterRefund = await passState('time', passId);
+      expect(afterRefund.remaining).toBe(4); // použití se vrátilo
+      expect(afterRefund.stored).toBe('suspended'); // DŘÍV tady bylo 'active'
+
+      const s2 = await createSession('2035-03-03T09:00:00.000Z');
+      await joinSession(s2, mail);
+      expect((await passState('time', passId)).remaining).toBe(4);
+    });
+
+    it('BUNDLE: pozastavit → zrušit rezervaci → pořád suspended a nejde čerpat', async () => {
+      const mail = `refund-bundle-${slug}@e2e.local`;
+      const cust = await createCustomer(mail, '2035-04-01T09:00:00.000Z');
+      const tpl = await apiCall<{ data: { id: string } }>('/admin/bundle-packs', {
+        method: 'POST',
+        token,
+        body: JSON.stringify({
+          name: 'Refund bundle',
+          items: [{ serviceId: groupServiceId, quantity: 3 }],
+          priceHellers: 1000,
+        }),
+      });
+      const alloc = await apiCall<{ data: { id: string } }>(
+        `/admin/customers/${cust}/bundle-packs`,
+        { method: 'POST', token, body: JSON.stringify({ bundlePackId: tpl.data.id }) },
+      );
+      const passId = alloc.data.id;
+
+      const s1 = await createSession('2035-04-02T09:00:00.000Z');
+      const booking = await joinSession(s1, mail);
+      expect((await passState('bundle', passId)).remaining).toBe(2);
+
+      await apiCall(`/admin/passes/bundle/${passId}/suspend`, {
+        method: 'POST',
+        token,
+        body: JSON.stringify({ note: 'Pauza.' }),
+      });
+
+      await leaveSession(s1, booking);
+      const afterRefund = await passState('bundle', passId);
+      expect(afterRefund.remaining).toBe(3); // kus se vrátil
+      expect(afterRefund.stored).toBe('suspended'); // DŘÍV tady bylo bezpodmínečně 'active'
+
+      const s2 = await createSession('2035-04-03T09:00:00.000Z');
+      await joinSession(s2, mail);
+      expect((await passState('bundle', passId)).remaining).toBe(3);
+    });
+
+    it('pozastavení bundle zapíše audit se service_id NULL (migrace 0085)', async () => {
+      const mail = `audit-bundle-${slug}@e2e.local`;
+      const cust = await createCustomer(mail, '2035-05-01T09:00:00.000Z');
+      const tpl = await apiCall<{ data: { id: string } }>('/admin/bundle-packs', {
+        method: 'POST',
+        token,
+        body: JSON.stringify({
+          name: 'Audit bundle',
+          items: [{ serviceId: secondServiceId, quantity: 1 }],
+          validityDays: 30,
+          priceHellers: 1000,
+        }),
+      });
+      const alloc = await apiCall<{ data: { id: string } }>(
+        `/admin/customers/${cust}/bundle-packs`,
+        { method: 'POST', token, body: JSON.stringify({ bundlePackId: tpl.data.id }) },
+      );
+
+      await apiCall(`/admin/passes/bundle/${alloc.data.id}/suspend`, {
+        method: 'POST',
+        token,
+        body: JSON.stringify({ note: 'Test auditu.' }),
+      });
+      // prodloužení platnosti se taky netýká konkrétní služby
+      await apiCall(`/admin/bundle-packs/allocation/${alloc.data.id}/adjust`, {
+        method: 'PATCH',
+        token,
+        body: JSON.stringify({ extendDays: 5, note: 'Prodlouzeni bez polozky.' }),
+      });
+
+      const uses = await apiCall<{
+        data: Array<{ action: string; serviceId: string | null; note: string | null }>;
+      }>(`/admin/bundle-packs/allocation/${alloc.data.id}/uses`, { token });
+      const adjustments = uses.data.filter((u) => u.action === 'admin_adjustment');
+      expect(adjustments.length).toBeGreaterThanOrEqual(2);
+      expect(adjustments.every((u) => u.serviceId === null)).toBe(true);
     });
   });
 });
