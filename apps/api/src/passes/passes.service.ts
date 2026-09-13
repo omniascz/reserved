@@ -55,6 +55,8 @@ interface PassRow {
   customerLastName: string | null;
   customerEmail: string | null;
   corporateAccountId: string | null;
+  /** Id šablony, ze které byla instance vydána. */
+  packId: string | null;
   packName: string | null;
   /** NULL = neomezeno (časový balíček bez limitu počtu rezervací). */
   balanceRemaining: number | null;
@@ -138,6 +140,7 @@ export class PassesService {
         c.last_name                       AS "customerLastName",
         c.email                           AS "customerEmail",
         p.corporate_account_id            AS "corporateAccountId",
+        p.${sql.raw(templateFk)}          AS "packId",
         t.name                            AS "packName",
         ${balanceRemaining}               AS "balanceRemaining",
         ${balanceTotal}                   AS "balanceTotal",
@@ -197,6 +200,7 @@ export class PassesService {
         WHERE (${query.type ?? null}::text IS NULL OR p.type = ${query.type ?? null})
           AND (${query.status ?? null}::text IS NULL OR p."effectiveStatus" = ${query.status ?? null})
           AND (${query.customerId ?? null}::uuid IS NULL OR p."customerId" = ${query.customerId ?? null}::uuid)
+          AND (${query.packId ?? null}::uuid IS NULL OR p."packId" = ${query.packId ?? null}::uuid)
           AND (
             ${search}::text IS NULL
             OR p."customerFirstName" ILIKE ${search}

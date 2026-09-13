@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { NavHeader } from '@/components/NavHeader';
 import {
   AdminApiError,
@@ -154,12 +155,20 @@ export default function TimePacksPage() {
               Kč" nebo „1 lekce denně, max 10 za měsíc".
             </p>
           </div>
-          <button
-            onClick={startNew}
-            className="bg-brand-600 hover:bg-brand-700 text-white font-semibold px-4 py-2 rounded-lg"
-          >
-            + Nový časový balíček
-          </button>
+          <div className="flex gap-2">
+            <Link
+              href="/passes?type=time"
+              className="px-4 py-2 border border-slate-300 rounded font-medium hover:bg-slate-50"
+            >
+              Vydané balíčky
+            </Link>
+            <button
+              onClick={startNew}
+              className="bg-brand-600 hover:bg-brand-700 text-white font-semibold px-4 py-2 rounded-lg"
+            >
+              + Nový časový balíček
+            </button>
+          </div>
         </div>
 
         {error && (

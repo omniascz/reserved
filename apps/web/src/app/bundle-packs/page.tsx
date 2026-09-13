@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { NavHeader } from '@/components/NavHeader';
 import {
   AdminApiError,
@@ -179,12 +180,20 @@ export default function BundlePacksPage() {
               manikúra + zábal za 2200 Kč.
             </p>
           </div>
-          <button
-            onClick={startNew}
-            className="bg-brand-600 hover:bg-brand-700 text-white font-semibold px-4 py-2 rounded-lg"
-          >
-            + Nový bundle
-          </button>
+          <div className="flex gap-2">
+            <Link
+              href="/passes?type=bundle"
+              className="px-4 py-2 border border-slate-300 rounded font-medium hover:bg-slate-50"
+            >
+              Vydané balíčky
+            </Link>
+            <button
+              onClick={startNew}
+              className="bg-brand-600 hover:bg-brand-700 text-white font-semibold px-4 py-2 rounded-lg"
+            >
+              + Nový bundle
+            </button>
+          </div>
         </div>
 
         {error && (

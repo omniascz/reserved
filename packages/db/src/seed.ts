@@ -1,5 +1,6 @@
 import * as argon2 from 'argon2';
 import { randomBytes } from 'node:crypto';
+import { eq } from 'drizzle-orm';
 import { db } from './client.js';
 import {
   tenants,
@@ -16,6 +17,15 @@ import {
   classSessions,
   classSessionWaitlist,
   resources,
+  creditPacks,
+  customerCreditPacks,
+  creditUses,
+  timePacks,
+  customerTimePacks,
+  timePackUses,
+  bundlePacks,
+  customerBundlePacks,
+  bundleItemUses,
 } from './schema/index.js';
 
 const DEMO_EMAIL = 'admin@demo.local';
@@ -362,6 +372,46 @@ async function seed(): Promise<void> {
   });
   await db.insert(bookings).values(bookingValues);
 
+  // ─── Bundle balíček (salonní, proto v demo tenantovi, ne ve fitness) ──
+  const [bundleTpl] = await db
+    .insert(bundlePacks)
+    .values({
+      tenantId: tenant.id,
+      name: 'Relaxační balíček',
+      description: 'Střih a barvení v jedné ceně.',
+      items: [
+        { serviceId: strih.id, quantity: 2 },
+        { serviceId: barveni.id, quantity: 1 },
+      ],
+      validityDays: 180,
+      priceHellers: 180000,
+      currency: 'CZK',
+      isActive: true,
+    })
+    .returning();
+  if (!bundleTpl) throw new Error('Failed to insert bundle pack template');
+
+  await db.insert(customerBundlePacks).values({
+    tenantId: tenant.id,
+    customerId: jana.id,
+    bundlePackId: bundleTpl.id,
+    // Jeden střih už vyčerpaný → 1× střih + 1× barvení zbývá.
+    itemsRemaining: [
+      { serviceId: strih.id, quantity: 1 },
+      { serviceId: barveni.id, quantity: 1 },
+    ],
+    snapshotItems: [
+      { serviceId: strih.id, quantity: 2 },
+      { serviceId: barveni.id, quantity: 1 },
+    ],
+    snapshotAllowedBranchIds: [],
+    snapshotSameVisitRequired: false,
+    validFrom: addDays(new Date(), -30),
+    validUntil: addDays(new Date(), 150),
+    status: 'active',
+    pricePaidHellers: 180000,
+  });
+
   const pastCount = plan.filter((p) => p.status === 'completed').length;
   const futureCount = plan.length - pastCount;
 
@@ -373,6 +423,7 @@ async function seed(): Promise<void> {
   console.log(`               Tomáš Demo — po–pá 12–20 (barvení)`);
   console.log(`  Klienti:     ${customerRows.length}`);
   console.log(`  Rezervace:   ${pastCount} v minulosti (dokončené) + ${futureCount} v budoucnu`);
+  console.log(`  Bundle:      Relaxační balíček — vydaný Janě (1× střih + 1× barvení zbývá)`);
   console.log(`  Login:       ${DEMO_EMAIL}  /  ${DEMO_PASSWORD}`);
   console.log(`  Admin:       http://localhost:4002  (tenant: demo)\n`);
   await seedFitness();
@@ -734,6 +785,230 @@ async function seedFitness(): Promise<void> {
     ],
   });
 
+  // ─── Permanentky (UI 2) ───────────────────────────────────────────────
+  // Čtyři instance v různých stavech, ať je na čem klikat — a hlavně ať je
+  // vidět rozdíl mezi uloženým a vypočteným stavem u propadlé permanentky.
+
+  const [creditTpl] = await db
+    .insert(creditPacks)
+    .values({
+      tenantId,
+      name: '10× EMS',
+      description: 'Deset vstupů na EMS trénink, platnost 90 dní.',
+      mode: 'per_visit',
+      totalCredits: 10,
+      validityDays: 90,
+      priceHellers: 500000,
+      currency: 'CZK',
+      isActive: true,
+    })
+    .returning();
+  if (!creditTpl) throw new Error('Failed to insert credit pack template');
+
+  const [timeTpl] = await db
+    .insert(timePacks)
+    .values({
+      tenantId,
+      name: '30 dní neomezeně',
+      description: 'Neomezené lekce po 30 dní, maximálně 2 vstupy denně.',
+      durationDays: 30,
+      maxBookingsPerDay: 2,
+      priceHellers: 180000,
+      currency: 'CZK',
+      isActive: true,
+    })
+    .returning();
+  if (!timeTpl) throw new Error('Failed to insert time pack template');
+
+  // Zúžení typu z `if (!creditTpl) throw` se do vnořené funkce nepřenese —
+  // proto si id vytáhneme do proměnné, která volitelná není.
+  const creditTplId = creditTpl.id;
+
+  /** Vydá kreditovou permanentku a vrátí id instance. */
+  async function issueCreditPass(opts: {
+    customer: SeedCustomer;
+    creditsRemaining: number;
+    validFrom: Date;
+    validUntil: Date | null;
+    status: string;
+    note?: string;
+  }): Promise<string> {
+    const [row] = await db
+      .insert(customerCreditPacks)
+      .values({
+        tenantId,
+        customerId: opts.customer.id,
+        creditPackId: creditTplId,
+        creditsRemaining: opts.creditsRemaining,
+        creditsAtPurchase: 10,
+        snapshotMode: 'per_visit',
+        snapshotAllowedServiceIds: [],
+        snapshotAllowedBranchIds: [],
+        snapshotCreditCosts: {},
+        validFrom: opts.validFrom,
+        validUntil: opts.validUntil,
+        status: opts.status,
+        pricePaidHellers: 500000,
+        note: opts.note ?? null,
+      })
+      .returning();
+    if (!row) throw new Error('Failed to issue credit pass');
+    return row.id;
+  }
+
+  // Rozjetá: 7 z 10, platná ještě 83 dní.
+  const startedPass = await issueCreditPass({
+    customer: klara,
+    creditsRemaining: 7,
+    validFrom: addDays(new Date(), -7),
+    validUntil: addDays(new Date(), 83),
+    status: 'active',
+  });
+
+  // Vyčerpaná: 0 z 10.
+  const usedUpPass = await issueCreditPass({
+    customer: tomasH,
+    creditsRemaining: 0,
+    validFrom: addDays(new Date(), -60),
+    validUntil: addDays(new Date(), 30),
+    status: 'used_up',
+  });
+
+  // Propadlá, ale ve sloupci pořád 'active' — přesně ten rozdíl, který musí UI
+  // ukázat jako „Propadlá" (expiraci nikdo neuklízí).
+  const expiredPass = await issueCreditPass({
+    customer: nikola,
+    creditsRemaining: 4,
+    validFrom: addDays(new Date(), -120),
+    validUntil: addDays(new Date(), -14),
+    status: 'active',
+    note: 'Propadlá — ve sloupci status zůstalo active.',
+  });
+
+  // Pozastavená: klient na dva měsíce odjel.
+  const suspendedPass = await issueCreditPass({
+    customer: radek,
+    creditsRemaining: 6,
+    validFrom: addDays(new Date(), -20),
+    validUntil: addDays(new Date(), 70),
+    status: 'suspended',
+    note: 'Klient na dva měsíce v zahraničí.',
+  });
+
+  // Časový balíček: rozjetý, platí ještě 23 dní.
+  const [timePass] = await db
+    .insert(customerTimePacks)
+    .values({
+      tenantId,
+      customerId: zuzana.id,
+      timePackId: timeTpl.id,
+      snapshotMaxBookingsPerPeriod: null,
+      snapshotMaxBookingsPerDay: 2,
+      snapshotAllowedServiceIds: [],
+      snapshotAllowedBranchIds: [],
+      bookingsUsed: 3,
+      validFrom: addDays(new Date(), -7),
+      validUntil: addDays(new Date(), 23),
+      status: 'active',
+      pricePaidHellers: 180000,
+    })
+    .returning();
+  if (!timePass) throw new Error('Failed to issue time pass');
+
+  // Čerpání navázané na SKUTEČNÉ rezervace fitness lekcí, ať historie není prázdná.
+  const fitnessBookings = await db
+    .select({
+      id: bookings.id,
+      customerId: bookings.customerId,
+      startsAt: bookings.startsAt,
+    })
+    .from(bookings)
+    .where(eq(bookings.tenantId, tenantId));
+
+  const bookingsOf = (customerId: string) =>
+    fitnessBookings.filter((b) => b.customerId === customerId);
+
+  const creditUseRows: Array<typeof creditUses.$inferInsert> = [];
+  // Klára: tři čerpání (10 → 7).
+  for (const b of bookingsOf(klara.id).slice(0, 3)) {
+    creditUseRows.push({
+      tenantId,
+      customerCreditPackId: startedPass,
+      bookingId: b.id,
+      creditsDeducted: 1,
+      action: 'consumed',
+      performedBy: null,
+    });
+  }
+  // Tomáš: dvě čerpání + ruční doplnění, aby historie měla i jinou akci.
+  for (const b of bookingsOf(tomasH.id).slice(0, 2)) {
+    creditUseRows.push({
+      tenantId,
+      customerCreditPackId: usedUpPass,
+      bookingId: b.id,
+      creditsDeducted: 1,
+      action: 'consumed',
+      performedBy: null,
+    });
+  }
+  creditUseRows.push({
+    tenantId,
+    customerCreditPackId: usedUpPass,
+    bookingId: null,
+    creditsDeducted: -2,
+    action: 'admin_adjustment',
+    performedBy: null,
+    note: 'Dobití za zrušenou lekci.',
+  });
+  // Nikola (propadlá): dvě čerpání.
+  for (const b of bookingsOf(nikola.id).slice(0, 2)) {
+    creditUseRows.push({
+      tenantId,
+      customerCreditPackId: expiredPass,
+      bookingId: b.id,
+      creditsDeducted: 1,
+      action: 'consumed',
+      performedBy: null,
+    });
+  }
+  // Radek (pozastavená): jedno čerpání + záznam o pozastavení.
+  for (const b of bookingsOf(radek.id).slice(0, 1)) {
+    creditUseRows.push({
+      tenantId,
+      customerCreditPackId: suspendedPass,
+      bookingId: b.id,
+      creditsDeducted: 1,
+      action: 'consumed',
+      performedBy: null,
+    });
+  }
+  creditUseRows.push({
+    tenantId,
+    customerCreditPackId: suspendedPass,
+    bookingId: null,
+    creditsDeducted: 0,
+    action: 'admin_adjustment',
+    performedBy: null,
+    note: 'Pozastaveno: klient na dva měsíce v zahraničí.',
+  });
+  await db.insert(creditUses).values(creditUseRows);
+
+  // Časový balíček: tři použití (service_id je u ručních úprav NULL, u čerpání služba).
+  const zuzanaBookings = bookingsOf(zuzana.id).slice(0, 3);
+  if (zuzanaBookings.length > 0) {
+    await db.insert(timePackUses).values(
+      zuzanaBookings.map((b) => ({
+        tenantId,
+        customerTimePackId: timePass.id,
+        bookingId: b.id,
+        serviceId: ems.id,
+        usageDate: b.startsAt,
+        action: 'consumed',
+        performedBy: null,
+      })),
+    );
+  }
+
   console.log(`\n✓ Fitness seed OK`);
   console.log(`  Tenant:      ${tenant.slug} (${tenant.id})`);
   console.log(`  Pobočka:     ${branch.name}`);
@@ -745,6 +1020,9 @@ async function seedFitness(): Promise<void> {
   console.log(`  Klienti:     ${customerRows.length}`);
   console.log(`  Lekce:       poloprázdná (4/12) · plná (3/3) + 3 v pořadníku ·`);
   console.log(`               EMS na přístroji #1 (1/1) · minulá s docházkou (2 přišli, 1 ne)`);
+  console.log(`  Permanentky: 10× EMS — rozjetá (7/10) · vyčerpaná (0/10) ·`);
+  console.log(`               propadlá (v DB 'active', ve výpisu 'Propadlá') · pozastavená`);
+  console.log(`               30 dní neomezeně — rozjetá (3 použití, 2/den)`);
   console.log(`  Login:       ${FITNESS_EMAIL}  /  ${FITNESS_PASSWORD}`);
   console.log(`  Admin:       http://localhost:4002  (tenant: fitness)\n`);
 }

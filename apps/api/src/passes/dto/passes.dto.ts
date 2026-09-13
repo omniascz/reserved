@@ -26,6 +26,8 @@ export const ListPassesQuerySchema = z.object({
   /** Filtruje podle VYPOČTENÉHO stavu, ne podle sloupce. */
   status: z.enum(passEffectiveStatuses).optional(),
   customerId: z.string().uuid().optional(),
+  /** Jen instance vydané z konkrétní šablony (credit_pack_id / bundle_pack_id / time_pack_id). */
+  packId: z.string().uuid().optional(),
   /** Hledá v jméně, příjmení a e-mailu klienta. */
   search: z.string().min(1).max(200).optional(),
   /** Jen permanentky, které propadnou do N dnů (a ještě nepropadly). */
