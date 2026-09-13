@@ -82,10 +82,15 @@ export default function OnboardingPage() {
   const [checklist, setChecklist] = useState<OnboardingChecklist | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const businessType =
-    typeof window !== 'undefined'
-      ? (sessionStorage.getItem('onboarding_business_type') ?? 'other')
-      : 'other';
+  // POZOR: `typeof window !== 'undefined'` PŘED pádem serveru ochrání, ale před
+  // chybou hydratace NE — server by dosadil 'other' a prohlížeč skutečný typ,
+  // takže by se první vykreslený krok lišil (jiný počet šablon, jiné hodnoty
+  // v polích). Proto se čte až po připojení v prohlížeči.
+  const [businessType, setBusinessType] = useState('other');
+
+  useEffect(() => {
+    setBusinessType(sessionStorage.getItem('onboarding_business_type') ?? 'other');
+  }, []);
 
   useEffect(() => {
     if (!getAccessToken()) {

@@ -4,11 +4,19 @@ import { FormEvent, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { login, setAuth, AdminApiError } from '@/lib/api';
 
+// Předvyplnění formuláře je jen pro lokální vývoj a NENÍ v kódu — bere se z env
+// (stejně jako DevAutoLogin). Bez těch proměnných je formulář prázdný, a v
+// produkčním běhu se nepředvyplní nic ani kdyby proměnné existovaly.
+const DEV_PREFILL = process.env.NODE_ENV === 'development';
+const PREFILL_SLUG = (DEV_PREFILL && process.env.NEXT_PUBLIC_DEV_LOGIN_SLUG) || '';
+const PREFILL_EMAIL = (DEV_PREFILL && process.env.NEXT_PUBLIC_DEV_LOGIN_EMAIL) || '';
+const PREFILL_PASSWORD = (DEV_PREFILL && process.env.NEXT_PUBLIC_DEV_LOGIN_PASSWORD) || '';
+
 export default function LoginPage() {
   const router = useRouter();
-  const [tenantSlug, setTenantSlug] = useState('demo-widget');
-  const [email, setEmail] = useState('o@demo-widget.test');
-  const [password, setPassword] = useState('verysecurepassword123');
+  const [tenantSlug, setTenantSlug] = useState(PREFILL_SLUG);
+  const [email, setEmail] = useState(PREFILL_EMAIL);
+  const [password, setPassword] = useState(PREFILL_PASSWORD);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 

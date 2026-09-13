@@ -36,7 +36,14 @@ export default function ThemeSettingsPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const slug = getTenantSlug();
+  // Slug až po připojení v prohlížeči — čtení z localStorage při renderu je
+  // zdroj chyb hydratace. Tady ho zatím zakrývá čekací stav, ale spoléhat se
+  // na to je křehké (stačí přeskládat podmínky výš).
+  const [slug, setSlug] = useState<string | null>(null);
+
+  useEffect(() => {
+    setSlug(getTenantSlug());
+  }, []);
 
   useEffect(() => {
     if (!getAccessToken()) router.replace('/login');

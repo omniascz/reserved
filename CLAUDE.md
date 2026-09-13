@@ -75,6 +75,32 @@ nebo `ADD CONSTRAINT` u cizího klíče, který se věcně nemění, příslušn
 API 4010 · master 4001 · web 4002 · portal 4003 · widget 4004 · marketing 4005 · tenant-site 4006 ·
 Postgres 5433 (DB `reserved_dev` + `reserved_test`) · Mailhog SMTP 1026 / UI 8026
 
+### PAST: `pnpm dev` po ukončení nechává běžet potomka
+
+Ukončení `pnpm dev` (Ctrl+C, TaskStop, i kill systému při nedostatku paměti) zabije jen wrapper —
+podřízený `tsx watch` (API) nebo `next dev` (frontendy) **běží dál**, drží port a drží paměť.
+Projeví se to dvěma způsoby, které svádějí na špatnou stopu: nový start spadne na obsazeném portu,
+nebo port naopak odpovídá, přestože „server neběží".
+
+**Před spuštěním stacku vždy zkontroluj a zabij osiřelé procesy:**
+
+```powershell
+# co drží porty Reserved
+Get-CimInstance Win32_Process -Filter "Name='node.exe'" |
+  Where-Object { $_.CommandLine -like "*Code\reserved*" } |
+  Select-Object ProcessId, @{n='MB';e={[math]::Round($_.WorkingSetSize/1MB)}}, CommandLine
+
+# zabít je
+Get-CimInstance Win32_Process -Filter "Name='node.exe'" |
+  Where-Object { $_.CommandLine -like "*Code\reserved*" } |
+  ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
+```
+
+Reálný dopad (2026-09-13): šest osiřelých procesů drželo 407 MB a systém při 0,8 GB volné paměti
+odstřelil všechny tři dev servery. Po úklidu byly volné 2 GB. Celý stack potřebuje ~1,2 GB
+(Postgres + Mailhog 59 MB, API ~60 MB, každý Next dev server ~360–460 MB), takže **frontendy
+pouštěj po jednom** — admin testy potřebují jen web (4002), widget test jen widget (4004).
+
 ## Železná pravidla
 
 ### Peníze
@@ -130,6 +156,26 @@ Postgres 5433 (DB `reserved_dev` + `reserved_test`) · Mailhog SMTP 1026 / UI 80
 - **Min. 1 test soubor per modul** ihned po napsání
 - Race conditions, money math, tenant boundaries → integration testy
 - Mock DB jen pro pure logic, jinak Postgres v Docker testovací DB
+
+**PAST: e2e testy musí mít TUTÉŽ databázi jako běžící API.** Skripty v `packages/db`
+(`db:migrate`, `db:seed`) ani e2e testy si `.env` nenačítají — `DATABASE_URL` berou čistě
+z prostředí procesu (v CI ji dodává workflow). Lokálně ji tedy musíš předat sám:
+
+```bash
+export $(grep -E '^DATABASE_URL=' apps/api/.env | xargs)
+pnpm db:migrate && pnpm db:seed
+pnpm turbo run test
+```
+
+Bez ní spadne rovnou `DATABASE_URL is not set`. **Horší je předat ji špatně:** e2e testy si
+tenanta zakládají přes HTTP (`/auth/register`), tedy v DB běžícího API, ale některé věci
+(magic-link token) zapisují přímo SQL spojením. Když každá půlka míří jinam, tenant vznikne
+v jedné DB a odkaz na něj ve druhé → `violates foreign key constraint
+"customer_magic_links_tenant_id_tenants_id_fk"`. Vypadá to jako regrese v kódu, ale je to
+jen rozpojená databáze.
+
+Playwright testy obrazovek (`tests/ui`) jedou samostatně přes `pnpm test:ui` a do `turbo run test`
+**se schválně nechytají** — balíček nemá script `test`.
 
 ### Commits
 

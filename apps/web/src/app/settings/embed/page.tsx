@@ -25,7 +25,12 @@ type EmbedKind =
 
 export default function EmbedSettingsPage() {
   const router = useRouter();
-  const slug = getTenantSlug();
+  // Slug je v localStorage, který server nezná. Kdyby se četl rovnou při
+  // renderu, server by vždy spadl do větve "nepodařilo načíst" a prohlížeč by
+  // vykreslil celou stránku → React by ty dva stromy nespároval a serverový
+  // render zahodil. Proto ho doplňujeme až po připojení v prohlížeči a do té
+  // doby rozlišujeme "ještě nevím" (null) od "není" (prázdný řetězec).
+  const [slug, setSlug] = useState<string | null>(null);
   const [kind, setKind] = useState<EmbedKind>('sdk');
   const [lang, setLang] = useState<'cs' | 'en'>('cs');
   const [copied, setCopied] = useState(false);
@@ -33,6 +38,18 @@ export default function EmbedSettingsPage() {
   useEffect(() => {
     if (!getAccessToken()) router.replace('/login');
   }, [router]);
+
+  useEffect(() => {
+    setSlug(getTenantSlug() ?? '');
+  }, []);
+
+  if (slug === null) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-slate-400">Načítám…</div>
+      </div>
+    );
+  }
 
   if (!slug) {
     return (

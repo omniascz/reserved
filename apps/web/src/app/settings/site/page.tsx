@@ -53,7 +53,13 @@ const TEMPLATES: Array<{
 
 export default function SiteSettingsPage() {
   const router = useRouter();
-  const slug = getTenantSlug();
+  // Slug až po připojení v prohlížeči — viz komentář v settings/theme.
+  const [slug, setSlug] = useState<string | null>(null);
+
+  useEffect(() => {
+    setSlug(getTenantSlug());
+  }, []);
+
   const [settings, setSettings] = useState<SiteSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);

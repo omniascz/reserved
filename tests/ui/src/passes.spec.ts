@@ -5,13 +5,10 @@ const statusFilter = 'div:has(> label:text-is("Stav")) > select';
 const typeFilter = 'div:has(> label:text-is("Typ")) > select';
 
 test.describe('Admin — /passes (seznam vydaných permanentek)', () => {
-  test.beforeEach(async ({ page, errors }) => {
-    // ZNÁMÝ NÁLEZ (v téhle fázi se nálezy neopravují, jen hlásí): NavHeader
-    // vypisuje slug z localStorage, takže se serverový a klientský render
-    // rozejdou → "Hydration failed" a React zahodí celý SSR výstup.
-    // Povolujeme výslovně, ať testy hlídají všechno ostatní a ať je v kódu
-    // vidět, že o té chybě víme.
-    errors.allow(/Hydration failed|Expected server HTML|hydration|hydrating/i);
+  test.beforeEach(async ({ page }) => {
+    // Povolenka na chybu hydratace je ZRUŠENÁ — NavHeader už slug vypisuje až
+    // po připojení v prohlížeči, takže žádná chyba nastat nesmí. Kdyby se
+    // regrese vrátila, testy na ní spadnou (hlídá je fixture `errors`).
     await loginAsFitnessAdmin(page);
   });
 
@@ -57,13 +54,10 @@ test.describe('Admin — /passes (seznam vydaných permanentek)', () => {
 });
 
 test.describe('Admin — /passes/[id] (detail permanentky)', () => {
-  test.beforeEach(async ({ page, errors }) => {
-    // ZNÁMÝ NÁLEZ (v téhle fázi se nálezy neopravují, jen hlásí): NavHeader
-    // vypisuje slug z localStorage, takže se serverový a klientský render
-    // rozejdou → "Hydration failed" a React zahodí celý SSR výstup.
-    // Povolujeme výslovně, ať testy hlídají všechno ostatní a ať je v kódu
-    // vidět, že o té chybě víme.
-    errors.allow(/Hydration failed|Expected server HTML|hydration|hydrating/i);
+  test.beforeEach(async ({ page }) => {
+    // Povolenka na chybu hydratace je ZRUŠENÁ — NavHeader už slug vypisuje až
+    // po připojení v prohlížeči, takže žádná chyba nastat nesmí. Kdyby se
+    // regrese vrátila, testy na ní spadnou (hlídá je fixture `errors`).
     await loginAsFitnessAdmin(page);
   });
 

@@ -4,12 +4,13 @@
 // Embed na cizí web přes embed.js (data-view="calendar"). Měsíční mřížka
 // obarvená dle dostupnosti → klik na den → volné časy → kontakt → rezervace.
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   confirmBooking,
   createHold,
   getAvailability,
   getAvailableDays,
+  isAbortError,
   listServices,
   ReservedApiError,
   type PublicService,
@@ -73,20 +74,42 @@ export function CalendarBooking({
       .catch(() => undefined);
   }, [slug, presetServiceId]);
 
+  // Dvě nezávislá načítání = dva řídicí objekty: měsíční mřížka a časy dne.
+  const daysRef = useRef<AbortController | null>(null);
+  const slotsRef = useRef<AbortController | null>(null);
+
   const loadDays = useCallback(() => {
     if (!serviceId) return;
+    // Rychlé listování měsíci nebo přepnutí služby: zrušit předchozí dotaz,
+    // ať jeho opožděná odpověď nepřepíše mřížku jiného měsíce.
+    daysRef.current?.abort();
+    const ac = new AbortController();
+    daysRef.current = ac;
     setLoadingDays(true);
     setError(null);
-    getAvailableDays(slug, serviceId, month)
-      .then((list) => setDays(Object.fromEntries(list.map((d) => [d.date, d.slotCount]))))
-      .catch((e) => setError(e instanceof ReservedApiError ? e.message : t('calendar.error')))
-      .finally(() => setLoadingDays(false));
+    getAvailableDays(slug, serviceId, month, undefined, ac.signal)
+      .then((list) => {
+        if (!ac.signal.aborted) setDays(Object.fromEntries(list.map((d) => [d.date, d.slotCount])));
+      })
+      .catch((e) => {
+        if (isAbortError(e)) return;
+        setError(e instanceof ReservedApiError ? e.message : t('calendar.error'));
+      })
+      .finally(() => {
+        if (!ac.signal.aborted) setLoadingDays(false);
+      });
   }, [slug, serviceId, month, t]);
 
   useEffect(() => {
     setSelectedDate(null);
     setDaySlots([]);
+    // Časy starého dne nesmí doběhnout do nového měsíce.
+    slotsRef.current?.abort();
     loadDays();
+    return () => {
+      daysRef.current?.abort();
+      slotsRef.current?.abort();
+    };
   }, [loadDays]);
 
   function pickDay(date: string): void {
@@ -94,9 +117,14 @@ export function CalendarBooking({
     setSelectedDate(date);
     setPending(null);
     setDone(false);
+    // Proklikávání dnů: odpověď na dřívější den nesmí přebít vybraný den.
+    slotsRef.current?.abort();
+    const ac = new AbortController();
+    slotsRef.current = ac;
     setLoadingSlots(true);
-    getAvailability(slug, serviceId, date)
+    getAvailability(slug, serviceId, date, undefined, ac.signal)
       .then((perEmp) => {
+        if (ac.signal.aborted) return;
         const flat: DaySlot[] = [];
         for (const emp of perEmp) {
           for (const s of emp.slots)
@@ -105,8 +133,13 @@ export function CalendarBooking({
         flat.sort((a, b) => a.startsAt.localeCompare(b.startsAt));
         setDaySlots(flat);
       })
-      .catch((e) => setError(e instanceof ReservedApiError ? e.message : t('calendar.error')))
-      .finally(() => setLoadingSlots(false));
+      .catch((e) => {
+        if (isAbortError(e)) return;
+        setError(e instanceof ReservedApiError ? e.message : t('calendar.error'));
+      })
+      .finally(() => {
+        if (!ac.signal.aborted) setLoadingSlots(false);
+      });
   }
 
   async function pickSlot(slot: DaySlot): Promise<void> {
