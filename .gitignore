@@ -53,3 +53,9 @@ docker-data/
 .cache/
 .eslintcache
 *.tsbuildinfo
+
+# Playwright (tests/ui) — artefakty běhu, do gitu nepatří
+tests/ui/screenshots/
+tests/ui/test-results/
+tests/ui/playwright-report/
+playwright/.cache/
