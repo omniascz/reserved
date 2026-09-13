@@ -62,8 +62,17 @@ export const test = base.extend<{ errors: CapturedErrors }>({
 
       await use(captured);
 
-      const realConsole = consoleErrors.filter((t) => !isAllowed(t));
-      const realHttp = httpErrors.filter((t) => !isAllowed(t));
+      // Omezovač požadavků (20 přihlášení/min na IP a cestu) je PRODUKČNÍ
+      // ochrana proti hádání hesel — a celá sada se přihlašuje jednou za test,
+      // takže ho při plném běhu občas přetečeme. Odmítnutí proto tolerujeme,
+      // ale jen na přihlašovací cestě: 429 odjinud test pořád shodí. A když by
+      // přihlášení bylo blokované trvale, test spadne stejně, protože se
+      // nedostane na /dashboard (viz `loginAsFitnessAdmin`).
+      const tolerovanoHttp = /^429 POST .*\/auth\/login/;
+      const tolerovanoKonzole = /429 \(Too Many Requests\)/;
+
+      const realConsole = consoleErrors.filter((t) => !isAllowed(t) && !tolerovanoKonzole.test(t));
+      const realHttp = httpErrors.filter((t) => !isAllowed(t) && !tolerovanoHttp.test(t));
 
       expect(realConsole, `Chyby v konzoli prohlížeče:\n${realConsole.join('\n')}`).toEqual([]);
       expect(realHttp, `Požadavky se stavem 4xx/5xx:\n${realHttp.join('\n')}`).toEqual([]);
@@ -86,10 +95,38 @@ export const FITNESS = {
  * aby se testovala i ta obrazovka. Čeká na /dashboard.
  */
 export async function loginAsFitnessAdmin(page: Page): Promise<void> {
-  await page.goto('/login');
-  await page.locator('#slug').fill(FITNESS.slug);
-  await page.locator('#email').fill(FITNESS.email);
-  await page.locator('#password').fill(FITNESS.password);
-  await page.getByRole('button', { name: 'Přihlásit' }).click();
-  await page.waitForURL('**/dashboard', { timeout: 20_000 });
+  const POKUSU = 3;
+
+  for (let pokus = 1; pokus <= POKUSU; pokus++) {
+    await page.goto('/login');
+    await page.locator('#slug').fill(FITNESS.slug);
+    await page.locator('#email').fill(FITNESS.email);
+    await page.locator('#password').fill(FITNESS.password);
+
+    const cekaniNaOdpoved = page.waitForResponse(
+      (r) => r.url().includes('/auth/login') && r.request().method() === 'POST',
+      { timeout: 20_000 },
+    );
+    await page.getByRole('button', { name: 'Přihlásit' }).click();
+    const odpoved = await cekaniNaOdpoved;
+
+    if (odpoved.status() !== 429) {
+      await page.waitForURL('**/dashboard', { timeout: 20_000 });
+      return;
+    }
+
+    // Omezovač odmítl. Čekáme PODLE HODNOTY, kterou sám poslal v těle odpovědi
+    // (`retryAfterSeconds`), ne podle odhadu — a zkusíme to znovu.
+    const telo = (await odpoved.json().catch(() => null)) as {
+      error?: { details?: { retryAfterSeconds?: number } };
+    } | null;
+    const sekund = telo?.error?.details?.retryAfterSeconds ?? 60;
+    // eslint-disable-next-line no-console
+    console.log(`[login] omezovač vrátil 429, čekám ${sekund} s (pokus ${pokus}/${POKUSU})`);
+    await page.waitForTimeout(Math.min(sekund + 1, 65) * 1000);
+  }
+
+  throw new Error(
+    `Přihlášení se nepovedlo ani na ${POKUSU}. pokus — omezovač požadavků pokaždé vrátil 429.`,
+  );
 }

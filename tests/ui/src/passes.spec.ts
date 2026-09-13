@@ -1,8 +1,33 @@
+import postgres from 'postgres';
 import { test, expect, shot, loginAsFitnessAdmin } from './fixtures';
 
 // Filtry na /passes nemají id ani name, jen <label> nad <select> ve stejném divu.
 const statusFilter = 'div:has(> label:text-is("Stav")) > select';
 const typeFilter = 'div:has(> label:text-is("Typ")) > select';
+
+const DB_URL = process.env.DATABASE_URL ?? 'postgresql://dev:dev@localhost:5433/reserved_dev';
+
+/**
+ * Nastaví Nikole ULOŽENÝ stav permanentky.
+ *
+ * Test si rozdíl „uloženo × spočítáno" musí vyrobit sám: poller expirace
+ * (pack-expiry) uložený stav propadlých permanentek uklízí na `expired`, takže
+ * po jeho běhu by žádný rozdíl nezbyl a test by měřil jen pořadí běhů. Tenhle
+ * zápis odpovídá skutečnosti z provozu — permanentka, ke které se poller ještě
+ * nedostal.
+ */
+async function nastavNikoleUlozenyStav(stav: string): Promise<void> {
+  const sql = postgres(DB_URL, { max: 1 });
+  try {
+    await sql`
+      UPDATE customer_credit_packs p SET status = ${stav}
+      FROM customers c, tenants t
+      WHERE c.id = p.customer_id AND t.id = p.tenant_id
+        AND t.slug = 'fitness' AND c.first_name = 'Nikola'`;
+  } finally {
+    await sql.end();
+  }
+}
 
 test.describe('Admin — /passes (seznam vydaných permanentek)', () => {
   test.beforeEach(async ({ page }) => {
@@ -13,6 +38,9 @@ test.describe('Admin — /passes (seznam vydaných permanentek)', () => {
   });
 
   test('seznam se načte a propadlá permanentka Nikoly je vidět jako Propadlá', async ({ page }) => {
+    // Uložený stav vrátíme na `active`, ať je rozdíl proti spočítanému stavu
+    // jistý i po běhu polleru expirace (ten ho jinak uklidí na `expired`).
+    await nastavNikoleUlozenyStav('active');
     await page.goto('/passes');
 
     await expect(page.getByRole('heading', { name: 'Vydané permanentky' })).toBeVisible();
@@ -24,8 +52,9 @@ test.describe('Admin — /passes (seznam vydaných permanentek)', () => {
     await expect(nikola).toHaveCount(1);
     await expect(nikola.getByText('Propadlá', { exact: true })).toBeVisible();
 
-    // Rozdíl uložený vs. spočítaný stav musí být v UI přiznaný.
-    await expect(nikola.getByText(/v DB/)).toBeVisible();
+    // Rozdíl uložený vs. spočítaný stav musí být v UI přiznaný — a to konkrétně:
+    // štítek říká „Propadlá", poznámka přiznává, že v databázi je „Aktivní".
+    await expect(nikola.getByText(/v DB Aktivní/)).toBeVisible();
 
     await shot(page, '03-passes-list');
   });

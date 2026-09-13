@@ -618,6 +618,30 @@ export class BundlePacksService {
     });
   }
 
+  /**
+   * Cron job — nastav status='expired' kde validUntil < now a status byl
+   * 'active' nebo 'used_up'. Vrací počet změn.
+   *
+   * POZASTAVENÉ (`suspended`) se ZÁMĚRNĚ nedotýká — viz stejná metoda
+   * u kreditových permanentek.
+   */
+  async expireOverdue(tenantId: string): Promise<number> {
+    return this.dbService.withRlsContext(serviceContext(tenantId), async (tx) => {
+      const result = await tx
+        .update(schema.customerBundlePacks)
+        .set({ status: 'expired', updatedAt: new Date() })
+        .where(
+          and(
+            eq(schema.customerBundlePacks.tenantId, tenantId),
+            sql`${schema.customerBundlePacks.validUntil} < NOW()`,
+            sql`${schema.customerBundlePacks.status} IN ('active', 'used_up')`,
+          ),
+        )
+        .returning({ id: schema.customerBundlePacks.id });
+      return result.length;
+    });
+  }
+
   async listUsesForAllocation(
     tenantId: string,
     userId: string,
