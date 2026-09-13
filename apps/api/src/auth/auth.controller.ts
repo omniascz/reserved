@@ -9,6 +9,7 @@ import {
   Query,
   Req,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import type { Request } from 'express';
 import { AuthService } from './auth.service.js';
 import { EmailVerificationService } from './email-verification.service.js';
@@ -20,6 +21,44 @@ import { RefreshSchema, type RefreshDto } from './dto/refresh.dto.js';
 import { RegisterSchema, type RegisterDto } from './dto/register.dto.js';
 import { VerifyEmailQuerySchema } from './dto/email-verification.dto.js';
 import { ZodValidationPipe } from './zod-validation.pipe.js';
+
+/**
+ * Přísnější limit na citlivé cesty: 20 pokusů / minutu na IP a cestu zvlášť
+ * (přepisuje výchozích 300/min). Bez něj šlo hádat hesla úplně bez omezení —
+ * ThrottlerModule byl nakonfigurovaný, ale nikde se nevynucoval.
+ *
+ * PROČ 20, a ne 5: limit dopadá na VŠECHNA přihlášení, ne jen na neúspěšná.
+ * Odlišit je nejde — throttler zvyšuje počítadlo v `canActivate`, tedy PŘED
+ * spuštěním handleru, kdy ještě není znám výsledek. Pět pokusů za minutu by
+ * proto trestalo i legitimní provoz: přihlášení na počítači, pak na mobilu,
+ * zavřená karta, návrat. Proti hádání hesla 20/min pořád funguje — útočník
+ * potřebuje tisíce pokusů, ne dvacet.
+ *
+ * POZOR: tohle NENÍ plnohodnotná ochrana proti hádání hesel. Tou je až
+ * zamykání účtu po N neúspěšných pokusech, které projekt zatím nemá (tabulka
+ * `users` nemá počítadlo pokusů ani `locked_until`). Rate limit je první
+ * vrstva, ne poslední.
+ *
+ * Dává se na KONKRÉTNÍ metody, ne na celý controller. Kdyby visel na
+ * controlleru, dopadl by i na `refresh`, `logout` a `verify-email/status` —
+ * a ty legitimní uživatel volá běžně a opakovaně: obnovu tokenu na pozadí,
+ * víc otevřených karet, stavový dotaz žlutého pruhu při každém překliku
+ * v adminu. Limit by jim rozbil normální provoz, aniž by cokoli chránil
+ * (obnova vyžaduje platný refresh token, hádat se u ní nedá nic).
+ */
+const CITLIVY_LIMIT = { short: { limit: 20, ttl: 60_000 } };
+
+/**
+ * Registrace má MÍRNĚJŠÍ limit než přihlášení (20/min místo 5/min) — záměrně.
+ *
+ * U přihlášení jde o hádání hesla, tam je přísnost jádrem ochrany. Registrací
+ * ale útočník nic neprolomí, jen si založí účty; limit tam brání zahlcení, ne
+ * průniku. A 5/min by vadilo i legitimnímu provozu: z jedné firemní adresy
+ * (sdílené připojení, coworking, mobilní síť) se může registrovat víc lidí po
+ * sobě a šestý by narazil. Klíčuje se podle IP + cesty, takže registrace
+ * nevyčerpá limit přihlášení a naopak.
+ */
+const REGISTRACE_LIMIT = { short: { limit: 20, ttl: 60_000 } };
 
 @Controller('auth')
 export class AuthController {
@@ -34,6 +73,7 @@ export class AuthController {
    * Vrací token pair pro okamžité přihlášení.
    */
   @Public()
+  @Throttle(REGISTRACE_LIMIT)
   @Post('register')
   @HttpCode(201)
   async register(@Body(new ZodValidationPipe(RegisterSchema)) dto: RegisterDto): Promise<{
@@ -54,6 +94,7 @@ export class AuthController {
    * / X-Tenant-ID header). Vrací token pair.
    */
   @Public()
+  @Throttle(CITLIVY_LIMIT)
   @Post('login')
   @HttpCode(200)
   async login(
@@ -125,6 +166,7 @@ export class AuthController {
   }
 
   /** POST /api/v1/auth/verify-email/resend — pošle odkaz znovu (s odstupem). */
+  @Throttle(CITLIVY_LIMIT)
   @Post('verify-email/resend')
   @HttpCode(200)
   async resendVerifyEmail(@CurrentUser() user: AccessTokenPayload) {

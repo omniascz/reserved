@@ -9,6 +9,7 @@ import { ValidationPipe } from '@nestjs/common';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import express from 'express';
+import helmet from 'helmet';
 import { AppModule } from './app.module.js';
 import { AuthExceptionFilter } from './auth/auth-exception.filter.js';
 import { SentryExceptionFilter } from './sentry.filter.js';
@@ -26,6 +27,34 @@ async function bootstrap(): Promise<void> {
     },
     bodyParser: false,
   });
+
+  // ─── Bezpečnostní HTTP hlavičky (Helmet) ───────────────────────────────
+  // POZOR na widget: vkládá se do cizích stránek jako <iframe> přes embed.js,
+  // ale ten iframe míří na Next aplikaci (widget), NE na tohle API. API vrací
+  // jen JSON a v iframe se nikdy nezobrazuje — hlavičky proti rámování ho tedy
+  // rozbít nemůžou.
+  //
+  // Co widget rozbít MŮŽE a proto je vypnuté:
+  //   - crossOriginResourcePolicy: JS uvnitř iframe volá tohle API z JINÉHO
+  //     původu. Výchozí `same-origin` by všechna ta volání zablokoval, takže
+  //     by na vložených widgetech přestaly fungovat rezervace.
+  //   - contentSecurityPolicy: pro čisté JSON API nemá smysl a v dev režimu by
+  //     rozbil Swagger UI na /api-docs (inline styly a skripty).
+  //
+  // CORS řeší povolené origins výš — Helmet ho nenahrazuje, doplňuje.
+  app.use(
+    helmet({
+      contentSecurityPolicy: false,
+      crossOriginResourcePolicy: false,
+      crossOriginEmbedderPolicy: false,
+      // API se v prohlížeči nikdy nerámuje → zákaz rámování je bezpečný.
+      frameguard: { action: 'deny' },
+      // HSTS jen v produkci; v dev běží http://localhost a prohlížeč by si
+      // vynucení HTTPS zapamatoval i pro další lokální projekty.
+      hsts: isDev ? false : { maxAge: 15552000, includeSubDomains: true },
+      referrerPolicy: { policy: 'no-referrer' },
+    }),
+  );
 
   // Raw body capture pro webhook endpointy (Stripe potrebuje pro signature).
   // Pro non-webhook routes pouzijeme standardní JSON parser.
