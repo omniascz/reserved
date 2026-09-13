@@ -1,0 +1,1 @@
+ALTER TABLE "bundle_item_uses" ALTER COLUMN "service_id" DROP NOT NULL;

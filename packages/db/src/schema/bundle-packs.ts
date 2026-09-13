@@ -142,10 +142,12 @@ export const bundleItemUses = pgTable(
       .references(() => customerBundlePacks.id, { onDelete: 'cascade' }),
     /** Booking, ktery zpusobil uziti. NULL pro admin_adjustment. */
     bookingId: uuid('booking_id').references(() => bookings.id, { onDelete: 'set null' }),
-    /** Sluzba ktere se polozka tyka. */
-    serviceId: uuid('service_id')
-      .notNull()
-      .references(() => services.id, { onDelete: 'restrict' }),
+    /**
+     * Sluzba ktere se polozka tyka. NULL u zasahu, ktere se konkretni sluzby
+     * netykaji (pozastaveni/obnoveni, prodlouzeni platnosti) — driv se tam
+     * cpala "prvni sluzba ze snapshotu", co bylo zavadejici.
+     */
+    serviceId: uuid('service_id').references(() => services.id, { onDelete: 'restrict' }),
     /** Kolik kusu strzeno. Zaporne = refund. */
     quantityDeducted: integer('quantity_deducted').notNull(),
     /** 'consumed' | 'refunded' | 'admin_adjustment' | 'cancelled' */
