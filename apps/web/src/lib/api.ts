@@ -3060,3 +3060,40 @@ export async function listPassUses(type: PassType, allocationId: string): Promis
     createdAt: r.createdAt,
   }));
 }
+
+// ─── Ověření e-mailu administrátora ──────────────────────────────────────
+
+export interface EmailVerificationStatus {
+  verified: boolean;
+  email: string;
+  /** ISO datum, kdy nejdřív půjde poslat znovu. null = hned. */
+  canResendAt: string | null;
+}
+
+export async function getEmailVerificationStatus(): Promise<EmailVerificationStatus> {
+  const { data } = await fetchApi<{ data: EmailVerificationStatus }>(`/auth/verify-email/status`);
+  return data;
+}
+
+export async function resendVerificationEmail(): Promise<{ sent: boolean; email: string }> {
+  const { data } = await fetchApi<{ data: { sent: boolean; email: string } }>(
+    `/auth/verify-email/resend`,
+    { method: 'POST' },
+  );
+  return data;
+}
+
+/**
+ * Potvrzení adresy z odkazu v e-mailu. Volá se BEZ přihlášení — uživatel klikne
+ * z pošty a token je jediná autorizace (proto `withAuth = false`).
+ */
+export async function confirmEmailVerification(
+  token: string,
+): Promise<{ email: string; alreadyVerified: boolean }> {
+  const { data } = await fetchApi<{ data: { email: string; alreadyVerified: boolean } }>(
+    `/auth/verify-email?token=${encodeURIComponent(token)}`,
+    undefined,
+    false,
+  );
+  return data;
+}

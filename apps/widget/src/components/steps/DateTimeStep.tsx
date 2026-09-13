@@ -72,7 +72,10 @@ export function DateTimeStep({
       });
       onPick(slot, hold);
     } catch (e) {
-      if (e instanceof ReservedApiError && e.code === 'SLOT_TAKEN') {
+      if (e instanceof ReservedApiError && e.code === 'TENANT_EMAIL_UNVERIFIED') {
+        // Zamknutí termínu je první místo, kde se blokace projeví.
+        setError(t('common.tenantUnverified'));
+      } else if (e instanceof ReservedApiError && e.code === 'SLOT_TAKEN') {
         setError(t('datetime.slotTaken'));
         // Obnovit nabídku termínů — ale tak, aby ji šlo zrušit při změně dne.
         refreshRef.current?.abort();

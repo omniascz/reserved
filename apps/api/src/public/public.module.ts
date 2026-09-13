@@ -10,12 +10,16 @@ import { ReferralsModule } from '../referrals/referrals.module.js';
 import { ChallengesModule } from '../challenges/challenges.module.js';
 import { DbModule } from '../db/db.module.js';
 import { TenantModule } from '../tenant/tenant.module.js';
+import { AuthModule } from '../auth/auth.module.js';
 import { PublicController } from './public.controller.js';
 
 @Module({
   imports: [
     DbModule,
     TenantModule,
+    // Kvůli EmailVerificationService — veřejné rezervace se blokují, dokud
+    // provozovatel nepotvrdí e-mail.
+    AuthModule,
     AvailabilityModule,
     BookingsModule,
     ClassSessionsModule,

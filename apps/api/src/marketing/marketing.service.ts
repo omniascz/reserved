@@ -14,6 +14,7 @@ import { schema } from '@reserved/db';
 import { type AppRole, type TenantContext } from '@reserved/rls-multitenancy';
 import type { Database } from '../db/db.service.js';
 import { DbService } from '../db/db.service.js';
+import { EmailVerificationService } from '../auth/email-verification.service.js';
 import type { AudienceDef, CreateCampaignDto } from './dto/campaign.dto.js';
 
 const MANAGE_ROLES: AppRole[] = ['owner', 'manager'];
@@ -40,7 +41,10 @@ interface Recipient {
 
 @Injectable()
 export class MarketingService {
-  constructor(@Inject(DbService) private readonly dbService: DbService) {}
+  constructor(
+    @Inject(DbService) private readonly dbService: DbService,
+    @Inject(EmailVerificationService) private readonly verification: EmailVerificationService,
+  ) {}
 
   async create(tenantId: string, userId: string, role: AppRole, dto: CreateCampaignDto) {
     assertCanManage(role);
@@ -164,6 +168,19 @@ export class MarketingService {
 
   async send(tenantId: string, userId: string, role: AppRole, campaignId: string) {
     assertCanManage(role);
+
+    // Dokud majitel nepotvrdí svůj e-mail, nesmí přes naši infrastrukturu
+    // rozeslat hromadnou poštu. Jinak by si stačilo založit účet na cizí adresu
+    // a spamovat — a doména Reserved by za to zaplatila reputací u poskytovatelů.
+    if (!(await this.verification.isTenantVerified(tenantId))) {
+      throw new ForbiddenException({
+        error: {
+          code: 'TENANT_EMAIL_UNVERIFIED',
+          message:
+            'Nejdřív potvrďte svůj e-mail — teprve pak lze rozesílat kampaně klientům. Odkaz najdete v e-mailu, který jsme vám poslali.',
+        },
+      });
+    }
     return this.dbService.withRlsContext(ctxFor(tenantId, userId, role), async (tx) => {
       const [campaign] = await tx
         .select()

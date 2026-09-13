@@ -7,13 +7,20 @@
 //                Detekce reuse → revoke celé family + force re-login.
 //   - logout:   označí session jako revoked.
 
-import { ConflictException, Inject, Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  ConflictException,
+  Inject,
+  Injectable,
+  Logger,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { eq, and } from 'drizzle-orm';
 import { schema } from '@reserved/db';
 import { serviceContext } from '@reserved/rls-multitenancy';
 import { randomUUID } from 'node:crypto';
 import { DbService } from '../db/db.service.js';
 import { JwtService } from './jwt.service.js';
+import { EmailVerificationService } from './email-verification.service.js';
 import { AuthError } from './auth.errors.js';
 import { hashPassword, verifyPassword } from './password.js';
 import type { RegisterDto } from './dto/register.dto.js';
@@ -22,9 +29,13 @@ import type { TokenPair } from './auth.types.js';
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     @Inject(DbService) private readonly dbService: DbService,
     @Inject(JwtService) private readonly jwt: JwtService,
+    @Inject(EmailVerificationService)
+    private readonly emailVerification: EmailVerificationService,
   ) {}
 
   // ---------------------------------------------------------------------------
@@ -38,7 +49,7 @@ export class AuthService {
     const passwordHash = await hashPassword(dto.password);
     const family = randomUUID();
 
-    return this.dbService.withRlsContext(serviceContext(), async (tx) => {
+    const created = await this.dbService.withRlsContext(serviceContext(), async (tx) => {
       // Slug musí být unikátní
       const existing = await tx
         .select({ id: schema.tenants.id })
@@ -128,6 +139,9 @@ export class AuthService {
       return {
         tenantId: tenant.id,
         userId: user.id,
+        email: dto.email,
+        userName: `${dto.firstName} ${dto.lastName}`.trim(),
+        tenantName: dto.tenantName,
         tokens: {
           accessToken: access.token,
           refreshToken: refresh.token,
@@ -135,6 +149,29 @@ export class AuthService {
         },
       };
     });
+
+    // Ověřovací e-mail až PO dokončení transakce: služba si otevírá vlastní a
+    // pomalé/nefunkční SMTP by jinak drželo otevřenou registrační transakci.
+    // Selhání odeslání registraci neshodí — účet vznikl a odkaz jde poslat znovu.
+    try {
+      await this.emailVerification.issue(created.tenantId, created.userId, {
+        email: created.email,
+        userName: created.userName,
+        tenantName: created.tenantName,
+      });
+    } catch (err) {
+      this.logger.warn(
+        `Registrace tenanta ${created.tenantId} proběhla, ale ověřovací e-mail se nepodařilo vystavit: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+    }
+
+    return {
+      tenantId: created.tenantId,
+      userId: created.userId,
+      tokens: created.tokens,
+    };
   }
 
   // ---------------------------------------------------------------------------

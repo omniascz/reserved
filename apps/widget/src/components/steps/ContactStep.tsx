@@ -65,6 +65,10 @@ export function ContactStep({
         if (e.code === 'HOLD_EXPIRED') {
           setExpired(true);
           setError(t('contact.holdExpired'));
+        } else if (e.code === 'TENANT_EMAIL_UNVERIFIED') {
+          // Vlastní hláška, ne obecná chyba: klient musí pochopit, že problém
+          // není u něj. Přes i18n, aby fungovala i v anglické verzi widgetu.
+          setError(t('common.tenantUnverified'));
         } else {
           setError(e.message);
         }

@@ -6,8 +6,13 @@
 // Run: pnpm --filter @reserved/e2e test   (API na :4000 + DB)
 
 import { describe, it, expect, beforeAll } from 'vitest';
+import postgres from 'postgres';
 
 const API_URL = process.env.API_URL ?? 'http://localhost:4010/api/v1';
+const DB_URL = process.env.DATABASE_URL ?? 'postgresql://dev:dev@localhost:5433/reserved_dev';
+
+/** Jen kvůli ověření e-mailu tenanta — zbytek testu jde čistě přes HTTP. */
+const sql = postgres(DB_URL, { max: 2 });
 
 function uniqueSlug(): string {
   const ts = Date.now().toString(36);
@@ -49,6 +54,11 @@ describe('Storno & bonus policy E2E', () => {
       }),
     });
     token = reg.tokens.accessToken;
+
+    // Nově registrovaný tenant má NEOVĚŘENÝ e-mail → veřejné rezervace jsou mu
+    // blokované. Registrace tady nevrací tenantId, takže ověřujeme podle slugu.
+    await sql`UPDATE users SET email_verified_at = now()
+              WHERE tenant_id = (SELECT id FROM tenants WHERE slug = ${slug})`;
 
     const branches = await apiCall<{ data: Array<{ id: string }> }>(`/public/${slug}/branches`);
     const branchId = branches.data[0]!.id;

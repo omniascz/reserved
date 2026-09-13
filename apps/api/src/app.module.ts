@@ -161,6 +161,14 @@ export class AppModule implements NestModule {
         { path: 'auth/register', method: RequestMethod.POST },
         { path: 'auth/refresh', method: RequestMethod.POST },
         { path: 'auth/logout', method: RequestMethod.POST },
+        // Ověření e-mailu administrátora: odkaz z pošty se otevírá NEPŘIHLÁŠENĚ
+        // a bez slugu tenanta — tenant se dohledá až podle otisku tokenu. Bez
+        // téhle výjimky vrátí middleware TENANT_NOT_FOUND dřív, než se request
+        // vůbec dostane do controlleru. Status a resend jedou na Bearer tokenu,
+        // ve kterém tenant je, takže tenant middleware také nepotřebují.
+        { path: 'auth/verify-email', method: RequestMethod.GET },
+        { path: 'auth/verify-email/status', method: RequestMethod.GET },
+        { path: 'auth/verify-email/resend', method: RequestMethod.POST },
         { path: 'admin/(.*)', method: RequestMethod.ALL },
         { path: 'platform/(.*)', method: RequestMethod.ALL },
         { path: 'public/(.*)', method: RequestMethod.ALL },
