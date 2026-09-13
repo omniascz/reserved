@@ -12,14 +12,17 @@ import {
   LoyaltySettingsSchema,
   MeetingSettingsSchema,
   NotificationSettingsSchema,
+  PaymentSettingsSchema,
   extractBookingRules,
   extractLoyaltySettings,
   extractMeetingSettings,
   extractNotificationSettings,
+  extractPaymentSettings,
   type BookingRules,
   type LoyaltySettings,
   type MeetingSettings,
   type NotificationSettings,
+  type PaymentSettings,
 } from './settings.types.js';
 import {
   CancellationPolicySchema,
@@ -272,6 +275,49 @@ export class SettingsService {
       const current = (rows[0]?.settings as Record<string, unknown> | null) ?? {};
       const merged = MeetingSettingsSchema.parse({ ...extractMeetingSettings(current), ...input });
       const newSettings = { ...current, meeting: merged };
+      await tx
+        .update(schema.tenants)
+        .set({ settings: newSettings, updatedAt: new Date() })
+        .where(eq(schema.tenants.id, tenantId));
+      return merged;
+    });
+  }
+
+  // ─── Platby (onboarding) ────────────────────────────────────────────
+  // `cashOnly` = provozovna vědomě nechce online platby (hotovost, terminál,
+  // QR na místě). Onboarding díky tomu nezůstane navždy nedokončený.
+
+  async getPaymentSettings(
+    tenantId: string,
+    userId: string,
+    role: AppRole,
+  ): Promise<PaymentSettings> {
+    return this.dbService.withRlsContext(ctxFor(tenantId, userId, role), async (tx) => {
+      const rows = await tx
+        .select({ settings: schema.tenants.settings })
+        .from(schema.tenants)
+        .where(eq(schema.tenants.id, tenantId))
+        .limit(1);
+      return extractPaymentSettings(rows[0]?.settings);
+    });
+  }
+
+  async updatePaymentSettings(
+    tenantId: string,
+    userId: string,
+    role: AppRole,
+    input: Partial<PaymentSettings>,
+  ): Promise<PaymentSettings> {
+    assertCanManage(role);
+    return this.dbService.withRlsContext(ctxFor(tenantId, userId, role), async (tx) => {
+      const rows = await tx
+        .select({ settings: schema.tenants.settings })
+        .from(schema.tenants)
+        .where(eq(schema.tenants.id, tenantId))
+        .limit(1);
+      const current = (rows[0]?.settings as Record<string, unknown> | null) ?? {};
+      const merged = PaymentSettingsSchema.parse({ ...extractPaymentSettings(current), ...input });
+      const newSettings = { ...current, payments: merged };
       await tx
         .update(schema.tenants)
         .set({ settings: newSettings, updatedAt: new Date() })

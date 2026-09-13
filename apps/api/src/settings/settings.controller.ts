@@ -9,6 +9,7 @@ import {
   LoyaltySettingsSchema,
   MeetingSettingsSchema,
   NotificationSettingsSchema,
+  PaymentSettingsSchema,
 } from './settings.types.js';
 import { CancellationPolicySchema } from './cancellation-policy.js';
 
@@ -17,6 +18,7 @@ const PartialNotificationsSchema = NotificationSettingsSchema.partial();
 const PartialLoyaltySchema = LoyaltySettingsSchema.partial();
 const PartialMeetingSchema = MeetingSettingsSchema.partial();
 const PartialCancellationSchema = CancellationPolicySchema.partial();
+const PartialPaymentsSchema = PaymentSettingsSchema.partial();
 
 @Controller('admin/settings')
 export class SettingsController {
@@ -96,6 +98,23 @@ export class SettingsController {
     @Body(new ZodValidationPipe(PartialMeetingSchema)) dto: z.infer<typeof PartialMeetingSchema>,
   ) {
     const data = await this.svc.updateMeetingSettings(user.tenantId, user.sub, user.role, dto);
+    return { data };
+  }
+
+  // Platby: `cashOnly` = provozovna vědomě nechce online platby. Onboarding pak
+  // krok „Nastavit platby" bere jako splněný i bez napojené brány.
+  @Get('payments')
+  async getPayments(@CurrentUser() user: AccessTokenPayload) {
+    const data = await this.svc.getPaymentSettings(user.tenantId, user.sub, user.role);
+    return { data };
+  }
+
+  @Patch('payments')
+  async updatePayments(
+    @CurrentUser() user: AccessTokenPayload,
+    @Body(new ZodValidationPipe(PartialPaymentsSchema)) dto: z.infer<typeof PartialPaymentsSchema>,
+  ) {
+    const data = await this.svc.updatePaymentSettings(user.tenantId, user.sub, user.role, dto);
     return { data };
   }
 }

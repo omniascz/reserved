@@ -127,6 +127,10 @@ async function seed(): Promise<void> {
     role: 'owner',
     isActive: true,
     passwordHash,
+    // Onboarding počítá krok „Ověřit email" z tohohle sloupce. Demo tenant
+    // simuluje rozjetý salon, který si e-mail potvrdil — jinak by měl
+    // onboarding nedokončený jen kvůli seedu.
+    emailVerifiedAt: new Date(),
   });
 
   // 4. Demo service category
@@ -465,6 +469,10 @@ async function seedFitness(): Promise<void> {
       plan: 'business',
       status: 'active',
       businessType: 'fitness',
+      // Studio bere platby na místě (hotovost / terminál), online bránu nemá a
+      // mít nebude. Bez tohohle vědomého rozhodnutí by mu krok onboardingu
+      // „Nastavit platby" zůstal nesplněný navždy.
+      settings: { payments: { cashOnly: true } },
     })
     .returning();
   if (!tenant) throw new Error('Failed to insert fitness tenant');
@@ -494,6 +502,8 @@ async function seedFitness(): Promise<void> {
     role: 'owner',
     isActive: true,
     passwordHash,
+    // Rozjeté studio má e-mail potvrzený — viz komentář u demo admina.
+    emailVerifiedAt: new Date(),
   });
 
   const [category] = await db
