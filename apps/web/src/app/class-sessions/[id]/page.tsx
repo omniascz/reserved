@@ -58,6 +58,21 @@ function formatDateTime(iso: string): string {
   });
 }
 
+function formatTimeOnly(iso: string): string {
+  return new Date(iso).toLocaleTimeString('cs-CZ', { hour: '2-digit', minute: '2-digit' });
+}
+
+/**
+ * Rozsah lekce: "út 15. 9. 19:00–19:55". Datum se u konce opakuje jen tehdy,
+ * když lekce přechází přes půlnoc — jinak by zkrácení mátlo.
+ */
+function formatRange(startsAt: string, endsAt: string): string {
+  const sameDay = new Date(startsAt).toDateString() === new Date(endsAt).toDateString();
+  return sameDay
+    ? `${formatDateTime(startsAt)}–${formatTimeOnly(endsAt)}`
+    : `${formatDateTime(startsAt)} – ${formatDateTime(endsAt)}`;
+}
+
 interface JoinFormState {
   target: 'session' | 'waitlist';
   customerName: string;
@@ -239,7 +254,7 @@ export default function ClassSessionDetailPage({ params }: { params: { id: strin
           <div>
             <h2 className="text-2xl font-bold">{service?.name ?? 'Lekce'}</h2>
             <p className="text-sm text-slate-500">
-              {formatDateTime(session.startsAt)} – {formatDateTime(session.endsAt)}
+              {formatRange(session.startsAt, session.endsAt)}
               {employee &&
                 ` · ${employee.displayName ?? `${employee.firstName} ${employee.lastName}`}`}
               {resource && ` · ${resource.name}`}

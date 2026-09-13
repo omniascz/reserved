@@ -146,6 +146,17 @@ export function NavHeader() {
   const [openGroup, setOpenGroup] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
+  // Slug žije v localStorage, který server nezná. Kdybychom ho vypsali rovnou
+  // při renderu, server by poslal prázdno, prohlížeč jméno salonu, React by to
+  // nespároval ("Hydration failed") a zahodil by celý serverový render.
+  // Proto ho doplníme až po připojení v prohlížeči — první render je tak na
+  // serveru i na klientovi stejný.
+  const [tenantSlug, setTenantSlug] = useState<string | null>(null);
+
+  useEffect(() => {
+    setTenantSlug(getTenantSlug());
+  }, [pathname]);
+
   useEffect(() => {
     function handleClick(e: MouseEvent): void {
       if (!containerRef.current?.contains(e.target as Node)) {
@@ -264,7 +275,7 @@ export function NavHeader() {
         </div>
 
         <div className="flex items-center gap-3 text-sm text-slate-500">
-          <span className="hidden md:inline">salon: {getTenantSlug()}</span>
+          <span className="hidden md:inline">{tenantSlug ? `salon: ${tenantSlug}` : ''}</span>
           <button onClick={handleLogout} className="hover:text-slate-900">
             Odhlásit
           </button>

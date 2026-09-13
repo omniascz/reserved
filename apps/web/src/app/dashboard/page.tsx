@@ -563,6 +563,9 @@ function DataTable({
 }
 
 function statusLabel(status: string): string {
+  // Co v mapě chybí, propadne fallbackem a vypíše se surový anglický stav z API
+  // (dlaždice jsou `uppercase`, takže se to projeví jako "SUSPENDED").
+  // Seznam musí pokrývat všechny stavy z `passEffectiveStatuses`.
   return (
     {
       active: 'Aktivní',
@@ -570,6 +573,8 @@ function statusLabel(status: string): string {
       used_up: 'Vyčerpané',
       refunded: 'Vrácené',
       cancelled: 'Zrušené',
+      suspended: 'Pozastavené',
+      rolled_over: 'Přenesené',
     }[status] ?? status
   );
 }

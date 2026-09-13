@@ -2,15 +2,24 @@
 
 // Sprint 9.1-B: Karta na dashboardu — kde najít rezervační odkaz, jak ho sdílet.
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { getTenantSlug } from '@/lib/api';
 
 const WIDGET_URL = process.env.NEXT_PUBLIC_WIDGET_URL ?? 'http://localhost:4004';
 
 export function ShareBookingCard() {
-  const slug = getTenantSlug();
+  // Slug je v localStorage, který server nezná. Dřív se četl rovnou při
+  // renderu a `if (!slug) return null` způsobil, že server nevykreslil NIC,
+  // kdežto prohlížeč celou <section> → "Expected server HTML to contain a
+  // matching <section> in <main>" a React zahodil celý serverový render.
+  // Proto slug doplňujeme až po připojení v prohlížeči.
+  const [slug, setSlug] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
+
+  useEffect(() => {
+    setSlug(getTenantSlug());
+  }, []);
 
   if (!slug) return null;
 

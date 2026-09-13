@@ -1,10 +1,11 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useT } from '@/i18n/I18nProvider';
 import {
   createHold,
   getAvailability,
+  isAbortError,
   type AvailabilityForEmployee,
   type AvailableSlot,
   type HoldResult,
@@ -34,13 +35,30 @@ export function DateTimeStep({
   const [error, setError] = useState<string | null>(null);
   const [locking, setLocking] = useState<string | null>(null);
 
+  // Dodatečné načtení po SLOT_TAKEN běží mimo efekt, takže si ho držíme zvlášť
+  // a rušíme ho při každé změně dne — jinak by jeho opožděná odpověď přepsala
+  // termíny jiného dne.
+  const refreshRef = useRef<AbortController | null>(null);
+
   useEffect(() => {
+    // Každá změna dne zruší předchozí požadavek. Bez toho může starší odpověď
+    // dorazit jako poslední a přepsat termíny nově vybraného dne — zákazník pak
+    // vidí prázdno u dne, který volno má.
+    const ac = new AbortController();
+    refreshRef.current?.abort();
     setLoading(true);
     setError(null);
-    getAvailability(slug, service.id, date, employee.id)
+    getAvailability(slug, service.id, date, employee.id, ac.signal)
       .then((data) => setAvailability(data))
-      .catch((e) => setError(e?.message ?? t('contact.genericError')))
-      .finally(() => setLoading(false));
+      .catch((e) => {
+        if (isAbortError(e)) return; // zrušili jsme ho sami, není to chyba
+        setError(e?.message ?? t('contact.genericError'));
+      })
+      .finally(() => {
+        // Zrušený požadavek už nesmí sahat na "načítám" — běží novější.
+        if (!ac.signal.aborted) setLoading(false);
+      });
+    return () => ac.abort();
   }, [slug, service.id, employee.id, date, t]);
 
   async function pickSlot(slot: AvailableSlot) {
@@ -56,8 +74,15 @@ export function DateTimeStep({
     } catch (e) {
       if (e instanceof ReservedApiError && e.code === 'SLOT_TAKEN') {
         setError(t('datetime.slotTaken'));
-        // Refresh availability
-        getAvailability(slug, service.id, date, employee.id).then(setAvailability);
+        // Obnovit nabídku termínů — ale tak, aby ji šlo zrušit při změně dne.
+        refreshRef.current?.abort();
+        const ac = new AbortController();
+        refreshRef.current = ac;
+        getAvailability(slug, service.id, date, employee.id, ac.signal)
+          .then((data) => {
+            if (!ac.signal.aborted) setAvailability(data);
+          })
+          .catch(() => undefined);
       } else {
         setError(e instanceof Error ? e.message : t('datetime.bookingError'));
       }

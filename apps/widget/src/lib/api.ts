@@ -22,6 +22,17 @@ export class ReservedApiError extends Error {
   }
 }
 
+/**
+ * true, když požadavek zrušil AbortController — tedy uživatel mezitím přepnul
+ * den/týden/měsíc/službu. Takovou "chybu" nesmíme ukázat jako chybu.
+ */
+export function isAbortError(e: unknown): boolean {
+  return (
+    (e instanceof DOMException && e.name === 'AbortError') ||
+    (e instanceof Error && e.name === 'AbortError')
+  );
+}
+
 async function fetchApi<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
     ...init,
@@ -148,11 +159,13 @@ export async function getAvailableDays(
   serviceId: string,
   month: string, // YYYY-MM
   employeeId?: string,
+  signal?: AbortSignal,
 ): Promise<AvailableDay[]> {
   const params = new URLSearchParams({ serviceId, month });
   if (employeeId) params.append('employeeId', employeeId);
   const { data } = await fetchApi<{ data: AvailableDay[] }>(
     `/public/${slug}/availability-days?${params.toString()}`,
+    { signal },
   );
   return data;
 }
@@ -162,11 +175,13 @@ export async function getAvailability(
   serviceId: string,
   date: string,
   employeeId?: string,
+  signal?: AbortSignal,
 ): Promise<AvailabilityForEmployee[]> {
   const params = new URLSearchParams({ serviceId, date });
   if (employeeId) params.append('employeeId', employeeId);
   const { data } = await fetchApi<{ data: AvailabilityForEmployee[] }>(
     `/public/${slug}/availability?${params.toString()}`,
+    { signal },
   );
   return data;
 }
@@ -284,10 +299,12 @@ export async function getSessionSpots(slug: string, sessionId: string): Promise<
 export async function listAllClassSessions(
   slug: string,
   range: { from: string; to: string },
+  signal?: AbortSignal,
 ): Promise<PublicClassSession[]> {
   const params = new URLSearchParams({ from: range.from, to: range.to });
   const { data } = await fetchApi<{ data: PublicClassSession[] }>(
     `/public/${slug}/class-sessions?${params.toString()}`,
+    { signal },
   );
   return data;
 }

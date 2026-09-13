@@ -4,8 +4,9 @@
 // Embed na cizí web přes embed.js (data-view="timetable"). Živá volná místa,
 // přihlášení i pořadník (waitlist) přímo z mřížky.
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  isAbortError,
   joinClassSession,
   joinClassWaitlist,
   listAllClassSessions,
@@ -55,18 +56,37 @@ export function Timetable({ slug }: { slug: string }) {
       .catch(() => undefined);
   }, [slug]);
 
+  // Řídicí objekt držíme v ref uvnitř `reload`, ne v parametru: reload se volá
+  // i z jiných míst (po přihlášení na lekci) a případné navěšení na onClick by
+  // jinak poslalo místo signálu událost z prohlížeče.
+  const reloadRef = useRef<AbortController | null>(null);
+
   const reload = useCallback(() => {
+    // Rychlé listování týdny: starší odpověď nesmí přepsat novější mřížku.
+    reloadRef.current?.abort();
+    const ac = new AbortController();
+    reloadRef.current = ac;
     setLoading(true);
     setError(null);
     const from = `${weekStart}T00:00:00.000Z`;
     const to = `${addDays(weekStart, 7)}T00:00:00.000Z`;
-    listAllClassSessions(slug, { from, to })
-      .then(setSessions)
-      .catch((e) => setError(e instanceof ReservedApiError ? e.message : t('timetable.error')))
-      .finally(() => setLoading(false));
+    listAllClassSessions(slug, { from, to }, ac.signal)
+      .then((data) => {
+        if (!ac.signal.aborted) setSessions(data);
+      })
+      .catch((e) => {
+        if (isAbortError(e)) return;
+        setError(e instanceof ReservedApiError ? e.message : t('timetable.error'));
+      })
+      .finally(() => {
+        if (!ac.signal.aborted) setLoading(false);
+      });
   }, [slug, weekStart, t]);
 
-  useEffect(() => reload(), [reload]);
+  useEffect(() => {
+    reload();
+    return () => reloadRef.current?.abort();
+  }, [reload]);
 
   const byDay = useMemo(() => {
     const groups: PublicClassSession[][] = [[], [], [], [], [], [], []];

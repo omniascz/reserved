@@ -26,6 +26,26 @@ test.describe('Admin — přihlášení', () => {
     expect(errors.consoleErrors.length + errors.httpErrors.length).toBeGreaterThanOrEqual(0);
   });
 
+  test('formulář nepředvyplňuje natvrdo zapsané cizí údaje', async ({ page }) => {
+    await page.goto('/login');
+
+    // Nález z fáze TESTY UI: v kódu byly natvrdo `demo-widget`,
+    // `o@demo-widget.test` a dokonce heslo. Předvyplnit se smí jen z env
+    // proměnných pro lokální vývoj — nikdy ne z kódu.
+    const slug = await page.locator('#slug').inputValue();
+    const email = await page.locator('#email').inputValue();
+    const heslo = await page.locator('#password').inputValue();
+
+    expect(slug).not.toBe('demo-widget');
+    expect(email).not.toBe('o@demo-widget.test');
+    expect(heslo).not.toBe('verysecurepassword123');
+
+    // Heslo se nesmí předvyplnit z kódu za žádných okolností; pokud je vyplněné,
+    // musí pocházet z dev proměnné, ne z natvrdo zapsané konstanty.
+    const zdrojHesla = await page.evaluate(() => document.body.innerHTML.includes('verysecure'));
+    expect(zdrojHesla, 'v HTML stránky nesmí být natvrdo zapsané heslo').toBe(false);
+  });
+
   test('špatné heslo dovnitř nepustí', async ({ page, errors }) => {
     // Neúspěšné přihlášení JE očekávaná 401 — povolujeme ji výslovně, ať je to v kódu vidět.
     errors.allow('401');

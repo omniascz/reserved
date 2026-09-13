@@ -1,11 +1,8 @@
 import { test, expect, shot, loginAsFitnessAdmin } from './fixtures';
 
 test.describe('Admin — /class-sessions (skupinové lekce)', () => {
-  test.beforeEach(async ({ page, errors }) => {
-    // ZNÁMÝ NÁLEZ — viz komentář v passes.spec.ts: chyba hydratace z NavHeaderu
-    // (slug z localStorage) shodí serverový render na každé admin stránce
-    // otevřené přímým načtením. Neopravujeme, jen výslovně povolujeme.
-    errors.allow(/Hydration failed|Expected server HTML|hydration|hydrating/i);
+  test.beforeEach(async ({ page }) => {
+    // Povolenka na chybu hydratace ZRUŠENA — viz passes.spec.ts.
     await loginAsFitnessAdmin(page);
   });
 
@@ -34,6 +31,12 @@ test.describe('Admin — /class-sessions (skupinové lekce)', () => {
     await expect(page.getByRole('heading', { name: 'Přihlášení' })).toBeVisible();
     await expect(page.getByText('Obsazenost')).toBeVisible();
     await shot(page, '08-class-session-detail');
+
+    // Rozsah času nesmí opakovat datum dvakrát ("út 15. 9. 19:00 – út 15. 9. 19:55").
+    // U lekce v rámci jednoho dne musí být datum právě jednou.
+    const podnadpis = (await page.locator('h2 + p, h2 ~ p').first().innerText()).trim();
+    const pocetDat = (podnadpis.match(/\d{1,2}\.\s*\d{1,2}\./g) ?? []).length;
+    expect(pocetDat, `rozsah opakuje datum: "${podnadpis}"`).toBeLessThanOrEqual(1);
 
     // První účastník v tabulce přihlášených.
     const participantRow = page
