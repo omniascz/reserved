@@ -130,6 +130,28 @@ Reálný dopad (2026-09-13): worker připomínek by v produkci spadl při **kaž
 poslat e-mail — odhalil to až jeho první test. Stejná chyba pak podruhé v přípravě dat testu
 expirace.
 
+### PAST: test, který prochází naprázdno
+
+Kontrola typu „po výmazu nezůstal e-mail ve frontě notifikací" projde i tehdy, když v té frontě
+**nikdy nic nebylo**. Zelená, která nic neměří, je nebezpečnější než červená — vypadá jako důkaz
+a přitom kryje nefunkční kód.
+
+**Pravidlo: u každého tvrzení „X už tam není" musí test nejdřív zařídit, aby tam X bylo** — a
+ideálně k němu přidat protikontrolu, že jiný záznam na témže místě zůstal (jen změněný).
+
+```ts
+// špatně: projde i s úplně rozbitou anonymizací
+expect(pocetRadkuSPuvodnimEmailem).toBe(0);
+
+// správně: řádek existuje, jen je anonymizovaný
+expect(anonymizovane.length).toBeGreaterThanOrEqual(1);
+expect(anonymizovane[0].body).toContain('obsah smazán');
+```
+
+Reálný dopad (2026-09-13): GDPR test „původní e-mail nezůstal ve frontě notifikací" procházel,
+protože veřejné přihlášení na lekci zákazníkovi žádný e-mail nezakládá. Anonymizace notifikací
+tak nebyla ověřená vůbec.
+
 ## Železná pravidla
 
 ### Peníze

@@ -11,7 +11,10 @@ import {
   getAccessToken,
   getCustomerDetail,
   removeCustomerTag,
+  eraseCustomerGdpr,
+  exportCustomerGdpr,
   type AdminCustomerDetail,
+  type GdprEraseResult,
 } from '@/lib/api';
 import { NoShowRiskBadge } from '@/components/NoShowRiskBadge';
 import { CustomerBundlePacks } from './CustomerBundlePacks';
@@ -34,6 +37,12 @@ export default function CustomerDetailPage({ params }: { params: { id: string } 
   const [error, setError] = useState<string | null>(null);
   const [newTag, setNewTag] = useState('');
   const [newNote, setNewNote] = useState('');
+  // GDPR panel
+  const [gdprBusy, setGdprBusy] = useState(false);
+  const [gdprSummary, setGdprSummary] = useState<string | null>(null);
+  const [eraseOpen, setEraseOpen] = useState(false);
+  const [eraseReason, setEraseReason] = useState('');
+  const [eraseResult, setEraseResult] = useState<GdprEraseResult | null>(null);
 
   useEffect(() => {
     if (!getAccessToken()) router.replace('/login');
@@ -91,6 +100,48 @@ export default function CustomerDetailPage({ params }: { params: { id: string } 
       reload();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Chyba');
+    }
+  }
+
+  async function handleGdprExport() {
+    setGdprBusy(true);
+    setGdprSummary(null);
+    try {
+      const exportData = await exportCustomerGdpr(params.id);
+      const celkem = Object.values(exportData.pocty).reduce((a, b) => a + b, 0);
+      const tabulek = Object.keys(exportData.pocty).length;
+
+      // Stažení souboru — export má být strojově čitelný a předatelný.
+      const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `gdpr-export-${params.id}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      setGdprSummary(`Export připraven: ${celkem} záznamů v ${tabulek} tabulkách.`);
+    } catch (err) {
+      setGdprSummary(err instanceof Error ? `Export selhal: ${err.message}` : 'Export selhal.');
+    } finally {
+      setGdprBusy(false);
+    }
+  }
+
+  async function handleGdprErase() {
+    setGdprBusy(true);
+    try {
+      const vysledek = await eraseCustomerGdpr(params.id, eraseReason.trim() || undefined);
+      setEraseResult(vysledek);
+      setEraseOpen(false);
+      setEraseReason('');
+      reload();
+    } catch (err) {
+      setGdprSummary(err instanceof Error ? `Výmaz selhal: ${err.message}` : 'Výmaz selhal.');
+    } finally {
+      setGdprBusy(false);
     }
   }
 
@@ -292,6 +343,92 @@ export default function CustomerDetailPage({ params }: { params: { id: string } 
 
         <div className="mt-6">
           <CustomerPayments customerId={params.id} />
+        </div>
+
+        {/* GDPR — export a výmaz osobních údajů */}
+        <div
+          className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 mt-6"
+          data-testid="gdpr-panel"
+        >
+          <h3 className="font-semibold mb-1">Osobní údaje (GDPR)</h3>
+          <p className="text-sm text-slate-500 mb-3">
+            Export vydá vše, co o zákazníkovi systém má. Výmaz osobní údaje odstraní, ale rezervace
+            a platby zůstanou kvůli účetnictví — jen už nikoho neidentifikují.
+          </p>
+
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={handleGdprExport}
+              disabled={gdprBusy}
+              data-testid="gdpr-export"
+              className="px-3 py-1.5 bg-slate-800 hover:bg-slate-900 disabled:opacity-50 text-white text-sm rounded"
+            >
+              Exportovat údaje
+            </button>
+            <button
+              onClick={() => setEraseOpen(true)}
+              disabled={gdprBusy}
+              data-testid="gdpr-erase"
+              className="px-3 py-1.5 border border-red-300 text-red-700 hover:bg-red-50 disabled:opacity-50 text-sm rounded"
+            >
+              Vymazat osobní údaje
+            </button>
+          </div>
+
+          {gdprSummary && (
+            <p className="text-sm text-slate-700 mt-3" data-testid="gdpr-export-summary">
+              {gdprSummary}
+            </p>
+          )}
+
+          {eraseOpen && (
+            <div
+              className="mt-4 border border-red-200 bg-red-50 rounded p-3"
+              data-testid="gdpr-erase-confirm"
+            >
+              <p className="text-sm text-red-800 font-medium mb-2">
+                Opravdu vymazat osobní údaje tohoto zákazníka? Nejde to vzít zpět.
+              </p>
+              <input
+                type="text"
+                value={eraseReason}
+                onChange={(e) => setEraseReason(e.target.value)}
+                placeholder="Důvod (např. žádost zákazníka)"
+                data-testid="gdpr-erase-reason"
+                className="w-full px-3 py-1.5 border border-red-300 rounded text-sm mb-2"
+              />
+              <div className="flex gap-2">
+                <button
+                  onClick={handleGdprErase}
+                  disabled={gdprBusy}
+                  data-testid="gdpr-erase-submit"
+                  className="px-3 py-1.5 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white text-sm rounded"
+                >
+                  Potvrdit výmaz
+                </button>
+                <button
+                  onClick={() => setEraseOpen(false)}
+                  className="px-3 py-1.5 border border-slate-300 text-sm rounded"
+                >
+                  Zrušit
+                </button>
+              </div>
+            </div>
+          )}
+
+          {eraseResult && (
+            <div
+              className="mt-4 border border-slate-200 rounded p-3 text-sm"
+              data-testid="gdpr-erase-result"
+            >
+              <p className="font-medium text-slate-800 mb-1">Osobní údaje byly vymazány.</p>
+              <p className="text-slate-600">
+                Anonymizováno záznamů:{' '}
+                {Object.values(eraseResult.anonymizovano).reduce((a, b) => a + b, 0)} · smazáno:{' '}
+                {Object.values(eraseResult.smazano).reduce((a, b) => a + b, 0)}
+              </p>
+            </div>
+          )}
         </div>
       </main>
     </div>

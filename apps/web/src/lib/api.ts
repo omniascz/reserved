@@ -483,6 +483,72 @@ export async function addCustomerNote(
   });
 }
 
+// ─── GDPR: export a výmaz osobních údajů ─────────────────────────────
+
+export interface GdprExport {
+  format: string;
+  generatedAt: string;
+  tenantId: string;
+  subject: { type: string; id: string };
+  customer?: Record<string, unknown>;
+  employee?: Record<string, unknown>;
+  data: Record<string, Array<Record<string, unknown>>>;
+  pocty: Record<string, number>;
+  nezahrnuto: Array<{ zdroj: string; duvod: string }>;
+}
+
+export interface GdprEraseResult {
+  subject: { type: string; id: string };
+  erasedAt: string;
+  anonymizedEmail: string;
+  smazano: Record<string, number>;
+  anonymizovano: Record<string, number>;
+  ponechano: Array<{ zdroj: string; duvod: string }>;
+}
+
+export async function exportCustomerGdpr(customerId: string): Promise<GdprExport> {
+  const { data } = await fetchApi<{ data: GdprExport }>(
+    `/admin/gdpr/customers/${customerId}/export`,
+  );
+  return data;
+}
+
+/** Nevratné. `confirm: true` posílá API schválně explicitně — viz gdpr.dto.ts. */
+export async function eraseCustomerGdpr(
+  customerId: string,
+  reason?: string,
+): Promise<GdprEraseResult> {
+  const { data } = await fetchApi<{ data: GdprEraseResult }>(
+    `/admin/gdpr/customers/${customerId}/erase`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ confirm: true, ...(reason ? { reason } : {}) }),
+    },
+  );
+  return data;
+}
+
+export async function exportEmployeeGdpr(employeeId: string): Promise<GdprExport> {
+  const { data } = await fetchApi<{ data: GdprExport }>(
+    `/admin/gdpr/employees/${employeeId}/export`,
+  );
+  return data;
+}
+
+export async function eraseEmployeeGdpr(
+  employeeId: string,
+  reason?: string,
+): Promise<GdprEraseResult> {
+  const { data } = await fetchApi<{ data: GdprEraseResult }>(
+    `/admin/gdpr/employees/${employeeId}/erase`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ confirm: true, ...(reason ? { reason } : {}) }),
+    },
+  );
+  return data;
+}
+
 // ─── Settings, Blocks, Holidays (sprint 1.8) ─────────────────────────
 
 export interface BookingRules {

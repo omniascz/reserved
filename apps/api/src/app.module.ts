@@ -16,6 +16,7 @@ import { CorporateAccountsModule } from './corporate-accounts/corporate-accounts
 import { CreditPacksModule } from './credit-packs/credit-packs.module.js';
 import { CustomDomainsModule } from './custom-domains/custom-domains.module.js';
 import { FeatureFlagsModule } from './feature-flags/feature-flags.module.js';
+import { GdprModule } from './gdpr/gdpr.module.js';
 import { GoogleCalendarModule } from './google-calendar/google-calendar.module.js';
 import { SubscriptionsModule } from './subscriptions/subscriptions.module.js';
 import { TimePacksModule } from './time-packs/time-packs.module.js';
@@ -109,6 +110,7 @@ import { TenantMiddleware } from './tenant/tenant.middleware.js';
     AvailabilityModule,
     EmailModule,
     CustomersModule,
+    GdprModule,
     BookingsModule,
     ClassSessionsModule,
     CreditPacksModule,
