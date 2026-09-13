@@ -29,6 +29,16 @@ export interface PortalEmailVars {
   expiresInMinutes?: number;
 }
 
+/** Vars pro ověření e-mailu administrátora (majitele tenanta). */
+export interface AdminVerifyEmailVars {
+  userName: string;
+  tenantName: string;
+  /** Plný URL s ?token= — vygenerovaný v EmailVerificationService. */
+  verifyUrl: string;
+  /** Hodin do expirace odkazu. */
+  expiresInHours: number;
+}
+
 /** Vars pro custom emaily (rules engine action). Libovolné klíče. */
 export interface CustomEmailVars {
   /** Sub schéma overrides — když action zadá vlastní subject/body, použijeme je. */
@@ -37,7 +47,7 @@ export interface CustomEmailVars {
   [key: string]: unknown;
 }
 
-export type EmailVars = BookingEmailVars | PortalEmailVars | CustomEmailVars;
+export type EmailVars = BookingEmailVars | PortalEmailVars | AdminVerifyEmailVars | CustomEmailVars;
 
 export interface EmailTemplate {
   subject: string;
@@ -52,6 +62,26 @@ function render(template: string, vars: Record<string, unknown>): string {
 }
 
 const TEMPLATES: Record<string, { subject: string; body: string }> = {
+  admin_email_verify: {
+    subject: 'Ověřte svůj e-mail — {{tenantName}}',
+    body: `Dobrý den {{userName}},
+
+pro provoz {{tenantName}} byl založen účet v Reserved s touto e-mailovou
+adresou. Potvrďte ji prosím kliknutím na odkaz:
+
+  {{verifyUrl}}
+
+Odkaz platí {{expiresInHours}} hodin a lze ho použít jen jednou.
+
+Dokud adresu nepotvrdíte, nebude váš rezervační formulář přijímat rezervace
+od klientů a nepůjde rozesílat e-maily zákazníkům. Do administrace se ale
+dostanete normálně a můžete si všechno nastavit.
+
+Pokud jste si účet nezakládali, tento e-mail ignorujte — bez potvrzení
+nebude účet nikomu k užitku.
+
+Tým Reserved`,
+  },
   booking_confirmed: {
     subject: 'Potvrzení rezervace — {{tenantName}}',
     body: `Dobrý den {{customerName}},

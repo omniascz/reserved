@@ -6,6 +6,7 @@ import {
   ForbiddenException,
   Inject,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { and, desc, eq } from 'drizzle-orm';
@@ -14,6 +15,7 @@ import { type AppRole, serviceContext, type TenantContext } from '@reserved/rls-
 import { randomBytes } from 'node:crypto';
 import { DbService } from '../db/db.service.js';
 import { EmailService } from '../email/email.service.js';
+import { EmailVerificationService } from '../auth/email-verification.service.js';
 import { PaymentsService } from '../payments/payments.service.js';
 import type { IssueVoucherDto, RedeemVoucherDto } from './dto/voucher.dto.js';
 
@@ -42,10 +44,13 @@ function generateCode(): string {
 
 @Injectable()
 export class VouchersService {
+  private readonly logger = new Logger(VouchersService.name);
+
   constructor(
     @Inject(DbService) private readonly dbService: DbService,
     @Inject(EmailService) private readonly email: EmailService,
     @Inject(PaymentsService) private readonly payments: PaymentsService,
+    @Inject(EmailVerificationService) private readonly verification: EmailVerificationService,
   ) {}
 
   /**
@@ -172,6 +177,15 @@ export class VouchersService {
     voucher: typeof schema.giftVouchers.$inferSelect,
   ): Promise<void> {
     if (!voucher.recipientEmail) return;
+
+    // Blokujeme ODESLÁNÍ příjemci, ne vydání poukazu. Vystavit poukaz
+    // neověřenému účtu nevadí — problém je posílat poštu na cizí adresu.
+    if (!(await this.verification.isTenantVerified(tenantId))) {
+      this.logger.warn(
+        `Poukaz ${voucher.id} nebyl odeslán na ${voucher.recipientEmail}: tenant ${tenantId} nemá ověřený e-mail.`,
+      );
+      return;
+    }
     const value = (voucher.initialValueHellers / 100).toLocaleString('cs-CZ');
     const greeting = voucher.recipientName ? `Ahoj ${voucher.recipientName},` : 'Dobrý den,';
     const note = voucher.note ? `\n\nVzkaz: ${voucher.note}` : '';

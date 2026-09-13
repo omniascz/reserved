@@ -5,6 +5,7 @@ import {
   BadRequestException,
   Body,
   Controller,
+  ForbiddenException,
   Get,
   HttpCode,
   Inject,
@@ -19,6 +20,7 @@ import { schema } from '@reserved/db';
 import { serviceContext } from '@reserved/rls-multitenancy';
 import { z } from 'zod';
 import { Public } from '../auth/decorators/public.decorator.js';
+import { EmailVerificationService } from '../auth/email-verification.service.js';
 import { ZodValidationPipe } from '../auth/zod-validation.pipe.js';
 import { DbService } from '../db/db.service.js';
 import { AvailabilityService } from '../availability/availability.service.js';
@@ -61,6 +63,7 @@ export class PublicController {
     @Inject(SmartService) private readonly smart: SmartService,
     @Inject(ReferralsService) private readonly referrals: ReferralsService,
     @Inject(ChallengesService) private readonly challenges: ChallengesService,
+    @Inject(EmailVerificationService) private readonly verification: EmailVerificationService,
   ) {}
 
   /** GET /api/v1/public/:slug — info o tenant (název + theme + currency, timezone). */
@@ -293,6 +296,7 @@ export class PublicController {
     @Body(new ZodValidationPipe(HoldSchema)) dto: z.infer<typeof HoldSchema>,
   ) {
     const tenant = await this.resolveTenant(slug);
+    await this.assertTenantCanAcceptBookings(tenant.id);
 
     return this.dbService.withRlsContext(serviceContext(tenant.id), async (tx) => {
       // 1. Načti službu pro durations
@@ -406,6 +410,7 @@ export class PublicController {
     @Body(new ZodValidationPipe(ConfirmBookingSchema)) dto: ConfirmBookingDto,
   ) {
     const tenant = await this.resolveTenant(slug);
+    await this.assertTenantCanAcceptBookings(tenant.id);
     const booking = await this.bookings.confirmFromHold(tenant.id, dto);
     return {
       data: {
@@ -460,6 +465,7 @@ export class PublicController {
     @Body(new ZodValidationPipe(JoinClassSessionSchema)) dto: JoinClassSessionDto,
   ) {
     const tenant = await this.resolveTenant(slug);
+    await this.assertTenantCanAcceptBookings(tenant.id);
     const booking = await this.classSessions.joinPublic(tenant.id, id, dto);
     return {
       data: {
@@ -671,5 +677,29 @@ export class PublicController {
       });
     }
     return tenant;
+  }
+
+  /**
+   * Brána pro VŠECHNY veřejné akce, které zakládají rezervaci.
+   *
+   * Dokud majitel nepotvrdí e-mail, formulář rezervace nepřijímá — ochrana
+   * klientů před tím, aby se objednali do provozu, který si někdo založil na
+   * cizí adresu a už se k němu nikdy nevrátí.
+   *
+   * Záměrně je to JEDNO místo se stejným tvarem chyby, aby sem šlo doplnit i
+   * blokaci po vypršení trialu (dnes není implementovaná nikde) bez zakládání
+   * paralelního systému.
+   */
+  private async assertTenantCanAcceptBookings(tenantId: string): Promise<void> {
+    const verified = await this.verification.isTenantVerified(tenantId);
+    if (!verified) {
+      throw new ForbiddenException({
+        error: {
+          code: 'TENANT_EMAIL_UNVERIFIED',
+          message:
+            'Online rezervace jsou dočasně vypnuté, protože provozovatel zatím nepotvrdil svůj e-mail. Zkuste to prosím později nebo provoz kontaktujte přímo.',
+        },
+      });
+    }
   }
 }

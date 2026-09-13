@@ -44,6 +44,10 @@ export const messages = {
     'datetime.locking': 'zamykám…',
     'datetime.slotTaken': 'Tento termín už si někdo zarezervoval. Vyber jiný.',
     'datetime.bookingError': 'Chyba při rezervaci',
+    // Provozovatel zatím nepotvrdil svůj e-mail → online rezervace jsou vypnuté.
+    // Klient musí pochopit, že chyba není u něj a co má dělat dál.
+    'common.tenantUnverified':
+      'Online rezervace jsou teď vypnuté — provozovatel ještě nedokončil ověření svého e-mailu. Zkus to prosím později, nebo se ozvi provozu přímo telefonem či e-mailem.',
 
     // ContactStep
     'contact.title': 'Tvoje údaje',
@@ -141,6 +145,8 @@ export const messages = {
     'datetime.locking': 'locking…',
     'datetime.slotTaken': 'Someone just booked this slot. Pick another.',
     'datetime.bookingError': 'Booking error',
+    'common.tenantUnverified':
+      'Online booking is switched off right now — the provider has not finished verifying their email yet. Please try again later, or contact them directly by phone or email.',
 
     'contact.title': 'Your details',
     'contact.name': 'Full name *',

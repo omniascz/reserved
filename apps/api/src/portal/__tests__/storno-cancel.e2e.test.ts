@@ -66,6 +66,12 @@ describe('Portálové storno dle politiky (e2e)', () => {
     token = reg.tokens.accessToken;
     tenantId = reg.tenantId;
 
+    // Nově registrovaný tenant má NEOVĚŘENÝ e-mail a veřejné rezervace jsou mu
+    // proto zablokované. Tenhle test zkoumá storno politiku, ne ověřování, a
+    // reálný provoz s ostrými rezervacemi ověřený e-mail mít bude — tak ho
+    // rovnou ověříme (stejnou cestou, jakou to dělá proklik odkazu).
+    await sql`UPDATE users SET email_verified_at = now() WHERE tenant_id = ${tenantId}`;
+
     const branches = await http<{ data: Array<{ id: string }> }>(`/public/${slug}/branches`);
     const branchId = branches.data[0]!.id;
 
