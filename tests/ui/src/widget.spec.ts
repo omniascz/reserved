@@ -26,15 +26,11 @@ test.describe('Widget — veřejná rezervace (tenant fitness)', () => {
     // ── 3. Termín ──
     await expect(page.getByRole('heading', { name: 'Vyber termín' })).toBeVisible();
 
-    // Datum posouváme ŠIPKOU, ne psaním do pole. Zadání psaním sice odešle dotaz
-    // na správný den, ale obrazovka pak hlásí "žádné volné termíny" — viz nález
-    // v reportu. Šipka na stejný den nabídne 42 časů.
-    const dnesek = new Date();
-    const cil = new Date(`${DATE}T12:00:00`);
-    const kroku = Math.round((cil.getTime() - dnesek.setHours(12, 0, 0, 0)) / 86_400_000);
-    for (let i = 0; i < kroku; i++) {
-      await page.getByRole('button', { name: 'Další den' }).click();
-    }
+    // Datum zadáváme PSANÍM do pole — právě tahle cesta byla rozbitá
+    // (opožděná odpověď na dřívější den přepsala výsledek a obrazovka hlásila
+    // "žádné volné termíny"). Druhý test v tomhle souboru pokrývá tutéž věc
+    // přes šipky, takže jsou ošetřené obě cesty.
+    await page.locator('input[type="date"]').fill(DATE);
     await expect(page.locator('input[type="date"]')).toHaveValue(DATE);
 
     // Počkat, až se načtou sloty pro zvolený den, a vzít první volný.
