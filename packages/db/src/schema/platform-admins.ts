@@ -76,6 +76,8 @@ export const platformActionTypes = [
   'tenant_plan_changed',
   'tenant_soft_deleted',
   'tenant_impersonated',
+  /** Ruční odemčení účtu zamčeného po neúspěšných přihlášeních. */
+  'tenant_user_unlocked',
 ] as const;
 export type PlatformActionType = (typeof platformActionTypes)[number];
 

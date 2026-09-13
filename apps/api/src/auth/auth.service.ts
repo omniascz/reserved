@@ -20,6 +20,7 @@ import { serviceContext } from '@reserved/rls-multitenancy';
 import { randomUUID } from 'node:crypto';
 import { DbService } from '../db/db.service.js';
 import { JwtService } from './jwt.service.js';
+import { AccountLockoutService, type KontextPokusu } from './account-lockout.service.js';
 import { EmailVerificationService } from './email-verification.service.js';
 import { AuthError } from './auth.errors.js';
 import { hashPassword, verifyPassword } from './password.js';
@@ -34,6 +35,7 @@ export class AuthService {
   constructor(
     @Inject(DbService) private readonly dbService: DbService,
     @Inject(JwtService) private readonly jwt: JwtService,
+    @Inject(AccountLockoutService) private readonly lockout: AccountLockoutService,
     @Inject(EmailVerificationService)
     private readonly emailVerification: EmailVerificationService,
   ) {}
@@ -177,63 +179,117 @@ export class AuthService {
   // ---------------------------------------------------------------------------
   // login: ověří heslo + vydá tokeny pro daný tenant
   // ---------------------------------------------------------------------------
-  async login(tenantId: string, dto: LoginDto): Promise<TokenPair> {
-    const result = await this.dbService.withRlsContext(serviceContext(), async (tx) => {
-      const rows = await tx
-        .select()
-        .from(schema.users)
-        .where(and(eq(schema.users.tenantId, tenantId), eq(schema.users.email, dto.email)))
-        .limit(1);
-      const user = rows[0];
-
-      if (!user || !user.passwordHash || !user.isActive) {
-        // Konstantní timing — vždy ověř hash, i když user neexistuje, abychom
-        // nezveřejnili existenci e-mailu přes side channel.
-        await verifyPassword('$argon2id$v=19$m=19456,t=2,p=1$dummy$dummy', dto.password).catch(
-          () => false,
-        );
-        throw new UnauthorizedException({
-          error: { code: 'INVALID_CREDENTIALS', message: 'Špatný email nebo heslo.' },
-        });
-      }
-
-      const ok = await verifyPassword(user.passwordHash, dto.password);
-      if (!ok) {
-        throw new UnauthorizedException({
-          error: { code: 'INVALID_CREDENTIALS', message: 'Špatný email nebo heslo.' },
-        });
-      }
-
-      // Update last_login_at
-      await tx
-        .update(schema.users)
-        .set({ lastLoginAt: new Date() })
-        .where(eq(schema.users.id, user.id));
-
-      const family = randomUUID();
-      const access = await this.jwt.signAccessToken({
-        userId: user.id,
-        tenantId: user.tenantId,
-        role: user.role as 'owner' | 'manager' | 'employee' | 'receptionist',
-        customRoleId: user.customRoleId,
-        branchIds: [], // TODO: na základě employee_branches v sprintu 1.3
+  async login(tenantId: string, dto: LoginDto, ctx: KontextPokusu = {}): Promise<TokenPair> {
+    // 1) ZÁMEK SE KONTROLUJE PŘED OVĚŘENÍM HESLA.
+    //    Kdyby se kontroloval až po něm, zamčený účet by šlo dál zkoušet —
+    //    zámek by byl jen nálepka na odpovědi, ne ochrana.
+    const zamek = await this.lockout.stav(tenantId, dto.email);
+    if (zamek.zamceno) {
+      const minut = Math.ceil(zamek.zbyvaSekund / 60);
+      throw new UnauthorizedException({
+        error: {
+          code: 'ACCOUNT_LOCKED',
+          message:
+            `Účet je dočasně uzamčený po opakovaných neúspěšných přihlášeních. ` +
+            `Zkuste to prosím znovu za ${minut} min.`,
+          details: { retryAfterSeconds: zamek.zbyvaSekund, lockedUntil: zamek.doKdy },
+        },
       });
-      const refresh = await this.jwt.signRefreshToken(user.id, family);
+    }
 
-      await tx.insert(schema.userSessions).values({
-        tenantId: user.tenantId,
-        userId: user.id,
-        family,
-        refreshTokenJti: refresh.jti,
-        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-      });
-
-      return {
-        accessToken: access.token,
-        refreshToken: refresh.token,
-        expiresIn: access.expiresIn,
+    // 2) Ověření samotné. POZOR: zápis neúspěchu se dělá AŽ ZA transakcí —
+    //    uvnitř by ho výjimka odrolovala zpět a evidence by tiše nevznikla.
+    let neuspech: {
+      duvod: 'unknown_user' | 'inactive_user' | 'bad_password';
+      user: null | {
+        id: string;
+        firstName: string;
+        lastName: string;
       };
-    });
+    } | null = null;
+
+    let result: TokenPair | null = null;
+    try {
+      result = await this.dbService.withRlsContext(serviceContext(), async (tx) => {
+        const rows = await tx
+          .select()
+          .from(schema.users)
+          .where(and(eq(schema.users.tenantId, tenantId), eq(schema.users.email, dto.email)))
+          .limit(1);
+        const user = rows[0];
+
+        if (!user || !user.passwordHash || !user.isActive) {
+          // Konstantní timing — vždy ověř hash, i když user neexistuje, abychom
+          // nezveřejnili existenci e-mailu přes side channel.
+          await verifyPassword('$argon2id$v=19$m=19456,t=2,p=1$dummy$dummy', dto.password).catch(
+            () => false,
+          );
+          neuspech = {
+            duvod: user ? 'inactive_user' : 'unknown_user',
+            // Neexistujícímu ani zablokovanému účtu se upozornění neposílá.
+            user: null,
+          };
+          throw new UnauthorizedException({
+            error: { code: 'INVALID_CREDENTIALS', message: 'Špatný email nebo heslo.' },
+          });
+        }
+
+        const ok = await verifyPassword(user.passwordHash, dto.password);
+        if (!ok) {
+          neuspech = {
+            duvod: 'bad_password',
+            user: { id: user.id, firstName: user.firstName, lastName: user.lastName },
+          };
+          throw new UnauthorizedException({
+            error: { code: 'INVALID_CREDENTIALS', message: 'Špatný email nebo heslo.' },
+          });
+        }
+
+        // Update last_login_at
+        await tx
+          .update(schema.users)
+          .set({ lastLoginAt: new Date() })
+          .where(eq(schema.users.id, user.id));
+
+        const family = randomUUID();
+        const access = await this.jwt.signAccessToken({
+          userId: user.id,
+          tenantId: user.tenantId,
+          role: user.role as 'owner' | 'manager' | 'employee' | 'receptionist',
+          customRoleId: user.customRoleId,
+          branchIds: [], // TODO: na základě employee_branches v sprintu 1.3
+        });
+        const refresh = await this.jwt.signRefreshToken(user.id, family);
+
+        await tx.insert(schema.userSessions).values({
+          tenantId: user.tenantId,
+          userId: user.id,
+          family,
+          refreshTokenJti: refresh.jti,
+          expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+        });
+
+        return {
+          accessToken: access.token,
+          refreshToken: refresh.token,
+          expiresIn: access.expiresIn,
+        };
+      });
+    } catch (err) {
+      // Zápis AŽ TADY, mimo transakci: uvnitř by ho výjimka odrolovala zpět
+      // a evidence by tiše nevznikla — počítadlo by se nikdy nenaplnilo.
+      if (neuspech) {
+        const n = neuspech as {
+          duvod: 'unknown_user' | 'inactive_user' | 'bad_password';
+          user: { id: string; firstName: string; lastName: string } | null;
+        };
+        await this.lockout.zaznamenejNeuspech(tenantId, dto.email, n.duvod, ctx, n.user);
+      }
+      throw err;
+    }
+
+    // 3) Úspěch nuluje počítadlo — předchozí pokusy přestanou zamykat.
+    await this.lockout.vynulujPoUspechu(tenantId, dto.email);
 
     return result;
   }

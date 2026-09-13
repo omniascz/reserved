@@ -39,6 +39,18 @@ export interface AdminVerifyEmailVars {
   expiresInHours: number;
 }
 
+/** Vars pro upozornění na dočasné uzamčení účtu po neúspěšných přihlášeních. */
+export interface AccountLockedVars {
+  userName: string;
+  tenantName: string;
+  /** Kolik neúspěšných pokusů zámek spustilo. */
+  attempts: number;
+  /** Na kolik minut je účet zamčený. */
+  lockMinutes: number;
+  /** IP posledního pokusu — ať majitel pozná, jestli to byl on. */
+  lastIp: string;
+}
+
 /** Vars pro custom emaily (rules engine action). Libovolné klíče. */
 export interface CustomEmailVars {
   /** Sub schéma overrides — když action zadá vlastní subject/body, použijeme je. */
@@ -47,7 +59,12 @@ export interface CustomEmailVars {
   [key: string]: unknown;
 }
 
-export type EmailVars = BookingEmailVars | PortalEmailVars | AdminVerifyEmailVars | CustomEmailVars;
+export type EmailVars =
+  | BookingEmailVars
+  | PortalEmailVars
+  | AdminVerifyEmailVars
+  | AccountLockedVars
+  | CustomEmailVars;
 
 export interface EmailTemplate {
   subject: string;
@@ -166,6 +183,23 @@ se můžete přihlásit e-mailem a heslem bez čekání na odkaz.
 Pokud jste heslo neměnili, okamžitě kontaktujte salon.
 
 Tým {{tenantName}}`,
+  },
+  account_locked: {
+    subject: 'Účet byl dočasně uzamčen — {{tenantName}}',
+    body: `Dobrý den {{userName}},
+
+k vašemu účtu v {{tenantName}} se někdo {{attempts}}× neúspěšně pokusil
+přihlásit, proto jsme ho na {{lockMinutes}} minut uzamkli.
+
+Poslední pokus přišel z adresy {{lastIp}}.
+
+Co s tím:
+  - Pokud jste to byli vy (překlep nebo zapnutý Caps Lock), počkejte
+    {{lockMinutes}} minut a přihlaste se znovu. Nic dalšího dělat nemusíte.
+  - Pokud jste se nepřihlašovali, někdo zkouší uhodnout vaše heslo. Po
+    odemčení si ho prosím změňte.
+
+Tým Reserved`,
   },
 };
 

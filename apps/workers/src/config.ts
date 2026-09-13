@@ -17,6 +17,12 @@ const EnvSchema = z.object({
    */
   WORKER_VERIFY_REMINDER_TICK_SECONDS: z.coerce.number().int().positive().default(3600),
   /**
+   * Úklid evidence neúspěšných přihlášení. Nic časově citlivého — maže se to,
+   * co je starší než 30 dní, takže stačí jednou za den. Častější běh by jen
+   * bez užitku zatěžoval databázi.
+   */
+  WORKER_AUTH_CLEANUP_TICK_SECONDS: z.coerce.number().int().positive().default(86400),
+  /**
    * Základ odkazu do administrace — musí odpovídat APP_URL, se kterou odkazy
    * staví API (EmailVerificationService). Bez toho by připomínka odkazovala
    * jinam než původní ověřovací e-mail.

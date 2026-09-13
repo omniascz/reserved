@@ -7,6 +7,7 @@ import { eq, isNull } from 'drizzle-orm';
 import { schema } from '@reserved/db';
 import { serviceContext } from '@reserved/rls-multitenancy';
 import { DbService } from '../db/db.service.js';
+import { AccountLockoutService } from '../auth/account-lockout.service.js';
 import { PlatformAuditService } from './platform-audit.service.js';
 import type {
   SuspendTenantDto,
@@ -24,8 +25,57 @@ export interface ActionContext {
 export class PlatformTenantActionsService {
   constructor(
     @Inject(DbService) private readonly dbService: DbService,
+    @Inject(AccountLockoutService) private readonly lockout: AccountLockoutService,
     @Inject(PlatformAuditService) private readonly audit: PlatformAuditService,
   ) {}
+
+  /**
+   * Ruční odemčení účtu zamčeného po neúspěšných přihlášeních.
+   *
+   * PROČ PRÁVĚ TUDY, a ne odkazem na e-mail:
+   *   - zamčený člověk se nemůže přihlásit, aby si pomohl sám,
+   *   - odkaz poslaný e-mailem by měl sílu obnovy hesla (kdo ho má, obejde
+   *     ochranu) a útočník by jím mohl oběť zahltit vyžádanými e-maily,
+   *   - master admin má už hotovou auditní stopu, takže po odemčení zůstane
+   *     záznam KDO, KDY a ODKUD ho provedl. Zámek se tím nestává neviditelným.
+   *
+   * Zámek vyprší i sám (15 minut) — tohle je zkratka pro případ, kdy se spěchá.
+   */
+  async unlockUser(
+    tenantId: string,
+    userId: string,
+    ctx: ActionContext,
+  ): Promise<{ email: string; uvolnenoPokusu: number }> {
+    const user = await this.dbService.withRlsContext(serviceContext(), async (tx) => {
+      const [row] = await tx
+        .select({ id: schema.users.id, email: schema.users.email, tenantId: schema.users.tenantId })
+        .from(schema.users)
+        .where(eq(schema.users.id, userId))
+        .limit(1);
+      if (!row || row.tenantId !== tenantId) {
+        // Stejná chyba pro „neexistuje" i „patří jinému tenantovi" — endpoint
+        // nesmí prozrazovat, které účty v cizím tenantovi existují.
+        throw new NotFoundException({
+          error: { code: 'USER_NOT_FOUND', message: 'Uživatel neexistuje.' },
+        });
+      }
+      return row;
+    });
+
+    const uvolnenoPokusu = await this.lockout.odemkni(tenantId, user.email);
+
+    await this.audit.log({
+      adminId: ctx.adminId,
+      action: 'tenant_user_unlocked',
+      targetType: 'tenant',
+      targetId: tenantId,
+      payload: { userId, email: user.email, uvolnenoPokusu },
+      ipAddress: ctx.ip,
+      userAgent: ctx.ua,
+    });
+
+    return { email: user.email, uvolnenoPokusu };
+  }
 
   async suspend(tenantId: string, dto: SuspendTenantDto, ctx: ActionContext): Promise<void> {
     const before = await this.dbService.withRlsContext(serviceContext(), async (tx) => {

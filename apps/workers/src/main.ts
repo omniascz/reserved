@@ -6,6 +6,7 @@
 //   - birthdays:         narozeninová přání (tick po hodině)
 //   - pack-expiry:       propadlé permanentky → 'expired' (tick po hodině)
 //   - verify-reminders:  připomínky k ověření e-mailu 48 h / 7 dní (tick po hodině)
+//   - auth-cleanup:      úklid evidence neúspěšných přihlášení (tick jednou denně)
 //
 // Graceful shutdown na SIGTERM / SIGINT.
 
@@ -20,6 +21,7 @@ import { SlotHoldsWorker } from './workers/slot-holds.worker.js';
 import { BirthdaysWorker } from './workers/birthdays.worker.js';
 import { PackExpiryWorker } from './workers/pack-expiry.worker.js';
 import { VerifyRemindersWorker } from './workers/verify-reminders.worker.js';
+import { AuthCleanupWorker } from './workers/auth-cleanup.worker.js';
 
 async function bootstrap(): Promise<void> {
   const env = loadConfig();
@@ -36,6 +38,7 @@ async function bootstrap(): Promise<void> {
   const birthdaysWorker = new BirthdaysWorker(db);
   const packExpiryWorker = new PackExpiryWorker(db);
   const verifyRemindersWorker = new VerifyRemindersWorker(db, env.APP_URL);
+  const authCleanupWorker = new AuthCleanupWorker(db);
 
   const pollers: Poller[] = [
     new Poller({
@@ -70,6 +73,16 @@ async function bootstrap(): Promise<void> {
       intervalSeconds: env.WORKER_VERIFY_REMINDER_TICK_SECONDS,
       tick: async () => {
         await verifyRemindersWorker.tick();
+      },
+    }),
+    // Úklid evidence neúspěšných přihlášení. Zámek se počítá jen z posledních
+    // 15 minut, takže starší záznamy nic neovlivňují — drží se 30 dní kvůli
+    // auditu a pak mizí. Bez úklidu by tabulka rostla donekonečna.
+    new Poller({
+      name: 'auth-cleanup',
+      intervalSeconds: env.WORKER_AUTH_CLEANUP_TICK_SECONDS,
+      tick: async () => {
+        await authCleanupWorker.tick();
       },
     }),
   ];
