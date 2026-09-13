@@ -428,14 +428,29 @@ export class CreditPacksService {
           error: { code: 'ALLOCATION_NOT_FOUND', message: 'Permanentka klienta nenalezena.' },
         });
       }
-      const newRemaining = alloc.creditsRemaining + dto.creditsDelta;
+      const creditsDelta = dto.creditsDelta ?? 0;
+      const newRemaining = alloc.creditsRemaining + creditsDelta;
       if (newRemaining < 0) {
         throw new BadRequestException({
           error: {
             code: 'NEGATIVE_CREDITS',
-            message: `Nelze odečíst ${Math.abs(dto.creditsDelta)} kreditů — zbývá jen ${alloc.creditsRemaining}.`,
+            message: `Nelze odečíst ${Math.abs(creditsDelta)} kreditů — zbývá jen ${alloc.creditsRemaining}.`,
           },
         });
+      }
+
+      // Prodloužení platnosti (UI 2). Balíček bez expirace nemá co posouvat.
+      let newValidUntil = alloc.validUntil;
+      if (dto.extendDays !== undefined && dto.extendDays !== 0) {
+        if (alloc.validUntil === null) {
+          throw new BadRequestException({
+            error: {
+              code: 'NO_EXPIRY_TO_EXTEND',
+              message: 'Tato permanentka nemá platnost omezenou datem — není co prodloužit.',
+            },
+          });
+        }
+        newValidUntil = new Date(alloc.validUntil.getTime() + dto.extendDays * 24 * 60 * 60 * 1000);
       }
 
       await tx
@@ -443,6 +458,7 @@ export class CreditPacksService {
         .set({
           creditsRemaining: newRemaining,
           status: newRemaining === 0 ? 'used_up' : alloc.status,
+          validUntil: newValidUntil,
           updatedAt: new Date(),
         })
         .where(eq(schema.customerCreditPacks.id, allocationId));
@@ -451,13 +467,13 @@ export class CreditPacksService {
         tenantId,
         customerCreditPackId: allocationId,
         bookingId: null,
-        creditsDeducted: -dto.creditsDelta, // delta=+5 -> deducted=-5 (refund); delta=-3 -> deducted=3 (consume)
+        creditsDeducted: -creditsDelta, // delta=+5 -> deducted=-5 (refund); delta=-3 -> deducted=3 (consume)
         action: 'admin_adjustment',
         performedBy: userId,
         note: dto.note,
       });
 
-      return { allocationId, newRemaining };
+      return { allocationId, newRemaining, validUntil: newValidUntil };
     });
   }
 

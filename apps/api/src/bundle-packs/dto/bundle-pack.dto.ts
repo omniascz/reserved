@@ -34,13 +34,25 @@ export const AllocateBundlePackSchema = z.object({
 });
 export type AllocateBundlePackDto = z.infer<typeof AllocateBundlePackSchema>;
 
-// Manualni uprava polozky (admin "+1 za bonus" / "-1 za opravu")
-export const AdjustBundleItemSchema = z.object({
-  serviceId: z.string().uuid(),
-  /** Kladne = pridat, zaporne = odebrat. */
-  quantityDelta: z.number().int(),
-  note: z.string().max(500),
-});
+// Manualni uprava polozky (admin "+1 za bonus" / "-1 za opravu") a/nebo prodlouzeni platnosti.
+export const AdjustBundleItemSchema = z
+  .object({
+    serviceId: z.string().uuid().optional(),
+    /** Kladne = pridat, zaporne = odebrat. Jde ruku v ruce se serviceId. */
+    quantityDelta: z.number().int().optional(),
+    /** Posunout platnost o N dní (kladné = prodloužit). Jen u balíčku, který expiraci má. */
+    extendDays: z.number().int().optional(),
+    note: z.string().min(1).max(500),
+  })
+  .refine(
+    (dto) =>
+      (dto.serviceId !== undefined && dto.quantityDelta !== undefined) ||
+      dto.extendDays !== undefined,
+    { message: 'Zadej serviceId s quantityDelta, extendDays, nebo obojí.' },
+  )
+  .refine((dto) => (dto.serviceId === undefined) === (dto.quantityDelta === undefined), {
+    message: 'serviceId a quantityDelta se zadávají společně.',
+  });
 export type AdjustBundleItemDto = z.infer<typeof AdjustBundleItemSchema>;
 
 // Alokace firme (sprint 3.3 fáze B2-extended)
