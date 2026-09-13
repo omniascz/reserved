@@ -101,6 +101,35 @@ odstřelil všechny tři dev servery. Po úklidu byly volné 2 GB. Celý stack p
 (Postgres + Mailhog 59 MB, API ~60 MB, každý Next dev server ~360–460 MB), takže **frontendy
 pouštěj po jednom** — admin testy potřebují jen web (4002), widget test jen widget (4004).
 
+### PAST: `Date` jako parametr syrového SQL shodí dotaz
+
+Do syrového SQL — tedy do šablony `sql` předané metodě `tx.execute`, i do šablony volané přímo
+na klientovi postgres-js — se **objekt `Date` předat nesmí**. Ovladač ho neumí serializovat
+a dotaz spadne na:
+
+```
+TypeError: The "string" argument must be of type string or an instance of Buffer or ArrayBuffer.
+Received an instance of Date
+```
+
+Zrádné je, že **typovaný dotazovač drizzle (`.update().set({ sentAt: new Date() })`) `Date` zvládá**
+— past sklapne jen u syrového SQL, takže jedna část kódu funguje a druhá ne.
+
+**Správně:** poslat ISO text s výslovným přetypováním.
+
+```ts
+const platiDo = new Date(Date.now() + 24 * 3600_000).toISOString();
+await tx.execute(
+  sql`INSERT INTO email_verifications (expires_at) VALUES (${platiDo}::timestamptz)`,
+);
+```
+
+Kde to jde, počítej čas rovnou v SQL (`now() - interval '48 hours'`) a parametr vůbec neposílej.
+
+Reálný dopad (2026-09-13): worker připomínek by v produkci spadl při **každém** běhu, kdy měl komu
+poslat e-mail — odhalil to až jeho první test. Stejná chyba pak podruhé v přípravě dat testu
+expirace.
+
 ## Železná pravidla
 
 ### Peníze
@@ -200,6 +229,21 @@ Playwright testy obrazovek (`tests/ui`) jedou samostatně přes `pnpm test:ui` a
 
 - Conventional commits: `feat:`, `fix:`, `chore:`, `refactor:`, `test:`, `docs:`
 - Každý commit funkční (CI green) — žádné WIP commity v `main`
+
+**PRAVIDLO: NIKDY neslučovat PR s červeným CI.** Kontrola musí merge **podmiňovat**,
+ne ho jen předcházet výpisem. Stalo se (PR #53): skript stav kontrol vypsal, viděl
+`ci: failure` a přesto pokračoval — main pak zůstal červený. Správně:
+
+```bash
+CI=$(gh api "repos/omniascz/reserved/commits/<sha>/check-runs" \
+      --jq '.check_runs[] | select(.name=="ci") | .conclusion' | head -1)
+if [ "$CI" != "success" ]; then echo "STOP: CI není zelené"; exit 1; fi
+gh pr merge <cislo> --merge
+```
+
+Totéž platí pro `e2e-smoke`. Po merge vždy ověřit CI i na `main` — merge commit je
+jiný commit než hlava PR a může dopadnout jinak.
+
 - Pre-commit hook: format (prettier přes lint-staged) + typecheck + gitleaks (pokud je nainstalovaný);
   commit-msg: commitlint (header max. 100 znaků)
 

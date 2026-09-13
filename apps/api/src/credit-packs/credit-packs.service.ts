@@ -729,6 +729,32 @@ export class CreditPacksService {
     });
   }
 
+  /**
+   * Cron job — nastav status='expired' kde validUntil < now a status byl
+   * 'active' nebo 'used_up'. Vrací počet změn.
+   *
+   * POZASTAVENÉ (`suspended`) se ZÁMĚRNĚ nedotýká: pozastavení je vědomé
+   * rozhodnutí provozovatele a expirace ho nesmí přepsat — stejné pravidlo
+   * jako u refundu, který pozastavenou permanentku také neoživí. Stejně tak
+   * zůstávají nedotčené 'cancelled', 'refunded' a 'rolled_over'.
+   */
+  async expireOverdue(tenantId: string): Promise<number> {
+    return this.dbService.withRlsContext(serviceContext(tenantId), async (tx) => {
+      const result = await tx
+        .update(schema.customerCreditPacks)
+        .set({ status: 'expired', updatedAt: new Date() })
+        .where(
+          and(
+            eq(schema.customerCreditPacks.tenantId, tenantId),
+            sql`${schema.customerCreditPacks.validUntil} < NOW()`,
+            sql`${schema.customerCreditPacks.status} IN ('active', 'used_up')`,
+          ),
+        )
+        .returning({ id: schema.customerCreditPacks.id });
+      return result.length;
+    });
+  }
+
   async listUsesForAllocation(
     tenantId: string,
     userId: string,

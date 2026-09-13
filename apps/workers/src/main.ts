@@ -1,8 +1,11 @@
 // Reserved workers entry point.
 //
 // Spustí všechny pollery na předem nastavených intervalech:
-//   - notifications:  emaily + SMS z fronty (tick každých 5s)
-//   - slot-holds:     uvolnění expired holds (tick každých 30s)
+//   - notifications:     emaily + SMS z fronty (tick každých 5s)
+//   - slot-holds:        uvolnění expired holds (tick každých 30s)
+//   - birthdays:         narozeninová přání (tick po hodině)
+//   - pack-expiry:       propadlé permanentky → 'expired' (tick po hodině)
+//   - verify-reminders:  připomínky k ověření e-mailu 48 h / 7 dní (tick po hodině)
 //
 // Graceful shutdown na SIGTERM / SIGINT.
 
@@ -15,6 +18,8 @@ import { Poller } from './lib/poller.js';
 import { NotificationsWorker } from './workers/notifications.worker.js';
 import { SlotHoldsWorker } from './workers/slot-holds.worker.js';
 import { BirthdaysWorker } from './workers/birthdays.worker.js';
+import { PackExpiryWorker } from './workers/pack-expiry.worker.js';
+import { VerifyRemindersWorker } from './workers/verify-reminders.worker.js';
 
 async function bootstrap(): Promise<void> {
   const env = loadConfig();
@@ -29,6 +34,8 @@ async function bootstrap(): Promise<void> {
   const notificationsWorker = new NotificationsWorker(db, email, sms, whatsapp);
   const slotHoldsWorker = new SlotHoldsWorker(db);
   const birthdaysWorker = new BirthdaysWorker(db);
+  const packExpiryWorker = new PackExpiryWorker(db);
+  const verifyRemindersWorker = new VerifyRemindersWorker(db, env.APP_URL);
 
   const pollers: Poller[] = [
     new Poller({
@@ -46,6 +53,24 @@ async function bootstrap(): Promise<void> {
       name: 'birthdays',
       intervalSeconds: 3600,
       tick: () => birthdaysWorker.tick(),
+    }),
+    // Expirace permanentek — úklid uloženého `status` u propadlých. Pozastavené
+    // se nedotýká. Není časově citlivé, stačí po hodině.
+    new Poller({
+      name: 'pack-expiry',
+      intervalSeconds: env.WORKER_PACK_EXPIRY_TICK_SECONDS,
+      tick: async () => {
+        await packExpiryWorker.tick();
+      },
+    }),
+    // Připomínky k ověření e-mailu (48 h / 7 dní). Idempotence hlídá, že každá
+    // odejde nejvýš jednou — jinak by při hodinovém tiku chodily dokola.
+    new Poller({
+      name: 'verify-reminders',
+      intervalSeconds: env.WORKER_VERIFY_REMINDER_TICK_SECONDS,
+      tick: async () => {
+        await verifyRemindersWorker.tick();
+      },
     }),
   ];
 
