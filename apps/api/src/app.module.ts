@@ -1,6 +1,8 @@
 import { MiddlewareConsumer, Module, NestModule, RequestMethod } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
 import { ThrottlerModule } from '@nestjs/throttler';
+import { AppThrottlerGuard } from './auth/app-throttler.guard.js';
 import { ApiKeysModule } from './api-keys/api-keys.module.js';
 import { AuthModule } from './auth/auth.module.js';
 import { AvailabilityModule } from './availability/availability.module.js';
@@ -76,10 +78,20 @@ import { TenantMiddleware } from './tenant/tenant.middleware.js';
       isGlobal: true,
       envFilePath: ['.env.local', '.env'],
     }),
-    // Rate limit: 2 hladiny — krátký burst (60/min) + denní strop (5000/h).
+    // Rate limit — VÝCHOZÍ limity pro běžné API. Vynucuje je AppThrottlerGuard
+    // nasazený globálně (viz providers níž); do téhle fáze byl ThrottlerModule
+    // jen nakonfigurovaný a nikde se neuplatňoval.
+    //
+    // 300/min je volené tak, aby nevadilo reálnému provozu: dashboard adminu
+    // načítá při jednom otevření desítky endpointů a limit 60/min by legitimní
+    // uživatele odstřeloval. Útočníka 5 req/s nezachrání.
+    //
+    // Citlivé cesty (přihlášení, registrace, ověřovací e-maily) si limit
+    // PŘEPISUJÍ na 5/min přes @Throttle — viz auth.controller.
+    // Klíčuje se podle IP + cesty, takže limity se nesčítají napříč endpointy.
     // Default in-memory storage; pro multi-instance produkci pridat Redis.
     ThrottlerModule.forRoot([
-      { name: 'short', ttl: 60_000, limit: 60 },
+      { name: 'short', ttl: 60_000, limit: 300 },
       { name: 'long', ttl: 3600_000, limit: 5000 },
     ]),
     DbModule,
@@ -149,6 +161,13 @@ import { TenantMiddleware } from './tenant/tenant.middleware.js';
     AdmissionsModule,
     OrdersModule,
     AppointmentRecordsModule,
+  ],
+  providers: [
+    // Omezovač požadavků se do téhle chvíle NIKDE nevynucoval — ThrottlerModule
+    // byl jen nakonfigurovaný. Tímhle se zapíná globálně, na všechny endpointy.
+    // AppThrottlerGuard (ne výchozí ThrottlerGuard) kvůli tvaru chyby: vrací
+    // 429 jako `{ error: { code, message } }` stejně jako zbytek API.
+    { provide: APP_GUARD, useClass: AppThrottlerGuard },
   ],
 })
 export class AppModule implements NestModule {

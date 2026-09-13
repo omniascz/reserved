@@ -60,8 +60,15 @@ jobs:
       - name: Build
         run: pnpm build
 
-      - name: DB migrace (prázdná DB → všech 85)
+      - name: DB migrace (prázdná DB → všech 86)
         run: pnpm db:migrate
+
+      # Seed je potřeba pro testy, které ověřují demo data (např. že existujícím
+      # účtům ze seedu nic nerozbilo ověřování e-mailu). Navíc tím CI hlídá, že
+      # seed na čisté DB vůbec projede — to se dřív netestovalo a už dvakrát se
+      # kvůli tomu rozbil (chybějící import, zúžení typu ve vnořené funkci).
+      - name: DB seed (demo + fitness tenant)
+        run: pnpm db:seed
 
       # Produkční běh: node dist/main.js. Balíčky @reserved/* exportují sestavený dist,
       # takže API jde spustit čistým Nodem bez tsx.

@@ -76,7 +76,10 @@ test.describe('Admin — ověření e-mailu', () => {
       await expect(page.getByRole('heading', { name: 'E-mail potvrzen' })).toBeVisible({
         timeout: 15_000,
       });
-      await expect(page.getByText(email)).toBeVisible();
+      // POZOR: adresa je na stránce DVAKRÁT — ve žlutém pruhu i v potvrzovací
+      // větě. Hledat ji globálně je nejednoznačné (stejná past jako u tlačítka
+      // „Přišel"), proto se ptáme na konkrétní odstavec s potvrzením.
+      await expect(page.getByRole('paragraph').filter({ hasText: email })).toBeVisible();
       await shot(page, '17-email-potvrzen');
 
       // ── Po ověření pruh zmizí ──

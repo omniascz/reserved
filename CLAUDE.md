@@ -157,6 +157,25 @@ pouštěj po jednom** — admin testy potřebují jen web (4002), widget test je
 - Race conditions, money math, tenant boundaries → integration testy
 - Mock DB jen pro pure logic, jinak Postgres v Docker testovací DB
 
+**PAST: omezovač požadavků počítá i testy.** Od nasazení globálního `AppThrottlerGuard`
+platí limity i na testovací běhy — všechny jedou z jedné IP (localhost) a klíčuje se
+podle IP + cesty. Citlivé cesty: **přihlášení 20/min**, znovuodeslání ověřovacího
+e-mailu 20/min, **registrace 20/min**; běžné API 300/min. Sada dnes dělá
+**12 volání `/auth/register`** a **~14 přihlášení** za běh (Playwright se přihlašuje
+skoro v každém testu, `hydratace.spec.ts` generuje testy cyklem). Když přibudou další
+testy, limit se vyčerpá a spadne ten soubor, který běží abecedně poslední — a s ním
+kaskádou testy, které staví na jeho tenantovi. Příznak: `429 TOO_MANY_REQUESTS`.
+Řešení je zvýšit `CITLIVY_LIMIT` / `REGISTRACE_LIMIT` v `auth.controller.ts`.
+
+**Proč zrovna 20 a ne 5:** limit dopadá na VŠECHNA volání, ne jen neúspěšná. Odlišit je
+nejde — `ThrottlerGuard.handleRequest()` zvyšuje počítadlo v `canActivate`, tedy PŘED
+spuštěním handleru, kdy výsledek ještě neexistuje. Nižší hodnota by trestala legitimní
+provoz (přihlášení na počítači, pak na mobilu, zavřená karta, návrat).
+
+**ZAPSANÝ DLUH: rate limit NENÍ plnohodnotná ochrana proti hádání hesel.** Tou je až
+zamykání účtu po N neúspěšných pokusech — projekt ho nemá, `users` nemá počítadlo
+pokusů ani `locked_until` a nikde se neúspěšná přihlášení neevidují.
+
 **PAST: e2e testy musí mít TUTÉŽ databázi jako běžící API.** Skripty v `packages/db`
 (`db:migrate`, `db:seed`) ani e2e testy si `.env` nenačítají — `DATABASE_URL` berou čistě
 z prostředí procesu (v CI ji dodává workflow). Lokálně ji tedy musíš předat sám:
