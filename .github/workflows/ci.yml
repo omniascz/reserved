@@ -5,6 +5,9 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  # Ruční spuštění z Actions → CI → Run workflow. Pozor: GitHub bere jako ref jen
+  # jméno větve nebo tagu, ne commit SHA — na konkrétní commit si udělej tag.
+  workflow_dispatch:
 
 jobs:
   ci:
