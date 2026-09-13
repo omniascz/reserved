@@ -170,6 +170,21 @@ export class PlatformTenantsController {
     await this.actions.softDelete(id, this.actionContext(req, admin));
   }
 
+  /**
+   * Ruční odemčení účtu zamčeného po neúspěšných přihlášeních.
+   * Zámek vyprší i sám; tohle je zkratka, když někdo spěchá.
+   */
+  @Post(':id/users/:userId/unlock')
+  async unlockUser(
+    @Req() req: Request,
+    @CurrentPlatformAdmin() admin: PlatformAccessPayload,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Param('userId', new ParseUUIDPipe()) userId: string,
+  ): Promise<{ data: { email: string; uvolnenoPokusu: number } }> {
+    const data = await this.actions.unlockUser(id, userId, this.actionContext(req, admin));
+    return { data };
+  }
+
   @Post(':id/impersonate')
   async impersonate(
     @Req() req: Request,

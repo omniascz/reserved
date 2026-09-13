@@ -5,6 +5,7 @@ import { EmailModule } from '../email/email.module.js';
 import { AuthConfig } from './auth.config.js';
 import { AuthController } from './auth.controller.js';
 import { AuthService } from './auth.service.js';
+import { AccountLockoutService } from './account-lockout.service.js';
 import { EmailVerificationService } from './email-verification.service.js';
 import { JwtService } from './jwt.service.js';
 import { JwtGuard } from './jwt.guard.js';
@@ -23,6 +24,7 @@ import { JwtGuard } from './jwt.guard.js';
     AuthConfig,
     JwtService,
     AuthService,
+    AccountLockoutService,
     EmailVerificationService,
     {
       provide: APP_GUARD,
@@ -32,6 +34,7 @@ import { JwtGuard } from './jwt.guard.js';
   ],
   // EmailVerificationService se exportuje: blokace veřejných rezervací
   // (public modul) i odchozí pošty (marketing, vouchers) se ptá právě jí.
-  exports: [AuthConfig, JwtService, AuthService, EmailVerificationService],
+  // AccountLockoutService se exportuje: ruční odemčení volá modul platformy.
+  exports: [AuthConfig, JwtService, AuthService, AccountLockoutService, EmailVerificationService],
 })
 export class AuthModule {}

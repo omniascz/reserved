@@ -11,6 +11,7 @@ export * from './tenants.js';
 export * from './branches.js';
 export * from './users.js';
 export * from './sessions.js';
+export * from './login-attempts.js';
 export * from './onboarding.js';
 export * from './services.js';
 export * from './employees.js';

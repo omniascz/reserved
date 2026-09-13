@@ -310,6 +310,19 @@ export class GdprService {
         data[tabulka] = radky(res);
       }
 
+      // Evidence neúspěšných přihlášení k tomuhle účtu (e-mail + IP). Bez ní by
+      // export tvrdil úplnost, kterou nemá — tabulka vznikla až po GDPR fázi.
+      const emailZam = String(zamestnanec.email ?? '').toLowerCase();
+      data['login_attempts'] = emailZam
+        ? radky(
+            await tx.execute(
+              sql`SELECT id, email, ip_address, user_agent, reason, resolved_at, created_at
+                  FROM login_attempts
+                  WHERE tenant_id = ${tenantId} AND lower(email) = ${emailZam}`,
+            ),
+          )
+        : [];
+
       // Napojení na Google kalendář BEZ tokenů — export se předává člověku,
       // přístupové tokeny do něj nepatří (je to přihlašovací údaj, ne osobní údaj
       // k přenositelnosti).
@@ -725,6 +738,20 @@ export class GdprService {
               WHERE tenant_id = ${tenantId} AND employee_id = ${employeeId} RETURNING id`,
         ),
       );
+
+      // Evidence neúspěšných přihlášení nese e-mail a IP adresu — osobní údaj
+      // jako každý jiný. Maže se podle E-MAILU, ne podle user_id: pokusy na
+      // neexistující účet (překlep, zkoušení adres) user_id vyplněné nemají.
+      const emailZamestnance = String(zamestnanec.email ?? '').toLowerCase();
+      smazano['login_attempts'] = emailZamestnance
+        ? pocet(
+            await tx.execute(
+              sql`DELETE FROM login_attempts
+                  WHERE tenant_id = ${tenantId} AND lower(email) = ${emailZamestnance}
+                  RETURNING id`,
+            ),
+          )
+        : 0;
 
       if (ucetId) {
         smazano['user_sessions'] = pocet(

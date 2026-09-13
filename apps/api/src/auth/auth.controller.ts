@@ -34,10 +34,11 @@ import { ZodValidationPipe } from './zod-validation.pipe.js';
  * zavřená karta, návrat. Proti hádání hesla 20/min pořád funguje — útočník
  * potřebuje tisíce pokusů, ne dvacet.
  *
- * POZOR: tohle NENÍ plnohodnotná ochrana proti hádání hesel. Tou je až
- * zamykání účtu po N neúspěšných pokusech, které projekt zatím nemá (tabulka
- * `users` nemá počítadlo pokusů ani `locked_until`). Rate limit je první
- * vrstva, ne poslední.
+ * Rate limit je PRVNÍ vrstva, ne poslední: brání rychlému hádání z jedné
+ * adresy, ale útočník s více adresami ho obejde. Druhou vrstvou je zamykání
+ * účtu po N neúspěšných pokusech — `AccountLockoutService`, evidence v tabulce
+ * `login_attempts`. Zámek se váže na ÚČET (tenant + e-mail), takže změna IP
+ * ho neobejde.
  *
  * Dává se na KONKRÉTNÍ metody, ne na celý controller. Kdyby visel na
  * controlleru, dopadl by i na `refresh`, `logout` a `verify-email/status` —
@@ -113,7 +114,12 @@ export class AuthController {
         },
       });
     }
-    return this.auth.login(req.tenant.id, dto);
+    // IP a prohlížeč jdou do evidence pokusů — slouží jen auditu. Zámek se
+    // podle nich NEŘÍDÍ, jinak by ho stačilo obejít přepnutím sítě.
+    return this.auth.login(req.tenant.id, dto, {
+      ip: req.ip,
+      userAgent: req.headers['user-agent'],
+    });
   }
 
   /**
