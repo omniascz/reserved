@@ -106,6 +106,28 @@ export function extractLoyaltySettings(settings: unknown): LoyaltySettings {
   return result.data;
 }
 
+// ─── Platby (onboarding) ───────────────────────────────────────────────
+// Provozovna, která bere jen hotovost (nebo terminál v místě), NEMÁ napojenou
+// platební bránu a nikdy ji mít nebude. Bez tohohle příznaku by jí onboarding
+// zůstal navždy nedokončený. Odpovídá volbě z onboarding wizardu
+// „Zatím ne, budu platby řešit osobně" (reserved-docs/17_onboarding_flow.md).
+export const PaymentSettingsSchema = z.object({
+  /** Tenant vědomě nechce online platby — hotovost / terminál / QR na místě. */
+  cashOnly: z.boolean().default(false),
+});
+export type PaymentSettings = z.infer<typeof PaymentSettingsSchema>;
+export const DEFAULT_PAYMENT_SETTINGS: PaymentSettings = PaymentSettingsSchema.parse({});
+
+export function extractPaymentSettings(settings: unknown): PaymentSettings {
+  if (!settings || typeof settings !== 'object') return DEFAULT_PAYMENT_SETTINGS;
+  const obj = settings as Record<string, unknown>;
+  const raw = obj.payments;
+  if (!raw) return DEFAULT_PAYMENT_SETTINGS;
+  const result = PaymentSettingsSchema.safeParse(raw);
+  if (!result.success) return DEFAULT_PAYMENT_SETTINGS;
+  return result.data;
+}
+
 // ─── Meeting / video odkaz (sprint 10.14) ──────────────────────────────
 // 'manual' = použij statické defaultOnlineMeetingUrl ze služby (beze změny).
 // 'jitsi'  = automaticky vygeneruj odkaz na meet.jit.si (bez API klíče).

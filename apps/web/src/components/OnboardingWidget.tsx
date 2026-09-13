@@ -87,7 +87,11 @@ export function OnboardingWidget() {
     setSeenExtras({ ...seenExtras, [key]: true });
   }
 
-  const coreCompleted = !!checklist.completedAt;
+  // „Hotovo" je vlastnost STAVU (všech 6 kroků splněno), ne přítomnost razítka.
+  // Razítko `completedAt` drží tabulka onboarding_checklist a tenantům, kteří
+  // v ní řádek nemají (typicky ze seedu), zůstává prázdné — sám o sobě by tedy
+  // widget hlásil „Začínáme" i provozovně, která má hotové všechno.
+  const coreCompleted = checklist.completedCount >= checklist.totalCount || !!checklist.completedAt;
   const allExtrasSeen = NEXT_STEPS.every((s) => seenExtras[s.storageKey]);
 
   // Pokud je vše hotovo (core + extras), schovej widget
