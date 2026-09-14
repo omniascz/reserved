@@ -296,6 +296,38 @@ Druhá půlka téže pasti: `pnpm turbo run test` bez `DATABASE_URL` skončí na
 tedy jako by testy spadly, přestože se vůbec nenačetly. V CI se proměnná nastavuje
 na úrovni jobu, lokálně ji musíš vyexportovat sám.
 
+### PAST: `apps/api/.env` tiše přebije databázi předanou na příkazové řádce
+
+`DbConfig` používá `DATABASE_APP_URL ?? DATABASE_URL`. Když se API spustí jen
+s `DATABASE_URL=…reserved_test`, ale `apps/api/.env` (nebo `.env.local`) má
+`DATABASE_APP_URL=…reserved_dev`, **API se připojí k `reserved_dev`** — přestože
+na příkazové řádce stojí něco jiného.
+
+Testy si přitom zakládají data podle svého `DATABASE_URL`. Vznikne tichý rozpor:
+API čte jednu databázi, testy píšou do druhé. Projeví se to takhle:
+
+```
+insert or update on table "email_verifications" violates foreign key constraint
+[403] TENANT_EMAIL_UNVERIFIED
+expected 403 to be 200
+```
+
+Vypadá to jako rozbitá registrace nebo vada kódu. Není. Poznávací znamení:
+**registrace vrátí 201 s `tenantId`, ale ten řádek v databázi, do které se díváš,
+není.**
+
+**Pravidlo: při ručním spouštění API pro testy nastav VŽDY obě proměnné**
+(`DATABASE_URL` i `DATABASE_APP_URL`) na tutéž databázi. A když něco nesedí,
+ověř to nejdřív takhle — ne čtením kódu:
+
+```bash
+curl -s -X POST …/auth/register -d '…'      # vrátí 201 a tenantId?
+psql -d <očekávaná_db> -c "select … where slug='…'"   # je tam ten řádek?
+```
+
+Reálný dopad (2026-09-14): tři chybné hypotézy po sobě (limit pokusů, chybějící
+seed, vlastní změna) a 13 „padajících" testů, které byly celou dobu v pořádku.
+
 ### PAST: `nest build` překládá i testovací soubory
 
 Typová chyba v souboru pod `__tests__` neshodí jen testy — **shodí stavbu celého
