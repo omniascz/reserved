@@ -19,7 +19,7 @@ import {
   webovaAdresa,
   zakladniDomena,
   type ZnackaEnv,
-} from '@reserved/utils';
+} from '@reserved/utils/znacka';
 
 // POZOR: tyhle dva řádky musí zůstat doslovné. Nenahrazovat cyklem ani
 // pomocnou funkcí — Next by pak neměl co zapéct.

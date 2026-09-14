@@ -11,7 +11,7 @@ import {
   webovaAdresa,
   zakladniDomena,
   type ZnackaEnv,
-} from '@reserved/utils';
+} from '@reserved/utils/znacka';
 
 // Doslovné čtení — nenahrazovat cyklem ani pomocnou funkcí.
 const ENV: ZnackaEnv = {
