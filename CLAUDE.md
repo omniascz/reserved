@@ -130,6 +130,64 @@ Reálný dopad (2026-09-13): worker připomínek by v produkci spadl při **kaž
 poslat e-mail — odhalil to až jeho první test. Stejná chyba pak podruhé v přípravě dat testu
 expirace.
 
+### PAST: vícestupňový Docker obraz v pnpm workspace
+
+Dvě léčky, obě shodily build a obě vypadaly jako chyba jinde:
+
+**1. `COPY packages packages` v build kroku přepíše `node_modules`.**
+Když se závislosti instalují v předchozí vrstvě a pak se přes složku zkopírují
+zdrojáky, instalace se ztratí. Balíčky přijdou o `tsc` a build spadne na
+`MODULE_NOT_FOUND` — což svádí hledat chybu v TypeScriptu, ne v pořadí kopií.
+**Kopíruj jen zdrojové podsložky** (`packages/x/src`, `tsconfig.json`), ne celé
+složky balíčků.
+
+**2. Produkční instalace spustí kořenový `prepare`.**
+`pnpm install --prod` zavolá `prepare: husky`, jenže husky je vývojová
+závislost a v produkčním režimu není → `husky: not found`. Řešení:
+`--ignore-scripts`. Nativní balíčky (argon2) to nerozbije, protože mají
+předkompilované binárky pro `linux-x64` i `linux-arm64`.
+
+**A hlavně: obraz, který se vyrobí, ještě nemusí nastartovat.** Po sestavení
+vždy kontejner spusť a ověř `/api/v1/health`. Samotné `exit code: 0` u buildu
+nic neříká o běhu — a když se build pustí rourou (`| tail`), návratový kód
+patří rouře, ne buildu.
+
+Reálný dopad (2026-09-14): tři neúspěšné pokusy o sestavení obrazu API, z toho
+jeden hlášený jako úspěšný.
+
+### PAST: souběh vitest + Playwright shodí testy „chybou aplikace"
+
+Když běží obě sady současně (nebo vedle nich `docker build`, který překládá celé
+monorepo), prohlížeč v Playwrightu dostane od systému méně prostředků a spojení
+mu padají. V logu to vypadá jako vada aplikace:
+
+```
+Failed to load resource: net::ERR_NETWORK_IO_SUSPENDED
+TimeoutError: page.waitForResponse: Timeout 20000ms exceeded
+```
+
+Ani jedno není chyba kódu — je to vyhladovění stroje. Stejně se projevuje
+u vitestu: test omezovače požadavků posílá 23 požadavků po síti a při zátěži
+přeteče výchozí pětisekundový strop, takže spadne **na čas**, ne na tvrzení.
+
+**Pravidlo: sady pouštěj po jedné.** A když test padne na časovém limitu nebo
+na síťové chybě prohlížeče, NEJDŘÍV ho pusť samostatně — teprve pak ho
+prohlašuj za rozbitý.
+
+Reálný dopad (2026-09-14): dvě falešná selhání, každé stálo desítky minut
+hledání neexistující chyby.
+
+### PAST: test, který měří kalendář místo aplikace
+
+Widgetový test měl v sobě `const DATE = '2026-09-15'` a komentář „dnes (neděle)
+je zavřeno". V neděli procházel, v pondělí spadl — pondělí je podle pracovní
+doby otevřené — a po 15. 9. by se rozbil úplně (počet kroků vyjde záporně).
+
+**Pravidlo: co test potřebuje o datech vědět, ať si zjistí z dat.** Seed zakládá
+pracovní dobu podle ISO dne v týdnu (pondělí–pátek), takže stačí přečíst
+`employee_working_hours` a otevřený i zavřený den z toho spočítat. Datum napsané
+natvrdo je v testu časovaná nálož s datem výbuchu.
+
 ### PAST: test, který prochází naprázdno
 
 Kontrola typu „po výmazu nezůstal e-mail ve frontě notifikací" projde i tehdy, když v té frontě

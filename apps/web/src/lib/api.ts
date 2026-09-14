@@ -1079,7 +1079,20 @@ export async function getEmailStats(filters: ReportFilters): Promise<EmailStats>
 
 // ─── Payments (sprint 3.2) ───────────────────────────────────────────
 
-export type PaymentMethodType = 'cash' | 'card_terminal' | 'qr_bank' | 'stripe' | 'gopay';
+// POZOR: musí se shodovat s PAYMENT_METHOD_TYPES v API
+// (apps/api/src/payments/dto/payment.dto.ts). Jsou to dvě nezávislá místa a
+// rozešla se: API české brány přijímalo, ale admin o nich nevěděl, takže se
+// nedaly nastavit jinak než přímým voláním API.
+export type PaymentMethodType =
+  | 'cash'
+  | 'card_terminal'
+  | 'qr_bank'
+  | 'stripe'
+  | 'gopay'
+  | 'comgate'
+  | 'thepay'
+  | 'payu'
+  | 'gpwebpay';
 export type PaymentStatus = 'pending' | 'succeeded' | 'failed' | 'refunded' | 'cancelled';
 
 export interface AdminPaymentMethod {

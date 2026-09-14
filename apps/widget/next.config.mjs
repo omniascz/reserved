@@ -3,6 +3,10 @@ import { withSentryConfig } from '@sentry/nextjs';
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // Samostatný výstup pro kontejner: Next vytvoří .next/standalone se
+  // serverem a jen nutnými závislostmi. Bez toho by obraz musel nést celé
+  // node_modules a nešel by spustit přes 'node server.js'.
+  output: 'standalone',
   // Default API URL = lokální dev. V produkci se nastaví přes env.
   env: {
     NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4010/api/v1',

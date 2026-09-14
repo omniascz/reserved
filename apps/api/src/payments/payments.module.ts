@@ -5,6 +5,7 @@ import { SubscriptionsModule } from '../subscriptions/subscriptions.module.js';
 import { TenantModule } from '../tenant/tenant.module.js';
 import { PaymentsController } from './payments.controller.js';
 import { PaymentsService } from './payments.service.js';
+import { PaymentsConfig } from './payments.config.js';
 import { WebhookController } from './webhook.controller.js';
 import { CheckoutController } from './checkout.controller.js';
 import { StripePaymentProvider } from './providers/stripe.provider.js';
@@ -20,6 +21,7 @@ import { PaymentProviderRegistry } from './providers/provider.registry.js';
   imports: [DbModule, TenantModule, EmailModule, forwardRef(() => SubscriptionsModule)],
   controllers: [PaymentsController, WebhookController, CheckoutController],
   providers: [
+    PaymentsConfig,
     PaymentsService,
     StripePaymentProvider,
     GoPayPaymentProvider,
@@ -30,6 +32,9 @@ import { PaymentProviderRegistry } from './providers/provider.registry.js';
     GpWebpayPaymentProvider,
     PaymentProviderRegistry,
   ],
-  exports: [PaymentsService],
+  // PaymentsConfig se exportuje: stejný šifrovací klíč potřebuje i DepositsService,
+  // která do payment_methods.config zapisuje propojení Stripe Connect. Kdyby si
+  // každý modul držel vlastní, rozešly by se a config by se přestal dešifrovat.
+  exports: [PaymentsService, PaymentsConfig],
 })
 export class PaymentsModule {}

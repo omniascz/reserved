@@ -1,0 +1,233 @@
+# Reserved — produkční sestava pro běžný linuxový server.
+#
+# ── ZÁMĚRNĚ BEZ VAZBY NA POSKYTOVATELE ──────────────────────────────────────
+# Obyčejné kontejnery a obyčejná proxy. Běží na Hetzneru, na jakémkoli jiném
+# VPS i na vlastním železe. Rozhodnutí o hostingu se tím neuzavírá.
+#
+# ── DOMÉNA JE JEDINÁ PROMĚNNÁ ───────────────────────────────────────────────
+# Nikde tu není doména natvrdo. Všechno se odvozuje od BASE_DOMAIN v .env.
+# Až doména padne, přepíše se jeden řádek.
+#
+# ── DATABÁZE ────────────────────────────────────────────────────────────────
+# Postgres tu je jako VOLITELNÁ služba (profil `s-databazi`). Doporučení zůstává
+# provozovat databázi spravovanou u poskytovatele — zálohy, obnova a aktualizace
+# jsou práce pro administrátora. Kdo si ji chce provozovat sám, spustí:
+#   docker compose -f docker-compose.prod.yml --profile s-databazi up -d
+#
+# Spuštění:
+#   cp .env.production.example .env && vyplnit
+#   docker compose -f docker-compose.prod.yml up -d --build
+#
+# Migrace (jednorázově před prvním startem a po každém nasazení):
+#   docker compose -f docker-compose.prod.yml run --rm migrace
+
+name: reserved
+
+x-spolecne: &spolecne
+  restart: unless-stopped
+  networks: [reserved]
+
+services:
+  # ── Reverzní proxy s automatickými certifikáty ────────────────────────────
+  proxy:
+    <<: *spolecne
+    image: caddy:2-alpine
+    ports:
+      - '80:80'
+      - '443:443'
+    environment:
+      BASE_DOMAIN: ${BASE_DOMAIN:?Nastav BASE_DOMAIN v .env}
+      ACME_EMAIL: ${ACME_EMAIL:?Nastav ACME_EMAIL v .env}
+    volumes:
+      - ./docker/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on: [api, web, portal, widget, master, marketing]
+
+  # ── API ───────────────────────────────────────────────────────────────────
+  api:
+    <<: *spolecne
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    environment:
+      NODE_ENV: production
+      API_PORT: 4010
+      # Adresy se skládají z jedné proměnné.
+      API_URL: https://api.${BASE_DOMAIN}
+      API_PUBLIC_URL: https://api.${BASE_DOMAIN}
+      APP_URL: https://app.${BASE_DOMAIN}
+      ADMIN_BASE_URL: https://app.${BASE_DOMAIN}
+      PORTAL_BASE_URL: https://portal.${BASE_DOMAIN}
+      MASTER_BASE_URL: https://master.${BASE_DOMAIN}
+      APP_BASE_DOMAIN: ${BASE_DOMAIN}
+      RESERVED_CNAME_TARGET: cname.${BASE_DOMAIN}
+      DATABASE_URL: ${DATABASE_URL:?}
+      DATABASE_APP_URL: ${DATABASE_APP_URL:?}
+      JWT_SECRET: ${JWT_SECRET:?}
+      # Klíč k šifrování přístupů k platebním bránám. Bez něj API nenastartuje.
+      PAYMENT_CONFIG_KEY: ${PAYMENT_CONFIG_KEY:?}
+      SMTP_HOST: ${SMTP_HOST:?}
+      SMTP_PORT: ${SMTP_PORT:-465}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      EMAIL_FROM: ${EMAIL_FROM:?}
+      EMAIL_FROM_NAME: ${EMAIL_FROM_NAME:-Reserved}
+      S3_ENDPOINT: ${S3_ENDPOINT:-}
+      S3_REGION: ${S3_REGION:-}
+      S3_BUCKET: ${S3_BUCKET:-}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:-}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:-}
+      S3_PUBLIC_BASE: ${S3_PUBLIC_BASE:-}
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      GIT_SHA: ${GIT_SHA:-}
+
+  # ── Workers (samostatně, ať restart API nepřeruší fronty) ─────────────────
+  workers:
+    <<: *spolecne
+    build:
+      context: .
+      dockerfile: apps/workers/Dockerfile
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: ${DATABASE_URL:?}
+      DATABASE_APP_URL: ${DATABASE_APP_URL:?}
+      # Musí se shodovat s APP_URL API — jinak odkazy v připomínkách míří jinam.
+      APP_URL: https://app.${BASE_DOMAIN}
+      SMTP_HOST: ${SMTP_HOST:?}
+      SMTP_PORT: ${SMTP_PORT:-465}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      EMAIL_FROM: ${EMAIL_FROM:?}
+      EMAIL_FROM_NAME: ${EMAIL_FROM_NAME:-Reserved}
+      SMS_PROVIDER: ${SMS_PROVIDER:-mock}
+      BULKGATE_APP_ID: ${BULKGATE_APP_ID:-}
+      BULKGATE_APP_TOKEN: ${BULKGATE_APP_TOKEN:-}
+      BULKGATE_SENDER: ${BULKGATE_SENDER:-Reserved}
+
+  # ── Jednorázové migrace ───────────────────────────────────────────────────
+  # Nespouští se automaticky: migrace má vždy odpálit člověk nebo skript
+  # nasazení, ne restart kontejneru uprostřed provozu.
+  migrace:
+    <<: *spolecne
+    profiles: ['nastroje']
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    # POZOR NA PRACOVNÍ ADRESÁŘ: migrační skript hledá složku s migracemi
+    # RELATIVNĚ (`migrationsFolder: './drizzle'`). Při `/app` by hledal
+    # `/app/drizzle`, což neexistuje, a nasazení by spadlo hned na první
+    # migraci. Musí běžet z adresáře balíčku.
+    working_dir: /app/packages/db
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?}
+      # Bez tohoto hesla migrace ZÁMĚRNĚ skončí chybou — jinak by role app_user
+      # zůstala s výchozím heslem z migrace 0003.
+      APP_USER_PASSWORD: ${APP_USER_PASSWORD:?}
+      PAYMENT_CONFIG_KEY: ${PAYMENT_CONFIG_KEY:?}
+    command: ['node', 'dist/migrate.js']
+
+  # ── Next.js aplikace ──────────────────────────────────────────────────────
+  # POZOR: NEXT_PUBLIC_* se zapékají do buildu, proto jdou jako build args.
+  # Změna domény = přestavět obrazy, ne jen restartovat.
+  web:
+    <<: *spolecne
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.next
+      args:
+        APP: web
+        PORT: '4002'
+        NEXT_PUBLIC_API_URL: https://api.${BASE_DOMAIN}/api/v1
+        NEXT_PUBLIC_WIDGET_URL: https://widget.${BASE_DOMAIN}
+        NEXT_PUBLIC_TENANT_SITE_URL: https://${BASE_DOMAIN}
+        NEXT_PUBLIC_SENTRY_DSN: ${NEXT_PUBLIC_SENTRY_DSN:-}
+
+  portal:
+    <<: *spolecne
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.next
+      args:
+        APP: portal
+        PORT: '4003'
+        NEXT_PUBLIC_API_URL: https://api.${BASE_DOMAIN}/api/v1
+        NEXT_PUBLIC_SENTRY_DSN: ${NEXT_PUBLIC_SENTRY_DSN:-}
+
+  widget:
+    <<: *spolecne
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.next
+      args:
+        APP: widget
+        PORT: '4004'
+        NEXT_PUBLIC_API_URL: https://api.${BASE_DOMAIN}/api/v1
+        NEXT_PUBLIC_SENTRY_DSN: ${NEXT_PUBLIC_SENTRY_DSN:-}
+
+  master:
+    <<: *spolecne
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.next
+      args:
+        APP: master
+        PORT: '4001'
+        NEXT_PUBLIC_API_URL: https://api.${BASE_DOMAIN}/api/v1
+        NEXT_PUBLIC_ADMIN_BASE_URL: https://app.${BASE_DOMAIN}
+        NEXT_PUBLIC_SENTRY_DSN: ${NEXT_PUBLIC_SENTRY_DSN:-}
+
+  marketing:
+    <<: *spolecne
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.next
+      args:
+        APP: marketing
+        PORT: '4005'
+        NEXT_PUBLIC_API_URL: https://api.${BASE_DOMAIN}/api/v1
+        NEXT_PUBLIC_ADMIN_BASE_URL: https://app.${BASE_DOMAIN}
+        NEXT_PUBLIC_SITE_URL: https://${BASE_DOMAIN}
+        NEXT_PUBLIC_SENTRY_DSN: ${NEXT_PUBLIC_SENTRY_DSN:-}
+
+  tenant-site:
+    <<: *spolecne
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.next
+      args:
+        APP: tenant-site
+        PORT: '4006'
+        NEXT_PUBLIC_API_URL: https://api.${BASE_DOMAIN}/api/v1
+        NEXT_PUBLIC_WIDGET_URL: https://widget.${BASE_DOMAIN}
+        NEXT_PUBLIC_SENTRY_DSN: ${NEXT_PUBLIC_SENTRY_DSN:-}
+
+  # ── Volitelná databáze (jen pro `--profile s-databazi`) ───────────────────
+  postgres:
+    <<: *spolecne
+    profiles: ['s-databazi']
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-reserved}
+      POSTGRES_USER: ${POSTGRES_USER:-reserved}
+      # Bez `:?` schválně: `docker compose config` vyhodnocuje i služby mimo
+      # aktivní profil, takže povinná proměnná by shodila kontrolu souboru
+      # i tomu, kdo vlastní databázi v kontejneru vůbec nepoužívá.
+      # Prázdné heslo odmítne samotný obraz Postgresu při startu, takže se na
+      # to nepřijde až za provozu.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-reserved}']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+networks:
+  reserved:
+
+volumes:
+  caddy_data:
+  caddy_config:
+  postgres_data:

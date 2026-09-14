@@ -1,0 +1,69 @@
+# Reverzní proxy s automatickými certifikáty (Caddy).
+#
+# ── PROČ CADDY ──────────────────────────────────────────────────────────────
+# Michal není administrátor serverů. Caddy si certifikáty od Let's Encrypt
+# vyžádá i obnovuje sám, bez cronu a bez ručních zásahů — to je u nginxu práce
+# navíc, kterou musí někdo hlídat. Zvládne i zástupný certifikát pro subdomény
+# tenantů, což je přesně to, co Reserved potřebuje.
+#
+# ── DOMÉNA JE JEDINÁ PROMĚNNÁ ───────────────────────────────────────────────
+# Nikde v repozitáři není doména natvrdo. Všechno se odvozuje od BASE_DOMAIN.
+# Až Michal doménu vybere, nastaví se na jednom místě v .env a nic dalšího se
+# nepřepisuje.
+#
+# ── ZÁSTUPNÝ CERTIFIKÁT ─────────────────────────────────────────────────────
+# `*.{$BASE_DOMAIN}` vyžaduje ověření přes DNS (HTTP ověření zástupné
+# certifikáty neumí). To potřebuje modul pro konkrétního DNS poskytovatele —
+# viz poznámka u bloku níže. Do té doby fungují vyjmenované subdomény.
+
+{
+	# E-mail pro Let's Encrypt (upozornění na vypršení certifikátu).
+	email {$ACME_EMAIL}
+}
+
+# ── Marketingový web (holá doména + www) ────────────────────────────────────
+{$BASE_DOMAIN}, www.{$BASE_DOMAIN} {
+	reverse_proxy marketing:4005
+}
+
+# ── API ─────────────────────────────────────────────────────────────────────
+api.{$BASE_DOMAIN} {
+	reverse_proxy api:4010
+}
+
+# ── Administrace provozovatele ──────────────────────────────────────────────
+app.{$BASE_DOMAIN} {
+	reverse_proxy web:4002
+}
+
+# ── Zákaznický portál ───────────────────────────────────────────────────────
+portal.{$BASE_DOMAIN} {
+	reverse_proxy portal:4003
+}
+
+# ── Rezervační widget (vkládá se do cizích stránek) ─────────────────────────
+widget.{$BASE_DOMAIN} {
+	reverse_proxy widget:4004
+}
+
+# ── Administrace platformy ──────────────────────────────────────────────────
+master.{$BASE_DOMAIN} {
+	reverse_proxy master:4001
+}
+
+# ── Subdomény tenantů: <slug>.<doména> → mini-web tenanta ───────────────────
+#
+# POZOR: tenhle blok potřebuje ZÁSTUPNÝ certifikát, a ten Let's Encrypt vydá
+# jen proti ověření přes DNS. Standardní obraz Caddy modul pro DNS nemá —
+# musí se použít obraz s modulem pro konkrétního poskytovatele DNS (např.
+# caddy-dns/cloudflare) a doplnit sem blok `tls { dns cloudflare {$CF_TOKEN} }`.
+#
+# Dokud to není nastavené, nechej blok zakomentovaný — jinak Caddy při startu
+# opakovaně selhává na vydání certifikátu.
+#
+# *.{$BASE_DOMAIN} {
+# 	tls {
+# 		dns cloudflare {$CLOUDFLARE_API_TOKEN}
+# 	}
+# 	reverse_proxy tenant-site:4006
+# }

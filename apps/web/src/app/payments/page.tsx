@@ -17,12 +17,19 @@ import {
   type PaymentStatus,
 } from '@/lib/api';
 
+// Musí pokrývat VŠECHNY typy z PaymentMethodType. TypeScript to hlídá: po
+// doplnění českých bran do typu se tady rozsvítila chyba, jinak by se platby
+// přes Comgate zobrazily ve výpisu bez názvu metody.
 const METHOD_LABELS: Record<PaymentMethodType, string> = {
   cash: '💵 Hotovost',
   card_terminal: '💳 Karta (terminál)',
   qr_bank: '📱 QR platba',
   stripe: '🌐 Stripe',
   gopay: '🌐 GoPay',
+  comgate: '🌐 Comgate',
+  thepay: '🌐 ThePay',
+  payu: '🌐 PayU',
+  gpwebpay: '🌐 GP webpay',
 };
 
 const STATUS_LABELS: Record<PaymentStatus, { label: string; color: string }> = {

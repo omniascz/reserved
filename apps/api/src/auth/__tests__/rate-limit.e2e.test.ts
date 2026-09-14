@@ -71,7 +71,12 @@ describe('Omezovač požadavků (e2e)', () => {
     expect(posledni!.body.error?.code).toBe('TOO_MANY_REQUESTS');
     expect(posledni!.body.error?.message).toMatch(/mnoho pokusů/i);
     expect(posledni!.body.error?.details?.retryAfterSeconds).toBeGreaterThan(0);
-  });
+    // Strop 30 s místo výchozích 5: test posílá 23 požadavků po síti a každé
+    // přihlášení dnes stojí ~120 ms (kontrola zámku účtu + zápis pokusu).
+    // Na nezatíženém stroji doběhne za ~3 s, ale při souběžné zátěži (build,
+    // jiná sada) strop přetekl a test spadl NA ČAS, ne na chybu — což vypadá
+    // jako rozbitý omezovač, přestože fungoval.
+  }, 30_000);
 
   it('špatné heslo vrací 401 DŘÍV, než se limit vyčerpá', async () => {
     // Kontrola, že limit nepřebíjí normální chování hned prvním pokusem.
@@ -95,7 +100,9 @@ describe('Omezovač požadavků (e2e)', () => {
       statusy.every((s) => s === 200),
       `nečekané stavy: ${statusy.join(', ')}`,
     ).toBe(true);
-  });
+    // Stejný důvod jako výše — 60 požadavků po síti se do 5 s vejde jen na
+    // klidném stroji.
+  }, 30_000);
 
   it('health endpoint není omezený (používá ho monitoring)', async () => {
     const statusy: number[] = [];
