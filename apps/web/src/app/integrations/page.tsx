@@ -16,6 +16,7 @@ import {
   type AdminEmployee,
   type AdminGoogleConnection,
 } from '@/lib/api';
+import { NAZEV_PRODUKTU } from '@/lib/znacka';
 
 function formatDate(iso: string | null): string {
   if (!iso) return '—';
@@ -149,7 +150,8 @@ function IntegrationsContent() {
       <main className="flex-1 p-6 max-w-5xl mx-auto w-full">
         <h2 className="text-2xl font-bold mb-2">Integrace</h2>
         <p className="text-sm text-slate-500 mb-6">
-          Externí služby propojené s Reserved. Aktuálně Google Calendar 2-way sync rezervací.
+          Externí služby propojené s {NAZEV_PRODUKTU}. Aktuálně Google Calendar 2-way sync
+          rezervací.
         </p>
 
         {error && (
@@ -169,8 +171,8 @@ function IntegrationsContent() {
             <p className="text-xs text-slate-500 mt-1">
               Po propojení se rezervace zaměstnance automaticky synchronizují do jeho Google
               Kalendáře (outbound). Volitelně lze zapnout i inbound sync — události z Google
-              (dovolené, schůzky) se pak v Reserved zobrazí jako blokované časy, takže je nelze
-              nabookovat.
+              (dovolené, schůzky) se pak v {NAZEV_PRODUKTU} zobrazí jako blokované časy, takže je
+              nelze nabookovat.
             </p>
           </div>
 

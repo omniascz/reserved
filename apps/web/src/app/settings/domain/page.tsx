@@ -13,6 +13,7 @@ import {
   removeCustomDomain,
   type CustomDomainStatus,
 } from '@/lib/api';
+import { DOMENA, NAZEV_PRODUKTU } from '@/lib/znacka';
 
 export default function CustomDomainPage() {
   const router = useRouter();
@@ -83,7 +84,7 @@ export default function CustomDomainPage() {
   }
 
   async function handleRemove(): Promise<void> {
-    if (!confirm('Opravdu odstranit custom doménu? Klienti se vrátí na subdoménu reserved.cz.'))
+    if (!confirm(`Opravdu odstranit custom doménu? Klienti se vrátí na subdoménu ${DOMENA}.`))
       return;
     clearMessages();
     setBusy(true);
@@ -116,7 +117,7 @@ export default function CustomDomainPage() {
       <main className="max-w-3xl mx-auto p-6">
         <h1 className="text-3xl font-bold mb-2">Vlastní doména</h1>
         <p className="text-slate-600 mb-8">
-          Místo <code className="bg-slate-100 px-1 rounded">salon.reserved.cz</code> můžeš svým
+          Místo <code className="bg-slate-100 px-1 rounded">salon.{DOMENA}</code> můžeš svým
           klientům nabídnout rezervace na vlastní doméně, např.{' '}
           <code className="bg-slate-100 px-1 rounded">booking.tvujsalon.cz</code>.
         </p>
@@ -214,7 +215,7 @@ export default function CustomDomainPage() {
                 <span className="text-slate-500">Hodnota:</span> <strong>{status.dnsTarget}</strong>
               </div>
               <div className="text-slate-500 mt-1 font-sans text-xs">
-                Tento záznam směruje provoz z tvojí domény na Reserved server.
+                Tento záznam směruje provoz z tvojí domény na {NAZEV_PRODUKTU} server.
               </div>
             </div>
 
@@ -257,8 +258,8 @@ export default function CustomDomainPage() {
           <section className="bg-white border border-slate-200 rounded-xl p-6">
             <h2 className="font-bold text-lg mb-2">SSL certifikát</h2>
             <p className="text-sm text-slate-600">
-              Reserved automaticky vystaví Let's Encrypt SSL certifikát pro tvoji doménu. Trvá to
-              obvykle do 5 minut po ověření DNS. Provoz pak běží přes HTTPS.
+              {NAZEV_PRODUKTU} automaticky vystaví Let's Encrypt SSL certifikát pro tvoji doménu.
+              Trvá to obvykle do 5 minut po ověření DNS. Provoz pak běží přes HTTPS.
             </p>
           </section>
         )}

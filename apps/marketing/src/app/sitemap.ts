@@ -2,8 +2,12 @@
 // tenantů z public API. Lokalizace: cs bez prefixu, en s /en (localePrefix as-needed).
 
 import type { MetadataRoute } from 'next';
+import { WEB_ADRESA } from '@/lib/znacka';
 
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://reserved.cz';
+// Výchozí adresa se odvozuje ze značky, ne z natvrdo psané domény — jinak by
+// mapa webu po přejmenování odkazovala na starou doménu a vyhledávače by
+// indexovaly neexistující adresy.
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? WEB_ADRESA;
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4010/api/v1';
 
 const STATIC_PATHS = [

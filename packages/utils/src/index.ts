@@ -7,6 +7,20 @@
 // domyslí — chyba se tak projeví až v kontejneru nebo v CI.
 export { sleep } from './async.js';
 
+// Značka — název produktu a doména z proměnných prostředí, na jednom místě.
+// Bez nastavených proměnných vychází současný stav („Reserved", reserved.cz).
+export {
+  VYCHOZI_NAZEV_PRODUKTU,
+  VYCHOZI_DOMENA,
+  nazevProduktu,
+  zakladniDomena,
+  webovaAdresa,
+  subdomena,
+  kontaktniEmail,
+  zakazanePripony,
+  type ZnackaEnv,
+} from './znacka.js';
+
 // Šifrování citlivých hodnot v databázi (přístupy k platebním branám).
 // Používá jen vestavěný node:crypto, takže balíček zůstává bez závislostí.
 export {

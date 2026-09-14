@@ -22,6 +22,7 @@ import { promises as dns } from 'node:dns';
 import { randomBytes } from 'node:crypto';
 import { schema } from '@reserved/db';
 import { serviceContext } from '@reserved/rls-multitenancy';
+import { zakazanePripony, zakladniDomena } from '@reserved/utils';
 import { DbService } from '../db/db.service.js';
 import { PovoleneOriginyService } from '../cors/povolene-originy.service.js';
 
@@ -39,7 +40,11 @@ export interface CustomDomainStatus {
 const DOMAIN_REGEX = /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/i;
 
 // Domény, které nelze použít jako custom (předchází kolizi a sebevandalismu).
-const RESERVED_SUFFIXES = ['reserved.cz', 'reserved.com', 'localhost'];
+//
+// ODVOZUJE SE Z DOMÉNY PLATFORMY, ne z natvrdo psaného seznamu. Dřív tu stálo
+// `['reserved.cz', 'reserved.com', 'localhost']` — po změně domény by ochrana
+// dál hlídala starou doménu a novou by si mohl kdokoli nárokovat jako vlastní.
+const RESERVED_SUFFIXES = zakazanePripony();
 
 @Injectable()
 export class CustomDomainsService {
@@ -50,7 +55,9 @@ export class CustomDomainsService {
     @Inject(DbService) private readonly dbService: DbService,
     @Inject(PovoleneOriginyService) private readonly originy: PovoleneOriginyService,
   ) {
-    this.dnsTarget = process.env.RESERVED_CNAME_TARGET ?? 'cname.reserved.cz';
+    // Cíl pro CNAME se odvozuje z domény platformy. Natvrdo psaná hodnota by
+    // po přejmenování posílala zákazníky s vlastní doménou na starou adresu.
+    this.dnsTarget = process.env.RESERVED_CNAME_TARGET ?? `cname.${zakladniDomena()}`;
   }
 
   async getStatus(tenantId: string): Promise<CustomDomainStatus> {

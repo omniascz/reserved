@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { NavHeader } from '@/components/NavHeader';
+import { NAZEV_PRODUKTU, kontakt } from '@/lib/znacka';
 import {
   AdminApiError,
   cancelBillingSubscription,
@@ -161,7 +162,7 @@ export default function BillingPage() {
         <div>
           <h1 className="text-2xl font-bold">Fakturace</h1>
           <p className="text-sm text-slate-500 mt-1">
-            Tvé předplatné Reserved. Tady upgraduješ plán nebo spravuješ kartu.
+            Tvé předplatné {NAZEV_PRODUKTU}. Tady upgraduješ plán nebo spravuješ kartu.
           </p>
         </div>
 
@@ -321,7 +322,7 @@ export default function BillingPage() {
           </div>
           <p className="text-xs text-slate-500 mt-4">
             Potřebuješ Enterprise plán (řetězec, vlastní doména, SSO, SLA)?{' '}
-            <a href="mailto:sales@reserved.cz" className="text-brand-700 hover:underline">
+            <a href={`mailto:${kontakt('sales')}`} className="text-brand-700 hover:underline">
               Kontaktuj nás
             </a>
             .

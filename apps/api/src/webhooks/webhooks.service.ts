@@ -22,6 +22,7 @@ import {
   OnModuleInit,
 } from '@nestjs/common';
 import { createHmac, randomBytes } from 'node:crypto';
+import { nazevProduktu } from '@reserved/utils';
 import { and, desc, eq } from 'drizzle-orm';
 import { schema } from '@reserved/db';
 import type { WebhookEventType } from '@reserved/db';
@@ -205,7 +206,7 @@ export class WebhooksService implements OnModuleInit {
     }
 
     const payload = {
-      message: 'Toto je testovací payload z Reserved.',
+      message: `Toto je testovací payload z ${nazevProduktu()}.`,
       tenantId,
       timestamp: new Date().toISOString(),
     };

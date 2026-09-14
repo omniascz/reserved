@@ -11,6 +11,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { NavHeader } from '@/components/NavHeader';
 import { clearAuth, getAccessToken, getTenantSlug, AdminApiError } from '@/lib/api';
+import { NAZEV_PRODUKTU, kontakt } from '@/lib/znacka';
 
 const WIDGET_URL = process.env.NEXT_PUBLIC_WIDGET_URL ?? 'http://localhost:4004';
 
@@ -64,8 +65,7 @@ export default function EmbedSettingsPage() {
   const SNIPPETS: Record<EmbedKind, { label: string; description: string; code: string }> = {
     sdk: {
       label: '⭐ 1-řádkový script (nejjednodušší)',
-      description:
-        'Vlož jeden řádek a Reserved automaticky vytvoří widget s auto-resize. Žádný iframe ručně, žádný extra JS.',
+      description: `Vlož jeden řádek a ${NAZEV_PRODUKTU} automaticky vytvoří widget s auto-resize. Žádný iframe ručně, žádný extra JS.`,
       code: `<script src="${WIDGET_URL}/embed.js" data-slug="${slug}"${
         lang === 'en' ? ' data-lang="en"' : ''
       } defer></script>`,
@@ -289,8 +289,8 @@ export default function EmbedSettingsPage() {
             <p className="text-sm text-slate-700 mt-2 ml-6">
               Většina platforem má <strong>Embed HTML / Custom Code</strong> blok. Hledej v editoru
               stránky. Pokud nemůžeš najít, napiš na{' '}
-              <a href="mailto:podpora@reserved.cz" className="text-brand-700 hover:underline">
-                podpora@reserved.cz
+              <a href={`mailto:${kontakt('podpora')}`} className="text-brand-700 hover:underline">
+                {kontakt('podpora')}
               </a>{' '}
               — pomůžeme.
             </p>

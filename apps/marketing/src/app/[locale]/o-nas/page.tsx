@@ -1,4 +1,5 @@
 import { useTranslations } from 'next-intl';
+import { kontakt } from '@/lib/znacka';
 
 const ADMIN_URL = process.env.NEXT_PUBLIC_ADMIN_BASE_URL ?? 'http://localhost:4002';
 
@@ -42,8 +43,8 @@ export default function AboutPage() {
           <h2 className="text-2xl font-bold mb-4 mt-10">{t('whereHeader')}</h2>
           <p className="text-slate-700 leading-relaxed">
             {t('whereText')}{' '}
-            <a href="mailto:ahoj@reserved.cz" className="text-brand-700 hover:underline">
-              ahoj@reserved.cz
+            <a href={`mailto:${kontakt('ahoj')}`} className="text-brand-700 hover:underline">
+              {kontakt('ahoj')}
             </a>
             .
           </p>

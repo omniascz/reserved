@@ -26,7 +26,7 @@
     "about": "O nás",
     "contact": "Kontakt",
     "support": "Podpora",
-    "copyright": "© 2026 Reserved. Vytvořeno s ❤️ v České republice.",
+    "copyright": "© 2026 {produkt}. Vytvořeno s ❤️ v České republice.",
     "terms": "Obchodní podmínky",
     "gdpr": "Ochrana osobních údajů"
   },
@@ -40,17 +40,15 @@
     "trustTrial": "14 dní trial",
     "trustNoCard": "Bez platební karty",
     "trustQuick": "Spuštění za 5 minut",
-    "socialProof": "Reserved používá více než 250 českých studií, klinik a fitness center",
     "featuresHeadline": "Vše, co salon potřebuje",
     "featuresSub": "Od online rezervací přes klientskou databázi po platby a marketing. V jednom systému, plně česky.",
-    "compareHeadline": "Proč Reserved, a ne Booksy nebo Fresha?",
     "compareSub": "Jsme férová alternativa. Klienti jsou tvoji, ne marketplace.",
     "pricingHeadline": "Jednoduché ceny, bez překvapení",
     "pricingSub": "Od 590 Kč měsíčně. 14 dní zdarma, můžeš kdykoliv přestat.",
     "pricingMore": "Detailní porovnání plánů →",
     "ctaBigHeadline": "Začni přijímat rezervace ještě dnes",
     "ctaBigSub": "Spuštění za 5 minut. Trial na 14 dní bez platební karty. Když se ti nebude líbit, prostě skončíš.",
-    "ctaBigButton": "Vyzkoušet Reserved zdarma →"
+    "ctaBigButton": "Vyzkoušet {produkt} zdarma →"
   },
   "features": {
     "onlineBooking": {
@@ -87,7 +85,7 @@
     },
     "api": {
       "title": "API + webhooky",
-      "text": "Napoj Reserved na svůj e-shop, CRM nebo vlastní mobilní appku. Plně dokumentované API."
+      "text": "Napoj {produkt} na svůj e-shop, CRM nebo vlastní mobilní appku. Plně dokumentované API."
     }
   },
   "compare": {
@@ -131,7 +129,7 @@
     "ctaTrial": "Vyzkoušet zdarma",
     "enterprise": "Potřebuješ víc (řetězec, vlastní doména, SSO, SLA)? Napiš nám pro Enterprise nabídku.",
     "faqTitle": "Časté otázky",
-    "ctaBigHeadline": "Vyzkoušej Reserved zdarma",
+    "ctaBigHeadline": "Vyzkoušej {produkt} zdarma",
     "ctaBigSub": "14 dní bez závazku, bez platební karty.",
     "ctaBigButton": "Začít zdarma →",
     "plans": {
@@ -221,7 +219,7 @@
       },
       {
         "q": "Můžu používat vlastní doménu (např. rezervace.mujsalon.cz)?",
-        "a": "Ano, v plánu Business a Enterprise. V plánech Starter / Pro dostáváš subdoménu (mujsalon.reserved.cz)."
+        "a": "Ano, v plánu Business a Enterprise. V plánech Starter / Pro dostáváš subdoménu (mujsalon.{domena})."
       },
       {
         "q": "Berete komisi z rezervací?",
@@ -229,16 +227,16 @@
       },
       {
         "q": "Co když mám zvláštní požadavky (vlastní integrace, SLA, SSO)?",
-        "a": "Mrkni na Enterprise plán nebo nám napiš na sales@reserved.cz — uděláme ti nabídku na míru."
+        "a": "Mrkni na Enterprise plán nebo nám napiš na sales@{domena} — uděláme ti nabídku na míru."
       }
     ]
   },
   "featuresPage": {
     "title": "Vše, co salon potřebuje",
-    "subtitle": "Reserved je komplexní provozní operační systém pro businessy s rezervacemi. Tady je kompletní inventář funkcí — nic skrytého za příplatkem, jen rozdělení do plánů.",
+    "subtitle": "{produkt} je komplexní provozní operační systém pro businessy s rezervacemi. Tady je kompletní inventář funkcí — nic skrytého za příplatkem, jen rozdělení do plánů.",
     "missingTitle": "Něco chybí?",
-    "missingText": "Reserved se vyvíjí s našimi zákazníky. Pokud potřebuješ funkci, kterou tady nevidíš, napiš nám — pravděpodobně už ji někdo požaduje.",
-    "ctaButton": "Vyzkoušet Reserved zdarma →",
+    "missingText": "{produkt} se vyvíjí s našimi zákazníky. Pokud potřebuješ funkci, kterou tady nevidíš, napiš nám — pravděpodobně už ji někdo požaduje.",
+    "ctaButton": "Vyzkoušet {produkt} zdarma →",
     "categories": {
       "online": {
         "title": "📅 Online rezervace",
@@ -340,7 +338,7 @@
     }
   },
   "aboutPage": {
-    "title": "Stavíme Reserved pro Česko",
+    "title": "Stavíme {produkt} pro Česko",
     "subtitle": "Software pro salony a kliniky, který je férový k provozovatelům i jejich klientům.",
     "whyHeader": "Proč jsme začali",
     "whyP1": "Sledovali jsme, jak české salony platí 20 % komise zahraničním marketplacům za „akvizici\" klientů, kteří už by k nim přišli i tak. Stávající systémy byly buď staromódní (Reservanto, Reservio), nebo příliš drahé pro malé provozovatele (SimplyBook, Calendly).",
@@ -360,7 +358,7 @@
     },
     "whereHeader": "Kde nás najdeš",
     "whereText": "Sídlíme v Praze. Pracujeme distribuovaně, ale podpora odpovídá v české pracovní době. Kontakt:",
-    "ctaButton": "Vyzkoušet Reserved →"
+    "ctaButton": "Vyzkoušet {produkt} →"
   },
   "contactPage": {
     "title": "Kontakt",
@@ -385,7 +383,7 @@
     },
     "billingHeader": "Fakturační údaje",
     "billing": {
-      "company": "Reserved s.r.o.",
+      "company": "{produkt} s.r.o.",
       "ico": "IČO: 12345678",
       "dic": "DIČ: CZ12345678",
       "address": "Sídlo: Praha, Česká republika",
@@ -395,7 +393,7 @@
   },
   "legalTerms": {
     "title": "Obchodní podmínky",
-    "subtitle": "Všeobecné obchodní podmínky služby Reserved.",
+    "subtitle": "Všeobecné obchodní podmínky služby {produkt}.",
     "placeholderNote": "Tato stránka je připravená struktura nadpisů. Právní text dodá provozovatel — bez něj nesmí web jít do produkce.",
     "sections": {
       "provider": "Poskytovatel a předmět podmínek",

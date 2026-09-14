@@ -12,6 +12,7 @@ import {
 import { and, asc, desc, eq, sql } from 'drizzle-orm';
 import { schema } from '@reserved/db';
 import type { TenantContext } from '@reserved/rls-multitenancy';
+import { nazevProduktu } from '@reserved/utils';
 import { BundlePacksService } from '../bundle-packs/bundle-packs.service.js';
 import { CreditPacksService } from '../credit-packs/credit-packs.service.js';
 import { SubscriptionsService } from '../subscriptions/subscriptions.service.js';
@@ -230,7 +231,7 @@ export class PortalMeService {
           metadata: { source: 'portal', stornoOutcome: outcome.reasonCode },
         });
 
-        return { booking: updated!, tenantName: tenant?.name ?? 'Reserved', outcome };
+        return { booking: updated!, tenantName: tenant?.name ?? nazevProduktu(), outcome };
       },
     );
 
@@ -422,7 +423,7 @@ export class PortalMeService {
           return {
             booking: updated!,
             oldStartsAt: booking.startsAt,
-            tenantName: tenant?.name ?? 'Reserved',
+            tenantName: tenant?.name ?? nazevProduktu(),
           };
         } catch (err) {
           const e = err as { code?: string; cause?: { code?: string } };

@@ -1,5 +1,6 @@
 import { useTranslations, useMessages } from 'next-intl';
 import { Link } from '@/i18n/navigation';
+import { kontakt } from '@/lib/znacka';
 
 const ADMIN_URL = process.env.NEXT_PUBLIC_ADMIN_BASE_URL ?? 'http://localhost:4002';
 
@@ -158,8 +159,8 @@ export default function PricingPage() {
           <div className="text-center mt-8">
             <p className="text-sm text-slate-500">
               {t('enterprise')}{' '}
-              <a href="mailto:sales@reserved.cz" className="text-brand-700 hover:underline">
-                sales@reserved.cz
+              <a href={`mailto:${kontakt('sales')}`} className="text-brand-700 hover:underline">
+                {kontakt('sales')}
               </a>
             </p>
           </div>
@@ -179,6 +180,8 @@ export default function PricingPage() {
                   {item.q}
                   <span className="text-slate-400 group-open:rotate-180 transition">▼</span>
                 </summary>
+                {/* Značka je dosazená už při načtení překladů (i18n/request.ts),
+                    takže tady se vypisuje hotový text. */}
                 <p className="text-slate-600 text-sm mt-3 leading-relaxed">{item.a}</p>
               </details>
             ))}

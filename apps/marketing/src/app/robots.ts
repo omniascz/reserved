@@ -1,6 +1,8 @@
 import type { MetadataRoute } from 'next';
+import { WEB_ADRESA } from '@/lib/znacka';
 
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://reserved.cz';
+// Viz sitemap.ts — výchozí adresa ze značky, ne natvrdo.
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? WEB_ADRESA;
 
 export default function robots(): MetadataRoute.Robots {
   return {

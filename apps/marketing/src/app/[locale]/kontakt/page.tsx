@@ -1,10 +1,11 @@
 import { useTranslations } from 'next-intl';
+import { kontakt } from '@/lib/znacka';
 
 const CARDS = [
-  { key: 'support', icon: '💬', email: 'podpora@reserved.cz' },
-  { key: 'sales', icon: '💼', email: 'sales@reserved.cz' },
-  { key: 'partner', icon: '🤝', email: 'partner@reserved.cz' },
-  { key: 'media', icon: '📰', email: 'media@reserved.cz' },
+  { key: 'support', icon: '💬', email: kontakt('podpora') },
+  { key: 'sales', icon: '💼', email: kontakt('sales') },
+  { key: 'partner', icon: '🤝', email: kontakt('partner') },
+  { key: 'media', icon: '📰', email: kontakt('media') },
 ] as const;
 
 export default function ContactPage() {

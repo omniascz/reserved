@@ -6,6 +6,7 @@ import { notFound } from 'next/navigation';
 import { Header } from '@/components/Header';
 import { Footer } from '@/components/Footer';
 import { routing } from '@/i18n/routing';
+import { NAZEV_PRODUKTU } from '@/lib/znacka';
 
 function isValidLocale(value: string): value is 'cs' | 'en' {
   return (routing.locales as readonly string[]).includes(value);
@@ -13,11 +14,10 @@ function isValidLocale(value: string): value is 'cs' | 'en' {
 
 export const metadata: Metadata = {
   title: {
-    template: '%s | Reserved',
-    default: 'Reserved — Moderní rezervační systém pro studia a kliniky',
+    template: `%s | ${NAZEV_PRODUKTU}`,
+    default: `${NAZEV_PRODUKTU} — Moderní rezervační systém pro studia a kliniky`,
   },
-  description:
-    'Vlastníš svého klienta, žádné komise. Reserved je rezervační systém pro kadeřnictví, fyzioterapie, fitness centra, autoškoly a další.',
+  description: `Vlastníš svého klienta, žádné komise. ${NAZEV_PRODUKTU} je rezervační systém pro kadeřnictví, fyzioterapie, fitness centra, autoškoly a další.`,
 };
 
 export function generateStaticParams() {

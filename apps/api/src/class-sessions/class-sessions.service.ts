@@ -18,6 +18,7 @@ import {
 import { and, asc, desc, eq, gt, gte, isNull, isNotNull, lt, lte, ne, or, sql } from 'drizzle-orm';
 import { schema } from '@reserved/db';
 import { type AppRole, type TenantContext, serviceContext } from '@reserved/rls-multitenancy';
+import { nazevProduktu } from '@reserved/utils';
 import type { Database } from '../db/db.service.js';
 import { randomBytes } from 'node:crypto';
 import { DbService } from '../db/db.service.js';
@@ -726,7 +727,7 @@ export class ClassSessionsService {
               .limit(1)
           )[0]
         : undefined;
-      return { tenantName: tenant?.name ?? 'Reserved', employee };
+      return { tenantName: tenant?.name ?? nazevProduktu(), employee };
     });
 
     const employeeName = meta.employee

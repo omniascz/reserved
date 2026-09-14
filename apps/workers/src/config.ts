@@ -1,5 +1,9 @@
 import { z } from 'zod';
+import { kontaktniEmail, nazevProduktu } from '@reserved/utils';
 
+// Výchozí hodnoty odvozené ze značky (název produktu, doména) — viz komentář
+// v apps/api/src/email/email.config.ts. `.default()` se vyhodnotí při načtení
+// modulu; proměnné prostředí se nastavují před startem, takže to sedí.
 const EnvSchema = z.object({
   NODE_ENV: z.string().default('development'),
   DATABASE_URL: z.string().min(1),
@@ -33,13 +37,13 @@ const EnvSchema = z.object({
   SMTP_PORT: z.coerce.number().int().default(1026),
   SMTP_USER: z.string().optional(),
   SMTP_PASS: z.string().optional(),
-  EMAIL_FROM: z.string().default('noreply@reserved.local'),
-  EMAIL_FROM_NAME: z.string().default('Reserved'),
+  EMAIL_FROM: z.string().default(kontaktniEmail('noreply')),
+  EMAIL_FROM_NAME: z.string().default(nazevProduktu()),
   // SMS
   SMS_PROVIDER: z.enum(['mock', 'bulkgate']).default('mock'),
   BULKGATE_APP_ID: z.string().optional(),
   BULKGATE_APP_TOKEN: z.string().optional(),
-  BULKGATE_SENDER: z.string().default('Reserved'),
+  BULKGATE_SENDER: z.string().default(nazevProduktu()),
   // WhatsApp Business
   WHATSAPP_PROVIDER: z.enum(['mock', 'bulkgate']).default('mock'),
   /** Číslo registrované jako WhatsApp Business sender (E.164). */

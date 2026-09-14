@@ -19,6 +19,7 @@ import {
   type AdminWebhookDelivery,
   type WebhookEventType,
 } from '@/lib/api';
+import { NAZEV_PRODUKTU } from '@/lib/znacka';
 
 const EVENT_LABELS: Record<WebhookEventType, string> = {
   'booking.created': 'Nová rezervace',
@@ -203,7 +204,7 @@ export default function WebhooksPage() {
             <h2 className="text-2xl font-bold">Webhooky</h2>
             <p className="text-sm text-slate-500">
               Pošli události (rezervace, zákazníci) do Zapieru, Make/Integromat, IFTTT nebo
-              vlastního endpointu. Reserved posílá POST na tvoji URL podepsaný HMAC-SHA256.
+              vlastního endpointu. {NAZEV_PRODUKTU} posílá POST na tvoji URL podepsaný HMAC-SHA256.
             </p>
           </div>
           <button
@@ -304,13 +305,14 @@ export default function WebhooksPage() {
               <h3 className="text-lg font-bold mb-2">Webhook vytvořen</h3>
               <p className="text-sm text-slate-700 mb-2">
                 <strong>Zkopíruj si tento secret hned!</strong> Slouží k ověření, že příchozí POST
-                request je opravdu od Reserved (HMAC-SHA256). Po zavření tohoto okna ho už neuvidíš.
+                request je opravdu od {NAZEV_PRODUKTU} (HMAC-SHA256). Po zavření tohoto okna ho už
+                neuvidíš.
               </p>
               <pre className="bg-slate-100 border border-slate-300 rounded p-3 text-xs font-mono overflow-x-auto">
                 {createdSecret.secret}
               </pre>
               <p className="text-xs text-slate-500 mt-3">
-                Reserved bude posílat hlavičku{' '}
+                {NAZEV_PRODUKTU} bude posílat hlavičku{' '}
                 <code className="text-slate-700">X-Reserved-Signature: sha256=&lt;hex&gt;</code> kde
                 hex = HMAC(secret, body). Verifikuj na své straně.
               </p>

@@ -13,6 +13,7 @@ import {
   markOnboardingStep,
   type OnboardingChecklist,
 } from '@/lib/api';
+import { NAZEV_PRODUKTU } from '@/lib/znacka';
 
 // Smart defaults per business type — preset prvni sluzby + dalsi sluzby
 const SERVICE_TEMPLATES: Record<
@@ -127,7 +128,7 @@ export default function OnboardingPage() {
       <div className="max-w-3xl mx-auto pt-8">
         <div className="bg-white rounded-xl shadow-xl overflow-hidden">
           <div className="bg-brand-600 text-white px-8 py-5">
-            <h1 className="text-xl font-bold">Vítej v Reserved!</h1>
+            <h1 className="text-xl font-bold">Vítej v {NAZEV_PRODUKTU}!</h1>
             <p className="text-brand-100 text-sm mt-1">
               Připravíme tě k práci za 5 minut. Krok {currentIdx + 1} z {STEPS.length}.
             </p>

@@ -1,5 +1,6 @@
 import { useTranslations } from 'next-intl';
 import { Link } from '@/i18n/navigation';
+import { NAZEV_PRODUKTU, DOMENA } from '@/lib/znacka';
 
 const ADMIN_URL = process.env.NEXT_PUBLIC_ADMIN_BASE_URL ?? 'http://localhost:4002';
 
@@ -50,7 +51,7 @@ export default function HomePage() {
                 <div className="w-3 h-3 rounded-full bg-red-400"></div>
                 <div className="w-3 h-3 rounded-full bg-yellow-400"></div>
                 <div className="w-3 h-3 rounded-full bg-green-400"></div>
-                <div className="text-xs text-slate-400 ml-2">mujsalon.reserved.cz</div>
+                <div className="text-xs text-slate-400 ml-2">mujsalon.{DOMENA}</div>
               </div>
               <MockCalendar />
             </div>
@@ -66,7 +67,7 @@ export default function HomePage() {
       <section className="py-12 bg-white border-y border-slate-100">
         <div className="max-w-7xl mx-auto px-6">
           <p className="text-center text-sm text-slate-500 mb-6">
-            Reserved používá více než 250 českých studií, klinik a fitness center
+            {NAZEV_PRODUKTU} používá více než 250 českých studií, klinik a fitness center
           </p>
           <div className="flex flex-wrap items-center justify-center gap-8 opacity-60">
             <span className="text-slate-400 font-semibold">Salon Petra</span>
@@ -92,7 +93,7 @@ export default function HomePage() {
             <FeatureCard
               icon="📅"
               title="Online rezervace 24/7"
-              text="Klienti si rezervují přes tvůj web nebo přímo na reserved.cz. Drag-and-drop kalendář s celodenním pohledem."
+              text={`Klienti si rezervují přes tvůj web nebo přímo na ${DOMENA}. Drag-and-drop kalendář s celodenním pohledem.`}
             />
             <FeatureCard
               icon="👥"
@@ -132,7 +133,7 @@ export default function HomePage() {
             <FeatureCard
               icon="🔌"
               title="API + webhooky"
-              text="Napoj Reserved na svůj e-shop, CRM nebo vlastní mobilní appku. Plně dokumentované API."
+              text={`Napoj ${NAZEV_PRODUKTU} na svůj e-shop, CRM nebo vlastní mobilní appku. Plně dokumentované API.`}
             />
           </div>
         </div>
@@ -143,7 +144,7 @@ export default function HomePage() {
         <div className="max-w-5xl mx-auto px-6">
           <div className="text-center mb-12">
             <h2 className="text-3xl md:text-4xl font-bold mb-4">
-              Proč Reserved, a ne Booksy nebo Fresha?
+              Proč {NAZEV_PRODUKTU}, a ne Booksy nebo Fresha?
             </h2>
             <p className="text-lg text-slate-600">
               Jsme férová alternativa. Klienti jsou tvoji, ne marketplace.
@@ -154,7 +155,9 @@ export default function HomePage() {
               <thead>
                 <tr className="bg-slate-50">
                   <th className="text-left px-6 py-4 font-semibold"></th>
-                  <th className="text-center px-6 py-4 font-semibold text-brand-700">Reserved</th>
+                  <th className="text-center px-6 py-4 font-semibold text-brand-700">
+                    {NAZEV_PRODUKTU}
+                  </th>
                   <th className="text-center px-6 py-4 font-semibold text-slate-500">Booksy</th>
                   <th className="text-center px-6 py-4 font-semibold text-slate-500">Fresha</th>
                 </tr>
@@ -267,7 +270,7 @@ export default function HomePage() {
             href={`${ADMIN_URL}/register`}
             className="inline-block bg-white text-brand-700 hover:bg-brand-50 font-semibold px-8 py-4 rounded-lg text-lg"
           >
-            Vyzkoušet Reserved zdarma →
+            Vyzkoušet {NAZEV_PRODUKTU} zdarma →
           </a>
         </div>
       </section>

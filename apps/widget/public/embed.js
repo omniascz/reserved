@@ -1,8 +1,14 @@
 /*!
- * Reserved Embed SDK v1
+ * Embed SDK v1
+ *
+ * POZOR: tenhle soubor se servíruje prohlížeči tak, jak je — neprochází
+ * překladem, takže v něm nejde použít proměnnou pro doménu. Adresa v ukázce
+ * je proto ZÁSTUPNÁ. Skutečnou adresu si skript odvozuje sám z toho, odkud
+ * byl načten (viz `Odvozeni base URL` níž), takže po změně domény funguje
+ * bez zásahu — měnit se musí jen tenhle komentář a návod v administraci.
  *
  * 1-liner embed:
- *   <script src="https://widget.reserved.cz/embed.js" data-slug="salon-petra" defer></script>
+ *   <script src="https://widget.VASE-DOMENA/embed.js" data-slug="salon-petra" defer></script>
  *
  * Auto-injects iframe na pozici tagu, handluje auto-resize, supportuje
  * tlacitka, modaly a více widgetů na jedne strance.
