@@ -44,7 +44,12 @@ jobs:
       APP_USER_PASSWORD: reserved_ci_app_2026
       # Klíč pro šifrování přístupů k platebním bránám (32 B = 64 hex znaků).
       # Testovací hodnota, v produkci se generuje: openssl rand -hex 32
-      PAYMENT_CONFIG_KEY: 1111111111111111111111111111111111111111111111111111111111111111
+      #
+      # POZOR — UVOZOVKY JSOU POVINNÉ. Dřív tu bylo 64 jedniček bez uvozovek a
+      # YAML je přečetl jako ČÍSLO: do prostředí se dostalo "1.11111111111111E+63",
+      # tedy 14 bajtů místo 32, a API kvůli tomu vůbec nenastartovalo. Hodnota
+      # proto obsahuje i písmena (jako číslo se přečíst nedá) a je v uvozovkách.
+      PAYMENT_CONFIG_KEY: 'a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90'
       # API_URL záměrně NEnastavujeme: API ho používá jako vlastní base URL (bez /api/v1),
       # testy mají správný default http://localhost:4010/api/v1.
 
