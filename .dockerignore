@@ -1,0 +1,70 @@
+# Co se NEMÁ posílat do stavby obrazů.
+#
+# ── PROČ TENHLE SOUBOR VZNIKL ───────────────────────────────────────────────
+# Bez něj posílá Docker do každé stavby celý obsah repozitáře. Při zkušebním
+# nasazení to bylo přes 1,7 GB na JEDNU aplikaci — a aplikací je osm. Většinu
+# tvořily nainstalované závislosti, přeložené výstupy a historie gitu, tedy
+# věci, které se v obrazu stejně vyrábějí znovu.
+#
+# Nejde ale jen o rychlost. Jsou tu dva skutečné problémy:
+#
+# 1. ZÁVISLOSTI POSTAVENÉ PRO JINÝ SYSTÉM. Konfigurace Next aplikací kopíruje
+#    celé složky `apps` a `packages` dovnitř obrazu. Bez tohohle filtru se do
+#    linuxového obrazu dostaly `node_modules` nainstalované na Windows, včetně
+#    binárek zkompilovaných pro Windows (argon2). Že to procházelo, bylo dané
+#    jen tím, že je následná instalace přepsala.
+#
+# 2. TAJEMSTVÍ V OBRAZU. Soubory `.env*` obsahují hesla a klíče. Do obrazu,
+#    který se posílá na server nebo do registru, nepatří ani omylem.
+
+# ── Závislosti a výstupy sestavení (v obrazu se vyrábějí znovu) ─────────────
+**/node_modules
+**/dist
+**/.next
+**/.turbo
+**/build
+**/out
+
+# ── Historie a nastavení vývoje ────────────────────────────────────────────
+.git
+.github
+.husky
+.vscode
+.idea
+
+# ── Proměnné prostředí — NIKDY do obrazu ───────────────────────────────────
+# Konfigurace se předává za běhu, ne zapečením do obrazu.
+.env
+.env.*
+!.env.example
+!.env.production.example
+
+# ── Testy a jejich výstupy ─────────────────────────────────────────────────
+**/playwright-report
+**/test-results
+**/coverage
+**/.playwright
+
+# ── Nahrané soubory a dočasné věci ─────────────────────────────────────────
+#
+# POZOR NA ŠÍŘI VZORCE. Původně tu stálo `**/uploads`, což mělo vyloučit
+# soubory nahrané uživateli. Jenže ten vzorec sedí i na `apps/api/src/uploads`,
+# tedy na ZDROJOVÝ modul pro nahrávání. Stavba API pak spadla na
+# `Cannot find module './uploads/uploads.module.js'` — což vypadá jako chyba
+# v kódu, ale příčina byla tady.
+#
+# Proto se vylučují jen konkrétní úložiště za běhu, ne každá složka toho jména.
+/uploads
+apps/api/uploads
+**/tmp
+**/*.log
+
+# ── Dokumentace a podklady (do běhu aplikace nevstupují) ───────────────────
+reserved-docs
+analytics
+RESERVED_BRIEFING.md
+**/*.md
+!packages/db/**/*.md
+
+# ── Sestavy kontejnerů (do obrazu se nekopírují) ───────────────────────────
+docker-compose*.yml

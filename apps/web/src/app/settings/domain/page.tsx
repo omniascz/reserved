@@ -149,7 +149,9 @@ export default function CustomDomainPage() {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 placeholder="booking.tvujsalon.cz"
-                pattern="^[a-z0-9.-]+$"
+                /* Escapovaná pomlčka — viz registrace: `[a-z0-9.-]` se s příznakem
+                   `v` nepřeloží a kontrola tvaru domény by se tiše nepoužila. */
+                pattern="^[a-z0-9.\-]+$"
                 className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
                 disabled={busy}
               />

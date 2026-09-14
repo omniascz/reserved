@@ -1,0 +1,196 @@
+# Reserved — ZKUŠEBNÍ nasazení nanečisto (lokálně, v kontejnerech).
+#
+# ── K ČEMU TO JE ────────────────────────────────────────────────────────────
+# Mezi „CI je zelené" a „běží to na serveru" je mezera. CI pouští testy nad
+# zdrojáky; server pouští hotové obrazy. Chyba, která se projeví až v obrazu
+# (chybějící přípona v importu, chybějící závislost v produkční instalaci),
+# projde CI bez povšimnutí. Tenhle soubor tu mezeru zavírá: postaví a spustí
+# přesně ty obrazy, které by šly na server.
+#
+# ── PROČ PŘEKRYV A NE SAMOSTATNÝ SOUBOR ─────────────────────────────────────
+# Pouští se VŽDY spolu s produkčním souborem:
+#
+#   docker compose --env-file .env.nanecisto \
+#     -f docker-compose.prod.yml -f docker-compose.nanecisto.yml up -d --build
+#
+# Tím se ověřuje i samotný produkční soubor. Kdyby tu byla celá sestava znovu
+# opsaná, zkouška by ověřovala kopii, ne to, co se nasadí — a obojí by se
+# postupně rozešlo.
+#
+# ── CO SE MĚNÍ OPROTI PRODUKCI A PROČ ───────────────────────────────────────
+# 1. Adresy: místo https://api.<doména> jde všechno na http://localhost:<port>.
+#    Lokálně není veřejná doména ani certifikát.
+# 2. Proxy dostane konfiguraci bez certifikátů (docker/Caddyfile.nanecisto).
+# 3. Přibývá databáze a Mailhog. V produkci je databáze spravovaná
+#    u poskytovatele a e-maily odcházejí přes skutečný SMTP.
+# 4. Porty se zveřejňují na hostitele, aby na ně dosáhly obě testovací sady.
+#
+# ── CO SE ZÁMĚRNĚ NEMĚNÍ ────────────────────────────────────────────────────
+# NODE_ENV=production zůstává. Právě kvůli němu se zkouška dělá: zavírá CORS,
+# skrývá dokumentaci API a zapíná HSTS. Kdyby se tu přepnul na vývojový režim,
+# celá zkouška by ztratila smysl.
+#
+# Adresa administrace (4002) a adresa widgetu (4004) jsou schválně RŮZNÉ, stejně
+# jako budou na serveru. Když widget kvůli CORS nezavolá API, zkouška to musí
+# ukázat — ne to zamaskovat tím, že se všechno sjednotí na jednu adresu.
+
+name: reserved-nanecisto
+
+x-spolecne: &spolecne
+  restart: unless-stopped
+  networks: [reserved]
+
+services:
+  # ── Proxy bez certifikátů ─────────────────────────────────────────────────
+  # Přípojný bod je stejný (/etc/caddy/Caddyfile), takže tenhle svazek nahradí
+  # produkční — nepřidá se k němu.
+  proxy:
+    volumes:
+      - ./docker/Caddyfile.nanecisto:/etc/caddy/Caddyfile:ro
+    depends_on:
+      - tenant-site
+
+  # ── Databáze (v produkci spravovaná u poskytovatele) ──────────────────────
+  db:
+    <<: *spolecne
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      # 5434, protože 5432 i 5433 na tomhle stroji drží jiné projekty.
+      - '5434:5432'
+    volumes:
+      - db_nanecisto:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # ── Zachytávač e-mailů (v produkci skutečný SMTP) ─────────────────────────
+  mailhog:
+    <<: *spolecne
+    image: mailhog/mailhog:latest
+    ports:
+      - '1027:1025' # SMTP (1025 i 1026 na tomhle stroji drží jiné projekty)
+      - '8027:8025' # Web: http://localhost:8027
+
+  # ── API ───────────────────────────────────────────────────────────────────
+  api:
+    ports:
+      - '4010:4010'
+    environment:
+      # NODE_ENV zůstává production — viz poznámka v hlavičce.
+      API_URL: http://localhost:4010
+      API_PUBLIC_URL: http://localhost:4010
+      APP_URL: http://localhost:4002
+      ADMIN_BASE_URL: http://localhost:4002
+      PORTAL_BASE_URL: http://localhost:4003
+      MASTER_BASE_URL: http://localhost:4001
+      # Adresy ostatních aplikací — bez nich by jim prohlížeč zakázal volat API.
+      # Tady jsou to porty na localhostu, na serveru subdomény; mechanismus je
+      # stejný, takže zkouška ověřuje totéž chování.
+      WIDGET_URL: http://localhost:4004
+      TENANT_SITE_URL: http://localhost:4006
+      MARKETING_URL: http://localhost:4005
+      APP_BASE_DOMAIN: reserved.local
+      RESERVED_CNAME_TARGET: cname.reserved.local
+    depends_on:
+      db:
+        condition: service_healthy
+
+  workers:
+    environment:
+      APP_URL: http://localhost:4002
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # ── Migrace ───────────────────────────────────────────────────────────────
+  migrace:
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # ── Naplnění ukázkovými daty ──────────────────────────────────────────────
+  #
+  # Spouští se ručně, stejně jako migrace:
+  #   docker compose ... --profile nastroje run --rm seed
+  #
+  # POZOR: `pnpm db:seed` volá `tsx`, což je VÝVOJOVÁ závislost a v produkčním
+  # obrazu není. Proto se pouští přeložená verze (`node dist/seed.js`).
+  # Do produkce tohle nepatří — je to jen pro zkušební běh a testovací data.
+  seed:
+    <<: *spolecne
+    profiles: ['nastroje']
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    working_dir: /app/packages/db
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+    command: ['node', 'dist/seed.js']
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # ── Next.js aplikace ──────────────────────────────────────────────────────
+  # NEXT_PUBLIC_* se ZAPÉKAJÍ do obrazu, takže se musí přepsat jako build args,
+  # ne jako proměnné za běhu. Kdyby se přepsaly jen za běhu, prohlížeč by pořád
+  # volal produkční adresy.
+  web:
+    ports:
+      - '4002:4002'
+    build:
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:4010/api/v1
+        NEXT_PUBLIC_WIDGET_URL: http://localhost:4004
+        NEXT_PUBLIC_TENANT_SITE_URL: http://localhost:4006
+
+  portal:
+    ports:
+      - '4003:4003'
+    build:
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:4010/api/v1
+
+  widget:
+    ports:
+      - '4004:4004'
+    build:
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:4010/api/v1
+
+  master:
+    ports:
+      - '4001:4001'
+    build:
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:4010/api/v1
+        NEXT_PUBLIC_ADMIN_BASE_URL: http://localhost:4002
+
+  marketing:
+    ports:
+      - '4005:4005'
+    build:
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:4010/api/v1
+        NEXT_PUBLIC_ADMIN_BASE_URL: http://localhost:4002
+        NEXT_PUBLIC_SITE_URL: http://localhost:4005
+
+  tenant-site:
+    ports:
+      - '4006:4006'
+    build:
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:4010/api/v1
+        NEXT_PUBLIC_WIDGET_URL: http://localhost:4004
+
+networks:
+  reserved:
+
+volumes:
+  db_nanecisto:

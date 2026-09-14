@@ -1,0 +1,65 @@
+# Reverzní proxy pro ZKUŠEBNÍ běh nanečisto (lokálně, bez certifikátů).
+#
+# ── PROČ SAMOSTATNÝ SOUBOR ──────────────────────────────────────────────────
+# Produkční `docker/Caddyfile` si certifikáty vyžádá od Let's Encrypt. To na
+# lokálním stroji projít nemůže: Let's Encrypt musí doménu ověřit zvenčí a
+# `reserved.local` žádná veřejná doména není. Caddy by se donekonečna pokoušel
+# vydat certifikát a proxy by nenaběhla.
+#
+# Produkční soubor se proto NEMĚNÍ. Tenhle ho jen na dobu zkoušky nahradí.
+#
+# ── CO SE TÍM POŘÁD OVĚŘÍ ───────────────────────────────────────────────────
+# Směrování podle názvu hostitele, tedy to podstatné: že proxy pozná, která
+# adresa patří které aplikaci, a že na sebe kontejnery v síti vidí. Neověří se
+# vydávání certifikátů — to jde vyzkoušet až proti skutečné doméně.
+#
+# Volání z hostitele bez úpravy DNS:
+#   curl -H "Host: api.reserved.local" http://localhost/api/v1/health
+
+{
+	# Bez tohohle by Caddy u pojmenovaných adres sám přepnul na HTTPS
+	# a vyžádal si certifikát.
+	auto_https off
+	admin off
+}
+
+# ── Marketingový web (holá doména) ──────────────────────────────────────────
+http://reserved.local, http://www.reserved.local {
+	reverse_proxy marketing:4005
+}
+
+# ── API ─────────────────────────────────────────────────────────────────────
+http://api.reserved.local {
+	reverse_proxy api:4010
+}
+
+# ── Administrace provozovatele ──────────────────────────────────────────────
+http://app.reserved.local {
+	reverse_proxy web:4002
+}
+
+# ── Zákaznický portál ───────────────────────────────────────────────────────
+http://portal.reserved.local {
+	reverse_proxy portal:4003
+}
+
+# ── Rezervační widget ───────────────────────────────────────────────────────
+http://widget.reserved.local {
+	reverse_proxy widget:4004
+}
+
+# ── Administrace platformy ──────────────────────────────────────────────────
+http://master.reserved.local {
+	reverse_proxy master:4001
+}
+
+# ── Subdomény tenantů: <slug>.reserved.local → mini-web tenanta ─────────────
+#
+# V produkčním souboru je tenhle blok ZAKOMENTOVANÝ, protože by potřeboval
+# zástupný certifikát a ten Let's Encrypt vydá jen proti ověření přes DNS.
+# Tady je aktivní: bez HTTPS žádný certifikát potřeba není, takže se dá ověřit
+# aspoň samotné směrování. Vyjmenované adresy výše mají přednost, protože Caddy
+# vybírá nejkonkrétnější shodu.
+http://*.reserved.local {
+	reverse_proxy tenant-site:4006
+}

@@ -76,6 +76,19 @@ COPY --from=build /app/packages packages
 RUN pnpm install --frozen-lockfile --prod --ignore-scripts --filter @reserved/api...
 COPY --from=build /app/apps/api/dist apps/api/dist
 
+# ── Složka pro soubory nahrané uživateli ────────────────────────────────────
+# Aplikace běží pod uživatelem `node`, ale všechno v /app patří rootovi. Bez
+# tohohle řádku si API složku nevytvoří a nahrávání skončí chybou:
+#   mkdir: can't create directory '/app/apps/api/uploads': Permission denied
+#
+# Cesta odpovídá výchozímu chování kódu (`UPLOADS_DIR ?? <pracovní adresář>/uploads`)
+# a pracovní adresář je /app/apps/api.
+#
+# Vytvoření složky UŽ V OBRAZU má ještě druhý účel: když se na tohle místo
+# připojí trvalý svazek, Docker z něj převezme vlastnictví a svazek je rovnou
+# zapisovatelný. Bez toho by vznikl svazek patřící rootovi a chyba by se vrátila.
+RUN mkdir -p /app/apps/api/uploads && chown -R node:node /app/apps/api/uploads
+
 # Neprivilegovaný uživatel — kdyby se někdo dostal dovnitř, ať není root.
 USER node
 

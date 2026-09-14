@@ -164,7 +164,9 @@ export default function BranchesPage() {
                 value={editing.slug}
                 onChange={(e) => setEditing({ ...editing, slug: e.target.value.toLowerCase() })}
                 required
-                pattern="[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?"
+                /* Escapovaná pomlčka — viz registrace: `[a-z0-9-]` se s příznakem
+                   `v` nepřeloží a prohlížeč kontrolu tvaru zahodí celou. */
+                pattern="[a-z0-9](?:[a-z0-9\-]{0,62}[a-z0-9])?"
                 placeholder="andel"
                 className="w-full px-3 py-2 border border-slate-300 rounded-lg"
               />

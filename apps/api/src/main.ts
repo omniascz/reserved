@@ -12,17 +12,28 @@ import express from 'express';
 import helmet from 'helmet';
 import { AppModule } from './app.module.js';
 import { AuthExceptionFilter } from './auth/auth-exception.filter.js';
+import { jePovolenyOrigin, povoleneOrigins } from './cors.js';
 import { SentryExceptionFilter } from './sentry.filter.js';
 
 async function bootstrap(): Promise<void> {
   // V dev módu povolíme volání z file:// (demo.html) a libovolného localhostu
-  // i Vite dev serverů. V produkci se origin omezí na konkrétní APP_URL.
+  // i Vite dev serverů.
+  //
+  // V PRODUKCI se dřív povolovala JEDINÁ adresa (`APP_URL`, tedy administrace).
+  // API ale z prohlížeče volají i widget, portál, master a mini-web tenanta —
+  // každý na své adrese — a prohlížeč jim to zakázal. Nefungovaly by čtyři
+  // aplikace ze šesti včetně veřejné rezervace. Seznam se proto skládá
+  // z proměnných a logika je v `cors.ts`, kde se dá otestovat.
   const isDev = process.env.NODE_ENV !== 'production';
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     cors: {
       origin: isDev
         ? true // odráží přijatý Origin (i `null` pro file://)
-        : (process.env.APP_URL ?? 'https://reserved.cz'),
+        : (origin, callback): void => {
+            // `false` znamená „hlavičku neposílej“ → prohlížeč volání zablokuje.
+            // Není to chyba požadavku, proto se nevrací výjimka.
+            callback(null, jePovolenyOrigin(origin, process.env));
+          },
       credentials: true,
     },
     bodyParser: false,

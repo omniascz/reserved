@@ -50,6 +50,21 @@ ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL \
 COPY tsconfig.base.json ./
 RUN pnpm turbo run build --filter=@reserved/${APP}
 
+# ── Složku `public` má jen část aplikací ────────────────────────────────────
+# Dnes ji mají portál (`icon.svg`, `sw.js`) a widget (`embed.js` — skript, který
+# si zákazníci vkládají na vlastní stránky). Administrace, master, marketing ani
+# mini-web tenanta ji nemají.
+#
+# Běhová vrstva ji ale kopíruje bezpodmínečně, a u aplikace, která ji nemá, na
+# tom stavba spadla:
+#   COPY --from=build /app/apps/web/public → "/app/apps/web/public": not found
+#
+# Vytvoření prázdné složky je bezpečné: `mkdir -p` nikdy nic nepřepíše ani
+# nesmaže, takže u portálu a widgetu zůstane obsah nedotčený. Kdyby se místo
+# toho kopírování udělalo „volitelné", ztráta `embed.js` by prošla bez
+# povšimnutí — a widget by přestal fungovat na cizích stránkách.
+RUN mkdir -p /app/apps/${APP}/public
+
 # ── 3) Běh ──────────────────────────────────────────────────────────────────
 # Samostatný výstup (`output: 'standalone'`) obsahuje server i jen ty závislosti,
 # které se opravdu používají. Obraz tím spadne z ~1 GB na desítky MB.
