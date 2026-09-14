@@ -31,6 +31,21 @@ jobs:
       NODE_ENV: test
       API_PORT: 4010
       APP_URL: http://localhost:4002
+      # Adresy ostatních aplikací.
+      #
+      # POZOR: API se tu spouští s NODE_ENV=production (viz krok „Start API z dist“),
+      # takže platí PRODUKČNÍ pravidlo pro volání z prohlížeče — projdou jen
+      # vyjmenované adresy. Když tu některá chybí, API na ni nevrátí hlavičku
+      # a testy CORS spadnou na „vrátilo null“, přestože aplikace je v pořádku.
+      #
+      # Produkční sestava (docker-compose.prod.yml) tyhle adresy nastavuje také.
+      # Musí se tedy nastavovat i tady, jinak CI zkouší jinou konfiguraci,
+      # než jaká poběží na serveru.
+      PORTAL_BASE_URL: http://localhost:4003
+      MASTER_BASE_URL: http://localhost:4001
+      WIDGET_URL: http://localhost:4004
+      TENANT_SITE_URL: http://localhost:4006
+      MARKETING_URL: http://localhost:4005
       # Migrace jako vlastník (dev); API běží jako app_user (roli vytvoří migrace 0003).
       DATABASE_URL: postgresql://dev:dev@localhost:5432/reserved_test
       DATABASE_APP_URL: postgresql://app_user:reserved_ci_app_2026@localhost:5432/reserved_test

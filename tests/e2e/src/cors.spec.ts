@@ -8,9 +8,17 @@ import { describe, it, expect } from 'vitest';
 // Regrese, kterou to hlídá: v produkci bylo povolené jediné `APP_URL`, takže
 // widget, portál, master ani mini-web tenanta nemohly API z prohlížeče volat.
 //
-// Tvrzení je schválně takové, které platí ve VÝVOJOVÉM i produkčním režimu:
-// ve vývoji je povoleno všechno, v produkci vyjmenované adresy. Test tím
-// neměří, v jakém režimu API zrovna běží, a nepadá podle prostředí.
+// POZOR — DŘÍVE TU STÁLO, ŽE TEST PLATÍ V OBOU REŽIMECH. NEPLATÍ.
+// Ve vývoji je povoleno všechno, takže projde cokoli. V produkci projdou jen
+// adresy vyjmenované v proměnných prostředí — a tenhle test tedy vyžaduje,
+// aby prostředí mělo nastavené VŠECHNY adresy aplikací, ne jen APP_URL.
+//
+// Stálo to jeden červený běh: v `e2e-smoke` se API spouští s NODE_ENV=production,
+// ale nastavená byla jen APP_URL. Portál, master i widget proto dostaly `null`
+// a test spadl, přestože aplikace byla v pořádku. Chyběla konfigurace CI.
+//
+// Proto se adresy berou z prostředí (s výchozími hodnotami pro lokální běh)
+// a workflow je musí nastavit stejně, jako je nastavuje produkční sestava.
 
 const API_URL = process.env.API_URL ?? 'http://localhost:4010/api/v1';
 
