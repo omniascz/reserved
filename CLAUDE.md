@@ -296,6 +296,23 @@ Druhá půlka téže pasti: `pnpm turbo run test` bez `DATABASE_URL` skončí na
 tedy jako by testy spadly, přestože se vůbec nenačetly. V CI se proměnná nastavuje
 na úrovni jobu, lokálně ji musíš vyexportovat sám.
 
+### PAST: `nest build` překládá i testovací soubory
+
+Typová chyba v souboru pod `__tests__` neshodí jen testy — **shodí stavbu celého
+API**, protože `nest build` překládá celý `src` včetně testů:
+
+```
+src/cors/__tests__/nacitac-domen.db.test.ts:48:17 - error TS2532: Object is possibly 'undefined'
+```
+
+Nejčastější případ je indexovaný přístup (`radky[0].id`), protože projekt má
+zapnuté `noUncheckedIndexedAccess`. **Ošetři to výslovně** (`const r = radky[0];
+if (!r) throw …`), ne vykřičníkem — ten kontrolu jen umlčí.
+
+Důsledek pro pořadí práce: po napsání testu spusť `pnpm turbo run typecheck`
+dřív, než se pustíš do stavby obrazu nebo do spouštění API. Jinak se typová
+chyba v testu projeví až jako nepovedená stavba a hledá se na špatném místě.
+
 ### PAST: vyčerpaný limit pokusů se hlásí pod cizím jménem
 
 Omezovač na `/auth/register` a `/auth/login` má **jeden společný rozpočet**

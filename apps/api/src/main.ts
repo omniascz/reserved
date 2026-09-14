@@ -12,31 +12,43 @@ import express from 'express';
 import helmet from 'helmet';
 import { AppModule } from './app.module.js';
 import { AuthExceptionFilter } from './auth/auth-exception.filter.js';
-import { jePovolenyOrigin, povoleneOrigins } from './cors.js';
+import { PovoleneOriginyService } from './cors/povolene-originy.service.js';
 import { SentryExceptionFilter } from './sentry.filter.js';
 
 async function bootstrap(): Promise<void> {
-  // V dev módu povolíme volání z file:// (demo.html) a libovolného localhostu
-  // i Vite dev serverů.
-  //
-  // V PRODUKCI se dřív povolovala JEDINÁ adresa (`APP_URL`, tedy administrace).
-  // API ale z prohlížeče volají i widget, portál, master a mini-web tenanta —
-  // každý na své adrese — a prohlížeč jim to zakázal. Nefungovaly by čtyři
-  // aplikace ze šesti včetně veřejné rezervace. Seznam se proto skládá
-  // z proměnných a logika je v `cors.ts`, kde se dá otestovat.
   const isDev = process.env.NODE_ENV !== 'production';
+
+  // POZOR: `cors: false` tu NEZNAMENÁ, že je CORS vypnutý. Znamená to, že se
+  // nenastavuje TEĎ — zapne se hned po sestavení aplikace (viz níž). Důvod je
+  // v tom, že seznam povolených adres potřebuje sáhnout do databáze kvůli
+  // vlastním doménám zákazníků, a k té se dá dostat až přes hotovou aplikaci.
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
-    cors: {
-      origin: isDev
-        ? true // odráží přijatý Origin (i `null` pro file://)
-        : (origin, callback): void => {
-            // `false` znamená „hlavičku neposílej“ → prohlížeč volání zablokuje.
-            // Není to chyba požadavku, proto se nevrací výjimka.
-            callback(null, jePovolenyOrigin(origin, process.env));
-          },
-      credentials: true,
-    },
+    cors: false,
     bodyParser: false,
+  });
+
+  // ─── Odkud smí prohlížeč volat API ──────────────────────────────────────
+  // Ve vývoji je povoleno všechno (i `null` pro file://, kvůli demo.html).
+  //
+  // V produkci rozhoduje `PovoleneOriginyService`, který skládá dohromady:
+  //   1. adresy aplikací z proměnných prostředí (administrace, portál, widget…),
+  //   2. subdomény základní domény (subdomény tenantů),
+  //   3. ruční doplnění v CORS_EXTRA_ORIGINS (pojistka),
+  //   4. OVĚŘENÉ VLASTNÍ DOMÉNY zákazníků z databáze — ty se obnovují za běhu,
+  //      takže nový zákazník nevyžaduje restart API.
+  //
+  // Dřív se povolovala jediná adresa (`APP_URL`) a nefungovaly čtyři aplikace
+  // ze šesti; pak seznam z proměnných, který ale neuměl vlastní domény.
+  const originy = app.get(PovoleneOriginyService);
+  app.enableCors({
+    origin: isDev
+      ? true
+      : (origin, callback): void => {
+          // `false` znamená „hlavičku neposílej“ → prohlížeč volání zablokuje.
+          // Není to chyba požadavku, proto se nevrací výjimka.
+          callback(null, originy.jePovolena(origin));
+        },
+    credentials: true,
   });
 
   // ─── Bezpečnostní HTTP hlavičky (Helmet) ───────────────────────────────
