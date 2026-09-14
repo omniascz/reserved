@@ -60,7 +60,20 @@ services:
       ADMIN_BASE_URL: https://app.${BASE_DOMAIN}
       PORTAL_BASE_URL: https://portal.${BASE_DOMAIN}
       MASTER_BASE_URL: https://master.${BASE_DOMAIN}
+      # Adresy zbylých aplikací. Bez nich jim prohlížeč zakáže volat API:
+      # v produkci se povolují jen vyjmenované adresy a subdomény základní
+      # domény. Dřív tu byla jen APP_URL a nefungovaly čtyři aplikace ze šesti.
+      WIDGET_URL: https://widget.${BASE_DOMAIN}
+      TENANT_SITE_URL: https://${BASE_DOMAIN}
+      MARKETING_URL: https://${BASE_DOMAIN}
+      # Vlastní domény tenantů (tenants.custom_domain) se sem musí doplnit ručně,
+      # oddělené čárkami — seznam se skládá při startu a z databáze se nenačítá.
+      CORS_EXTRA_ORIGINS: ${CORS_EXTRA_ORIGINS:-}
       APP_BASE_DOMAIN: ${BASE_DOMAIN}
+      # Kam se ukládají soubory nahrané uživateli, když není nastavené S3.
+      # Musí souhlasit s přípojným bodem svazku `uploads_data` níže, jinak
+      # skončí data uvnitř kontejneru a při nasazení zmizí.
+      UPLOADS_DIR: /app/apps/api/uploads
       RESERVED_CNAME_TARGET: cname.${BASE_DOMAIN}
       DATABASE_URL: ${DATABASE_URL:?}
       DATABASE_APP_URL: ${DATABASE_APP_URL:?}
@@ -81,6 +94,11 @@ services:
       S3_PUBLIC_BASE: ${S3_PUBLIC_BASE:-}
       SENTRY_DSN: ${SENTRY_DSN:-}
       GIT_SHA: ${GIT_SHA:-}
+    volumes:
+      # Bez tohohle svazku žijí nahrané soubory jen uvnitř kontejneru a každé
+      # nasazení je smaže. Doporučení zůstává používat S3 — tohle je záchranná
+      # síť pro provoz bez něj, ne náhrada zálohovaného úložiště.
+      - uploads_data:/app/apps/api/uploads
 
   # ── Workers (samostatně, ať restart API nepřeruší fronty) ─────────────────
   workers:
@@ -231,3 +249,4 @@ volumes:
   caddy_data:
   caddy_config:
   postgres_data:
+  uploads_data:

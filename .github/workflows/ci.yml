@@ -118,3 +118,135 @@ jobs:
           if [ -f /tmp/api.pid ]; then
             kill $(cat /tmp/api.pid) 2>/dev/null || true
           fi
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # OBRAZY — postaví produkční obrazy a spustí API z kontejneru.
+  #
+  # PROČ TENHLE JOB EXISTUJE:
+  # Job `ci` výše pouští API ze zdrojáků. To je něco jiného než produkce a mezi
+  # tím je mezera, do které se vejdou chyby, které CI nikdy neuvidí:
+  #   - import bez přípony `.js` (tsx si ji domyslí, čistý Node ne) — tohle
+  #     shodilo start API v kontejneru a přišlo se na to až ručně;
+  #   - závislost, která chybí v produkční instalaci (`--prod`);
+  #   - soubor vyloučený v `.dockerignore`, který ale kód potřebuje;
+  #   - `COPY` složky, kterou daná aplikace nemá.
+  #
+  # Job běží ODDĚLENĚ od `ci`, takže hlavní kontrolu nezdržuje.
+  #
+  # Staví se jen API a workers. Šest Next aplikací by běh protáhlo a chyby,
+  # o které tu jde, se projeví právě na těchhle dvou obrazech.
+  obrazy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: reserved_obrazy
+          POSTGRES_USER: dev
+          POSTGRES_PASSWORD: dev
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U dev -d reserved_obrazy"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      # POZOR: v uvozovkách. Bez nich YAML přečte samé číslice jako číslo
+      # a předá je ve vědeckém zápisu — API pak spadne na délce klíče.
+      PAYMENT_CONFIG_KEY: 'a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90'
+      APP_USER_PASSWORD: reserved_ci_app_2026
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Postavit obraz API
+        run: docker build -f apps/api/Dockerfile -t reserved-api:ci .
+
+      - name: Postavit obraz workers
+        run: docker build -f apps/workers/Dockerfile -t reserved-workers:ci .
+
+      # Migrace se pouštějí Z OBRAZU, ne ze zdrojáků — ověří se tím i to, že
+      # v obrazu je složka s migracemi a správný pracovní adresář.
+      - name: Migrace z obrazu
+        run: |
+          docker run --rm --network host \
+            -w /app/packages/db \
+            -e DATABASE_URL=postgresql://dev:dev@localhost:5432/reserved_obrazy \
+            -e APP_USER_PASSWORD="$APP_USER_PASSWORD" \
+            reserved-api:ci node dist/migrate.js
+
+      - name: Spustit API z kontejneru
+        run: |
+          docker run -d --name api-ci --network host \
+            -e NODE_ENV=production \
+            -e API_PORT=4010 \
+            -e DATABASE_URL=postgresql://dev:dev@localhost:5432/reserved_obrazy \
+            -e DATABASE_APP_URL="postgresql://app_user:${APP_USER_PASSWORD}@localhost:5432/reserved_obrazy" \
+            -e JWT_SECRET=ci_obrazy_secret_at_least_32_characters_long_xxx \
+            -e PAYMENT_CONFIG_KEY="$PAYMENT_CONFIG_KEY" \
+            -e APP_URL=http://localhost:4002 \
+            reserved-api:ci
+
+      - name: Ověřit health z kontejneru (max 90 s)
+        run: |
+          for i in $(seq 1 90); do
+            if curl -fs http://localhost:4010/api/v1/health > /dev/null 2>&1; then
+              echo "API v kontejneru odpovědělo po ${i}s"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "API v kontejneru nenaběhlo do 90 s"
+          docker logs api-ci
+          exit 1
+
+      # V produkčním režimu musí být dokumentace skrytá. Ve vývoji je na
+      # /api-docs, takže tohle zároveň potvrzuje, že NODE_ENV opravdu platí.
+      - name: Ověřit, že produkční režim skrývá dokumentaci
+        run: |
+          KOD=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:4010/api-docs)
+          if [ "$KOD" != "404" ]; then
+            echo "/api-docs vrátilo $KOD, v produkci má být 404"
+            exit 1
+          fi
+          echo "/api-docs → 404 (skryté)"
+
+      # Workers neposlouchají na portu, takže se ověřují přes záznam: musí
+      # ohlásit spuštěné pollery. Bez toho by se dal přehlédnout kontejner,
+      # který nastartuje a hned tiše skončí.
+      - name: Spustit workers z kontejneru a ověřit pollery
+        run: |
+          docker run -d --name workers-ci --network host \
+            -e NODE_ENV=production \
+            -e DATABASE_URL=postgresql://dev:dev@localhost:5432/reserved_obrazy \
+            -e DATABASE_APP_URL="postgresql://app_user:${APP_USER_PASSWORD}@localhost:5432/reserved_obrazy" \
+            -e APP_URL=http://localhost:4002 \
+            -e SMTP_HOST=localhost \
+            -e SMTP_PORT=1025 \
+            -e EMAIL_FROM=noreply@reserved.local \
+            reserved-workers:ci
+          for i in $(seq 1 60); do
+            if docker logs workers-ci 2>&1 | grep -q "\[poller:"; then
+              echo "Pollery se spustily po ${i}s:"
+              docker logs workers-ci 2>&1 | grep "\[poller:"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "Workers neohlásily žádný poller do 60 s"
+          docker logs workers-ci
+          exit 1
+
+      - name: Logy při selhání
+        if: failure()
+        run: |
+          echo "─── API ───"; docker logs api-ci 2>&1 || true
+          echo "─── workers ───"; docker logs workers-ci 2>&1 || true
+
+      - name: Uklidit kontejnery
+        if: always()
+        run: docker rm -f api-ci workers-ci 2>/dev/null || true

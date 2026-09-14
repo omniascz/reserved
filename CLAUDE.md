@@ -183,6 +183,144 @@ Reálný dopad (2026-09-14): obě kontroly na `main` (CI i E2E Smoke) padaly na
 `PAYMENT_CONFIG_KEY musí být 32 bajtů … dostal jsem 14 B`; API vůbec
 nenastartovalo.
 
+### PAST: vzorec v `.dockerignore` sedne i na zdrojovou složku
+
+`**/uploads` mělo vyloučit soubory nahrané uživateli. Sedlo ale i na
+`apps/api/src/uploads`, tedy na zdrojový modul. Stavba spadla na:
+
+```
+src/app.module.ts:72:31 - error TS2307: Cannot find module './uploads/uploads.module.js'
+```
+
+Chyba se tváří jako vada kódu — modul „zmizel", přestože v repozitáři je.
+V obrazu ale nikdy nebyl, protože ho odfiltroval `.dockerignore`.
+
+**Pravidlo: vzorce s `**/`piš co nejužší** a po každé změně`.dockerignore`ověř, na co všechno sedí:`find apps packages -type d -name <jméno> -not -path "_/node_modules/_"`.
+Vyluč konkrétní cestu (`apps/api/uploads`), ne každou složku toho jména.
+
+Bez `.dockerignore` se ale neobejdeš: kontext stavby byl 3,17 GB a po jeho
+zavedení 6,53 MB — a bez něj se do linuxového obrazu kopírovaly `node_modules`
+nainstalované na Windows (i soubory `.env` s hesly).
+
+### PAST: obalový skript vrátí 0, i když příkaz uvnitř spadl
+
+Sourozenec pasti s rourou. Když se příkaz spustí uvnitř skriptu, který na konci
+ještě něco vypisuje, vrací se návratový kód TOHO SKRIPTU. Hlášení „úloha
+skončila s kódem 0" pak znamená jen to, že doběhl obal — ne že uspěla stavba.
+
+**Pravidlo: návratový kód si ulož hned za příkazem (`KOD=$?`) a VYPIŠ ho.**
+Dokud ho nevidíš vypsaný, o výsledku nic nevíš — a netvrď, že něco prošlo.
+
+Reálný dopad (2026-09-14): stavba obrazů spadla (`navratovy kod: 1`,
+`target api: failed to solve`), obal vrátil 0 a já to ohlásil jako úspěch.
+Musel jsem to vzápětí odvolat.
+
+### PAST: stavba všech obrazů naráz shodí démona Dockeru
+
+`docker compose build` staví služby SOUBĚŽNĚ. U téhle sestavy to znamená osm
+obrazů naráz, z toho šest Next aplikací, a každá si uvnitř instaluje závislosti
+a překládá.
+
+Rozhodující není paměť celého počítače, ale **přidělení virtuálního stroje
+Dockeru** — zjistí se přes `docker info --format "{{.MemTotal}}"`. Tady to bylo
+**5,8 GB**, navíc sdílených s devíti kontejnery jiných projektů. Osm souběžných
+překladů se do toho nevešlo a démona to zabilo uprostřed práce:
+
+```
+request returned 500 Internal Server Error ... /_ping
+```
+
+Vypadá to jako porucha Dockeru nebo jako chyba ve stavbě — ve skutečnosti je to
+vyčerpaná paměť. Poznávací znamení: `docker image ls` najednou nic nevypíše
+a chybí i obrazy, které předtím existovaly. Démon se pak sám zotaví, takže při
+pozdějším ověřování už všechno vypadá v pořádku.
+
+**Pravidlo: stavěj po jedné službě** a u každé si vypiš návratový kód:
+
+```bash
+for S in api workers web portal widget master marketing tenant-site; do
+  docker compose ... build "$S"; KOD=$?
+  echo "$S -> $KOD"; [ "$KOD" -ne 0 ] && break
+done
+```
+
+Platí to i pro nasazení: na malém serveru dopadne souběžná stavba stejně. Proto
+se obrazy mají stavět jinde (v CI) a na server jen stahovat, ne stavět na něm.
+
+### PAST: společný Dockerfile kopíruje složku, kterou má jen část aplikací
+
+`docker/Dockerfile.next` staví všech šest Next aplikací z jednoho předpisu.
+Kopíroval bezpodmínečně `public`, jenže tu mají jen **portál** (`icon.svg`,
+`sw.js`) a **widget** (`embed.js`). U zbylých čtyř stavba spadla:
+
+```
+COPY --from=build /app/apps/web/public → "/app/apps/web/public": not found
+```
+
+Proč se to neprojevilo dřív: žádná Next aplikace se do té doby nepostavila až
+do konce — dřívější pokusy padaly nebo se rušily ještě před běhovou vrstvou.
+Vada v produkčním předpisu tak ležela nepovšimnutá a projevila by se až při
+prvním ostrém nasazení.
+
+**Pravidlo: u sdíleného předpisu ověř každý bezpodmínečný `COPY` proti VŠEM
+aplikacím, ne jen proti té, na které zrovna zkoušíš.** Chybějící volitelnou
+složku řeš `RUN mkdir -p` v build vrstvě — ne tím, že kopírování zvolníš.
+Volitelné kopírování by totiž tiše prošlo i tehdy, kdyby se ztratil `embed.js`,
+a widget by přestal fungovat na cizích stránkách, aniž by to cokoli ohlásilo.
+
+### PAST: zaostalá lokální testovací databáze vypadá jako vada kódu
+
+`reserved_test` na vývojovém stroji se NEMIGRUJE sama. Když někdo přidá migraci,
+CI je v pořádku (staví databázi od nuly), ale lokální sada začne padat způsobem,
+který svádí hledat chybu v aplikaci:
+
+```
+insert or update on table "payment_connections" violates foreign key constraint
+AssertionError: expected 4 to be 6
+relation "login_attempts" does not exist
+```
+
+Jen to třetí hlášení říká pravdu. První dvě jsou následek — databáze byla o jednu
+migraci pozadu (86 místo 87, 96 tabulek místo 97).
+
+**Pravidlo: při nečekaném pádu lokální sady NEJDŘÍV porovnej schéma**, teprve
+potom čti kód:
+
+```bash
+psql ... -tAc "SELECT count(*) FROM drizzle.__drizzle_migrations"
+DATABASE_URL=...reserved_test APP_USER_PASSWORD=... pnpm --filter @reserved/db db:migrate
+```
+
+Druhá půlka téže pasti: `pnpm turbo run test` bez `DATABASE_URL` skončí na
+`Error: DATABASE_URL is not set` a vitest to ohlásí jako „3 failed / no tests“ —
+tedy jako by testy spadly, přestože se vůbec nenačetly. V CI se proměnná nastavuje
+na úrovni jobu, lokálně ji musíš vyexportovat sám.
+
+### PAST: vyčerpaný limit pokusů se hlásí pod cizím jménem
+
+Omezovač na `/auth/register` a `/auth/login` má **jeden společný rozpočet**
+(klíčuje se podle IP a cesty, okno 60 s) a sdílí ho VŠECHNO, co na stroj sahá:
+obě testovací sady i ruční proklikávání. Dvě registrace přes formulář udělané
+rukou tedy stačí, aby sada, která běží hned po nich, spadla.
+
+Nejhorší na tom je, pod jakými jmény se to projeví:
+
+```
+✗ /settings/theme se načte bez chyby hydratace      → Test timeout (čekání na 429 při loginu)
+✗ tenant fitness po seedu NEUKAZUJE 0 z 6           → „na stránce je: (bez počtu)“ (nepřihlásil se)
+✗ neověřený účet: pruh se zobrazí…                  → „registrace musí projít“ (429)
+```
+
+Ani jeden z těch testů neměřil to, co má v názvu. Kdo se řídí názvem, opravuje
+tři neexistující vady — hydrataci, onboarding a ověřování e-mailu.
+
+**Pravidlo: po ručních registracích nebo přihlášeních nech uplynout aspoň 90 s,
+než pustíš sadu.** A když sada spadne na časovém limitu nebo na „nepřihlásil se“,
+NEJDŘÍV počkej a pusť ji znovu samotnou — teprve pak čti kód.
+
+Reálný dopad (2026-09-14): 3 spadlé testy z 24 a 6 z 217. Po vyčkání 90 s
+prošlo **24/24 (23,7 s)** a **217/217** beze změny jediného řádku kódu.
+
 ### PAST: souběh vitest + Playwright shodí testy „chybou aplikace"
 
 Když běží obě sady současně (nebo vedle nich `docker build`, který překládá celé
@@ -192,6 +330,7 @@ mu padají. V logu to vypadá jako vada aplikace:
 ```
 Failed to load resource: net::ERR_NETWORK_IO_SUSPENDED
 TimeoutError: page.waitForResponse: Timeout 20000ms exceeded
+Error: write CONNECT_TIMEOUT localhost:5434
 ```
 
 Ani jedno není chyba kódu — je to vyhladovění stroje. Stejně se projevuje

@@ -230,7 +230,13 @@ export default function RegisterPage() {
                     required
                     minLength={2}
                     maxLength={32}
-                    pattern="[a-z][a-z0-9-]*[a-z0-9]"
+                    /* Pomlčka MUSÍ být escapovaná. Prohlížeče překládají `pattern`
+                       s příznakem `v`, kterému `[a-z0-9-]` vadí — celý vzorec pak
+                       odmítnou a kontrolu tvaru adresy TIŠE VYPNOU:
+                         Invalid regular expression: /…/v: Invalid character class
+                       Server tvar ověřuje dál, ale zákazník místo nápovědy
+                       u políčka dostal až chybu ze serveru. */
+                    pattern="[a-z][a-z0-9\-]*[a-z0-9]"
                     className="flex-1 px-3 py-2 border border-slate-300 rounded-l-lg"
                     placeholder="mujsalon"
                   />
