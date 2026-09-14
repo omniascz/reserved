@@ -21,8 +21,10 @@ import {
 import { and, desc, eq, gte, lte, sql } from 'drizzle-orm';
 import { schema } from '@reserved/db';
 import { type AppRole, type TenantContext } from '@reserved/rls-multitenancy';
+import { desifrujKonfiguraci, zasifrujKonfiguraci } from '@reserved/utils';
 import { DbService } from '../db/db.service.js';
 import { EmailService } from '../email/email.service.js';
+import { PaymentsConfig } from './payments.config.js';
 import { SubscriptionsService } from '../subscriptions/subscriptions.service.js';
 import { generateSpaydString } from './qr-generator.js';
 import { PaymentProviderRegistry } from './providers/provider.registry.js';
@@ -91,7 +93,30 @@ export class PaymentsService {
     @Inject(forwardRef(() => SubscriptionsService))
     private readonly subscriptions: SubscriptionsService,
     @Inject(EmailService) private readonly email: EmailService,
+    @Inject(PaymentsConfig) private readonly paymentsConfig: PaymentsConfig,
   ) {}
+
+  /**
+   * Rozbalí uloženou konfiguraci brány.
+   *
+   * Volá se VŠUDE, kde se config čte — poskytovatelé bran dostávají vždy
+   * čitelné hodnoty a o šifrování nevědí. Starý (nezašifrovaný) záznam projde
+   * beze změny, takže převod může běžet postupně.
+   */
+  private readConfig(ulozeno: unknown): Record<string, unknown> {
+    return desifrujKonfiguraci(
+      (ulozeno ?? {}) as Record<string, unknown>,
+      this.paymentsConfig.klic,
+    );
+  }
+
+  /** Zabalí konfiguraci pro uložení. Šifruje se celý objekt včetně merchant ID. */
+  private writeConfig(config: Record<string, unknown>): Record<string, unknown> {
+    // Prázdnou konfiguraci nemá smysl šifrovat — ať je v databázi vidět, že
+    // tam opravdu nic není (zakládá ji propojení Stripe Connect).
+    if (Object.keys(config).length === 0) return {};
+    return zasifrujKonfiguraci(config, this.paymentsConfig.klic);
+  }
 
   /**
    * Veřejný/systémový checkout bez role-gate — pro anonymní toky (online nákup
@@ -224,7 +249,7 @@ export class PaymentsService {
               },
               customerEmail: input.customerEmail,
             },
-            method.config as Record<string, unknown>,
+            this.readConfig(method.config),
           );
 
           await tx
@@ -384,7 +409,7 @@ export class PaymentsService {
             ),
           )
           .limit(1);
-        return (method?.config ?? {}) as Record<string, unknown>;
+        return this.readConfig(method?.config);
       },
     );
 
@@ -506,11 +531,27 @@ export class PaymentsService {
 
   // ─── Payment methods config ─────────────────────────────────────
 
-  /** Klíče v config, ktere obsahuji secret a NESMI se posilat zpet do API. */
+  /**
+   * Klíče v config, které obsahují tajemství a NESMÍ se posílat zpět z API.
+   *
+   * Seznam musí pokrývat VŠECHNY brány. Dřív obsahoval jen tři klíče, takže
+   * `GET /admin/payment-methods` vracel v čitelné podobě heslo Comgate,
+   * heslo ThePay, druhý klíč PayU i privátní klíč GP webpay — stačilo se
+   * podívat do odpovědi v prohlížeči.
+   *
+   * Identifikátory (merchant, goId, clientId, projectId, posId, merchantNumber,
+   * publishableKey) se ZÁMĚRNĚ nemaskují: provozovatel si musí umět ověřit, že
+   * zadal správné číslo napojení, a samotný identifikátor bez hesla je k ničemu.
+   */
   private static readonly SECRET_CONFIG_KEYS = new Set([
     'secretKey', // Stripe sk_test/sk_live
     'webhookSecret', // Stripe whsec_
-    'clientSecret', // GoPay
+    'clientSecret', // GoPay, PayU
+    'secret', // Comgate — heslo napojení
+    'apiPassword', // ThePay
+    'secondKey', // PayU — klíč pro podpis
+    'privateKey', // GP webpay — PEM privátního klíče
+    'privateKeyPassword', // GP webpay — heslo k PEM
   ]);
 
   /** Vrati config s maskovanymi secret hodnotami. Zachova klice (aby UI vedelo
@@ -536,9 +577,12 @@ export class PaymentsService {
         .orderBy(schema.paymentMethods.sortOrder, schema.paymentMethods.methodType);
 
       // Filter pro receptionist — skry online brany
+      // Pořadí je důležité: nejdřív dešifrovat, pak maskovat. Maskování nad
+      // šifrovanou obálkou by vrátilo nesmysl a UI by neukázalo, které klíče
+      // jsou vůbec vyplněné.
       return rows
         .filter((r) => canViewMethod(role, r.methodType))
-        .map((r) => ({ ...r, config: this.maskSecrets(r.config as Record<string, unknown>) }));
+        .map((r) => ({ ...r, config: this.maskSecrets(this.readConfig(r.config)) }));
     });
   }
 
@@ -574,26 +618,26 @@ export class PaymentsService {
         .limit(1);
 
       if (existing) {
-        // Pokud user posle maskovany secret, zachovej puvodni
-        const mergedConfig = this.mergeConfig(
-          dto.config,
-          existing.config as Record<string, unknown>,
-        );
+        // Pokud uživatel pošle maskované tajemství, zachovej původní hodnotu.
+        // Porovnává se proti DEŠIFROVANÉ konfiguraci — jinak by se místo
+        // skutečného klíče uložila hvězdičková náhražka a brána by přestala
+        // fungovat.
+        const mergedConfig = this.mergeConfig(dto.config, this.readConfig(existing.config));
         const [updated] = await tx
           .update(schema.paymentMethods)
           .set({
             displayName: dto.displayName ?? existing.displayName,
-            config: mergedConfig,
+            config: this.writeConfig(mergedConfig),
             isEnabled: dto.isEnabled,
             sortOrder: dto.sortOrder,
             updatedAt: new Date(),
           })
           .where(eq(schema.paymentMethods.id, existing.id))
           .returning();
-        // Vrat s maskovanymi secrets
+        // Vrať s maskovanými tajemstvími (a dešifrované — v DB je obálka).
         return {
           ...updated!,
-          config: this.maskSecrets(updated!.config as Record<string, unknown>),
+          config: this.maskSecrets(this.readConfig(updated!.config)),
         };
       }
 
@@ -603,13 +647,13 @@ export class PaymentsService {
           tenantId,
           methodType: dto.methodType,
           displayName: dto.displayName ?? null,
-          config: dto.config,
+          config: this.writeConfig(dto.config),
           isEnabled: dto.isEnabled,
           sortOrder: dto.sortOrder,
         })
         .returning();
-      // Vrat s maskovanymi secrets
-      return { ...created!, config: this.maskSecrets(created!.config as Record<string, unknown>) };
+      // Vrať s maskovanými tajemstvími (a dešifrované — v DB je obálka).
+      return { ...created!, config: this.maskSecrets(this.readConfig(created!.config)) };
     });
   }
 

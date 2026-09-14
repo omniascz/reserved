@@ -33,12 +33,17 @@ jobs:
       APP_URL: http://localhost:4002
       # Migrace jako vlastník (dev); API běží jako app_user (roli vytvoří migrace 0003).
       DATABASE_URL: postgresql://dev:dev@localhost:5432/reserved_test
-      DATABASE_APP_URL: postgresql://app_user:app@localhost:5432/reserved_test
+      DATABASE_APP_URL: postgresql://app_user:reserved_ci_app_2026@localhost:5432/reserved_test
       DATABASE_POOL_MAX: 10
       JWT_SECRET: ci_smoke_test_secret_at_least_32_characters_long_xxxx
       JWT_ISSUER: reserved
       JWT_AUDIENCE: reserved-api
       APP_BASE_DOMAIN: localhost
+      # Heslo role app_user — migrace ho vyžaduje, musí sedět s DATABASE_APP_URL.
+      # Musí mít aspoň 12 znaků — migrace kratší heslo odmítne.
+      APP_USER_PASSWORD: reserved_ci_app_2026
+      # Klíč pro šifrování přístupů k platebním bránám (32 B = 64 hex znaků).
+      PAYMENT_CONFIG_KEY: 1111111111111111111111111111111111111111111111111111111111111111
       SMTP_HOST: localhost
       SMTP_PORT: 1025
       EMAIL_FROM: noreply@reserved.local

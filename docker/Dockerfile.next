@@ -1,0 +1,74 @@
+# Společný obraz pro všech šest Next.js aplikací.
+#
+# Liší se jen parametrem APP (web | portal | widget | master | marketing |
+# tenant-site) a portem. Šest skoro shodných Dockerfilů by znamenalo šest míst,
+# kde se zapomene na opravu.
+#
+# ── POZOR: NEXT_PUBLIC_* SE ZAPÉKAJÍ DO BUILDU ──────────────────────────────
+# Konfigurace každé aplikace má `process.env.NEXT_PUBLIC_API_URL ?? 'http://
+# localhost:4010/api/v1'`. Ta hodnota se vyhodnotí PŘI SESTAVENÍ, ne při startu
+# kontejneru. Když se nepředá jako build argument, hotový obraz bude v prohlížeči
+# volat localhost a aplikace nebude fungovat — a na produkci se to pozná až
+# tím, že se nic nenačte.
+# Proto jsou tyhle hodnoty ARG, ne jen ENV za běhu.
+#
+# Build z KOŘENE repozitáře:
+#   docker build -f docker/Dockerfile.next \
+#     --build-arg APP=web --build-arg PORT=4002 \
+#     --build-arg NEXT_PUBLIC_API_URL=https://api.example.com/api/v1 \
+#     -t reserved-web .
+
+FROM node:22-alpine AS base
+RUN corepack enable
+WORKDIR /app
+
+# ── 1) Závislosti ───────────────────────────────────────────────────────────
+FROM base AS deps
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json ./
+COPY apps apps
+COPY packages packages
+# Instalujeme z manifestů celého workspace; zdrojáky se kopírují až v build
+# vrstvě, takže změna kódu neshazuje cache závislostí.
+RUN pnpm install --frozen-lockfile
+
+# ── 2) Build ────────────────────────────────────────────────────────────────
+FROM deps AS build
+ARG APP
+ARG NEXT_PUBLIC_API_URL
+ARG NEXT_PUBLIC_ADMIN_BASE_URL
+ARG NEXT_PUBLIC_WIDGET_URL
+ARG NEXT_PUBLIC_TENANT_SITE_URL
+ARG NEXT_PUBLIC_SITE_URL
+ARG NEXT_PUBLIC_SENTRY_DSN
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL \
+    NEXT_PUBLIC_ADMIN_BASE_URL=$NEXT_PUBLIC_ADMIN_BASE_URL \
+    NEXT_PUBLIC_WIDGET_URL=$NEXT_PUBLIC_WIDGET_URL \
+    NEXT_PUBLIC_TENANT_SITE_URL=$NEXT_PUBLIC_TENANT_SITE_URL \
+    NEXT_PUBLIC_SITE_URL=$NEXT_PUBLIC_SITE_URL \
+    NEXT_PUBLIC_SENTRY_DSN=$NEXT_PUBLIC_SENTRY_DSN \
+    NEXT_TELEMETRY_DISABLED=1
+COPY tsconfig.base.json ./
+RUN pnpm turbo run build --filter=@reserved/${APP}
+
+# ── 3) Běh ──────────────────────────────────────────────────────────────────
+# Samostatný výstup (`output: 'standalone'`) obsahuje server i jen ty závislosti,
+# které se opravdu používají. Obraz tím spadne z ~1 GB na desítky MB.
+FROM base AS runtime
+ARG APP
+ARG PORT=3000
+ENV NODE_ENV=production \
+    NEXT_TELEMETRY_DISABLED=1 \
+    PORT=$PORT \
+    HOSTNAME=0.0.0.0
+
+COPY --from=build /app/apps/${APP}/.next/standalone ./
+COPY --from=build /app/apps/${APP}/.next/static ./apps/${APP}/.next/static
+COPY --from=build /app/apps/${APP}/public ./apps/${APP}/public
+
+USER node
+EXPOSE $PORT
+
+# Cesta k serveru odpovídá struktuře standalone výstupu v pnpm workspace.
+# APP se musí propsat i do CMD, proto přes shell formu.
+ENV APP=$APP
+CMD ["sh", "-c", "node apps/$APP/server.js"]

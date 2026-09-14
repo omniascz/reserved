@@ -32,12 +32,19 @@ jobs:
     env:
       # Migrace a DB testy jako vlastník (dev), běžící API jako app_user (RLS).
       DATABASE_URL: postgresql://dev:dev@localhost:5432/reserved_test
-      DATABASE_APP_URL: postgresql://app_user:app@localhost:5432/reserved_test
+      DATABASE_APP_URL: postgresql://app_user:reserved_ci_app_2026@localhost:5432/reserved_test
       JWT_SECRET: ci_test_secret_at_least_32_characters_long_xxxxxxxx
       JWT_ISSUER: reserved
       JWT_AUDIENCE: reserved-api
       API_PORT: 4010
       APP_URL: http://localhost:4002
+      # Heslo role app_user — migrace ho vyžaduje (bez něj skončí chybou) a musí
+      # se shodovat s heslem v DATABASE_APP_URL výše.
+      # Musí mít aspoň 12 znaků — migrace kratší heslo odmítne.
+      APP_USER_PASSWORD: reserved_ci_app_2026
+      # Klíč pro šifrování přístupů k platebním bránám (32 B = 64 hex znaků).
+      # Testovací hodnota, v produkci se generuje: openssl rand -hex 32
+      PAYMENT_CONFIG_KEY: 1111111111111111111111111111111111111111111111111111111111111111
       # API_URL záměrně NEnastavujeme: API ho používá jako vlastní base URL (bez /api/v1),
       # testy mají správný default http://localhost:4010/api/v1.
 

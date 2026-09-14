@@ -21,7 +21,23 @@ import type {
 interface ComgateConfig {
   merchant: string;
   secret: string;
-  test?: boolean;
+  /** Může přijít i jako text — viz `jeTestovaciRezim`. */
+  test?: boolean | string;
+}
+
+/**
+ * Rozhodne, jestli je zapnutý testovací režim.
+ *
+ * POZOR, TOHLE NENÍ ZBYTEČNÁ OPATRNOST: config je volný jsonb a formuláře
+ * posílají hodnoty jako text. Prostá pravdivostní kontrola (`cfg.test ? …`)
+ * by brala řetězec `"false"` i `"ne"` jako PRAVDU — provozovatel by nastavil
+ * „ne" a tím si zapnul testovací režim v ostrém provozu: platby by vypadaly
+ * jako přijaté, ale žádné peníze by nedorazily.
+ */
+function jeTestovaciRezim(hodnota: boolean | string | undefined): boolean {
+  if (typeof hodnota === 'boolean') return hodnota;
+  if (typeof hodnota !== 'string') return false;
+  return ['true', '1', 'ano', 'yes'].includes(hodnota.trim().toLowerCase());
 }
 
 const BASE = 'https://payments.comgate.cz/v1.0';
@@ -76,7 +92,7 @@ export class ComgatePaymentProvider implements PaymentProvider {
       prepareOnly: 'true',
       country: 'CZ',
       lang: 'cs',
-      test: cfg.test ? 'true' : 'false',
+      test: jeTestovaciRezim(cfg.test) ? 'true' : 'false',
       url_paid: input.successUrl,
       url_cancel: input.cancelUrl,
       url_pending: input.successUrl,

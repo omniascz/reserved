@@ -21,7 +21,14 @@ interface MethodTemplate {
   description: string;
   icon: string;
   phase: 'A' | 'B';
-  configFields?: Array<{ key: string; label: string; placeholder?: string; type?: string }>;
+  configFields?: Array<{
+    key: string;
+    label: string;
+    placeholder?: string;
+    /** `checkbox` ukládá SKUTEČNÝ boolean — viz komentář u Comgate níže. */
+    type?: 'text' | 'password' | 'checkbox';
+    hint?: string;
+  }>;
 }
 
 const TEMPLATES: MethodTemplate[] = [
@@ -79,6 +86,31 @@ const TEMPLATES: MethodTemplate[] = [
       { key: 'clientSecret', label: 'Client Secret', type: 'password' },
     ],
   },
+  {
+    type: 'comgate',
+    label: 'Comgate (česká brána)',
+    description:
+      'Česká platební brána. Karta, bankovní převod, Apple/Google Pay. Údaje najdeš v klientském portálu Comgate v sekci Integrace.',
+    icon: '🌐',
+    phase: 'B',
+    configFields: [
+      {
+        key: 'merchant',
+        label: 'Identifikátor napojení (merchant)',
+        placeholder: 'např. 123456',
+        hint: 'Není to adresa e-shopu — je to číselný identifikátor napojení z portálu Comgate.',
+      },
+      { key: 'secret', label: 'Heslo napojení (secret)', type: 'password' },
+      {
+        key: 'test',
+        label: 'Testovací režim (platby se jen simulují, peníze nedorazí)',
+        // ZAŠKRTÁVÁTKO, NE TEXT. Kdyby to bylo textové pole, hodnota „ne"
+        // by se v JavaScriptu vyhodnotila jako PRAVDA a provozovatel by si
+        // tím zapnul testovací režim v ostrém provozu.
+        type: 'checkbox',
+      },
+    ],
+  },
 ];
 
 export default function PaymentMethodsPage() {
@@ -87,7 +119,9 @@ export default function PaymentMethodsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [editingType, setEditingType] = useState<PaymentMethodType | null>(null);
-  const [editConfig, setEditConfig] = useState<Record<string, string>>({});
+  // Hodnota může být i boolean — zaškrtávátka (např. testovací režim Comgate)
+  // musí posílat SKUTEČNÝ boolean, ne text. Viz komentář u šablony Comgate.
+  const [editConfig, setEditConfig] = useState<Record<string, string | boolean>>({});
   const [editEnabled, setEditEnabled] = useState(true);
 
   useEffect(() => {
@@ -120,12 +154,16 @@ export default function PaymentMethodsPage() {
 
   function startEdit(template: MethodTemplate) {
     const existing = findMethod(template.type);
-    const initialConfig: Record<string, string> = {};
+    const initialConfig: Record<string, string | boolean> = {};
     if (template.configFields) {
       for (const field of template.configFields) {
-        initialConfig[field.key] = String(
-          (existing?.config as Record<string, unknown> | undefined)?.[field.key] ?? '',
-        );
+        const ulozeno = (existing?.config as Record<string, unknown> | undefined)?.[field.key];
+        if (field.type === 'checkbox') {
+          // Uložená hodnota může být boolean i text ("true" ze staršího zápisu).
+          initialConfig[field.key] = ulozeno === true || ulozeno === 'true';
+        } else {
+          initialConfig[field.key] = String(ulozeno ?? '');
+        }
       }
     }
     setEditingType(template.type);
@@ -228,20 +266,39 @@ export default function PaymentMethodsPage() {
 
                     {editingType === tpl.type && tpl.configFields && (
                       <div className="mt-3 space-y-2 bg-slate-50 p-3 rounded-lg">
-                        {tpl.configFields.map((field) => (
-                          <div key={field.key}>
-                            <label className="block text-xs font-medium mb-1">{field.label}</label>
-                            <input
-                              type={field.type ?? 'text'}
-                              value={editConfig[field.key] ?? ''}
-                              onChange={(e) =>
-                                setEditConfig({ ...editConfig, [field.key]: e.target.value })
-                              }
-                              placeholder={field.placeholder}
-                              className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm"
-                            />
-                          </div>
-                        ))}
+                        {tpl.configFields.map((field) =>
+                          field.type === 'checkbox' ? (
+                            <label key={field.key} className="flex items-start gap-2 text-sm">
+                              <input
+                                type="checkbox"
+                                className="mt-0.5"
+                                checked={editConfig[field.key] === true}
+                                onChange={(e) =>
+                                  setEditConfig({ ...editConfig, [field.key]: e.target.checked })
+                                }
+                              />
+                              <span>{field.label}</span>
+                            </label>
+                          ) : (
+                            <div key={field.key}>
+                              <label className="block text-xs font-medium mb-1">
+                                {field.label}
+                              </label>
+                              <input
+                                type={field.type ?? 'text'}
+                                value={String(editConfig[field.key] ?? '')}
+                                onChange={(e) =>
+                                  setEditConfig({ ...editConfig, [field.key]: e.target.value })
+                                }
+                                placeholder={field.placeholder}
+                                className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm"
+                              />
+                              {field.hint && (
+                                <p className="text-xs text-slate-500 mt-1">{field.hint}</p>
+                              )}
+                            </div>
+                          ),
+                        )}
                         <label className="flex items-center gap-2 text-sm">
                           <input
                             type="checkbox"

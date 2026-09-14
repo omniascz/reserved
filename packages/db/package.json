@@ -24,6 +24,7 @@
     "db:migrate": "tsx src/migrate.ts",
     "db:studio": "drizzle-kit studio",
     "db:seed": "tsx src/seed.ts",
+    "db:encrypt-payments": "tsx src/encrypt-payment-configs.ts",
     "db:import-pulseup": "tsx src/pulseup-import-cli.ts",
     "build": "tsc",
     "typecheck": "tsc --noEmit",
@@ -32,6 +33,7 @@
     "lint": "echo 'lint not configured yet'"
   },
   "dependencies": {
+    "@reserved/utils": "workspace:*",
     "argon2": "^0.41.1",
     "drizzle-orm": "^0.45.0",
     "pg": "^8.13.0",
