@@ -296,6 +296,35 @@ Druhá půlka téže pasti: `pnpm turbo run test` bez `DATABASE_URL` skončí na
 tedy jako by testy spadly, přestože se vůbec nenačetly. V CI se proměnná nastavuje
 na úrovni jobu, lokálně ji musíš vyexportovat sám.
 
+### PAST: „gitleaks not installed" po instalaci = starý terminál, ne chybějící nástroj
+
+Kontrola úniku hesel v předcommitovém hooku hlásí:
+
+```
+[hint] gitleaks not installed — skipping secret scan.
+```
+
+Na Windows se instaluje uživatelsky, bez správcovských práv:
+
+```powershell
+winget install --id gitleaks.gitleaks --scope user --silent `
+  --accept-package-agreements --accept-source-agreements
+```
+
+winget přidá balíčkovou složku do **uživatelské** proměnné `Path`
+(`%LOCALAPPDATA%\Microsoft\WinGet\Packages\Gitleaks.Gitleaks_*\`). Jenže
+**už běžící terminály nesou starou proměnnou prostředí** — hook v nich
+`gitleaks` dál nenajde a tváří se, že nástroj chybí.
+
+**Řešení: restartovat terminál.** NEPSAT do hooku natvrdo cestu — na jiném
+stroji (a v CI) by to nefungovalo a skrylo by to skutečný stav.
+
+Ověření, že nástroj opravdu je:
+
+```bash
+ls "$LOCALAPPDATA/Microsoft/WinGet/Packages/"Gitleaks.Gitleaks_*/gitleaks.exe
+```
+
 ### PAST: `apps/api/.env` tiše přebije databázi předanou na příkazové řádce
 
 `DbConfig` používá `DATABASE_APP_URL ?? DATABASE_URL`. Když se API spustí jen
