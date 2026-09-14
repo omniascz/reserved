@@ -30,12 +30,15 @@ export interface CorsEnv {
   /** Marketingový web. */
   MARKETING_URL?: string;
   /**
-   * Ruční doplnění, oddělené čárkami.
+   * Ruční doplnění, oddělené čárkami. POJISTKA, ne hlavní cesta.
    *
-   * Sem patří VLASTNÍ DOMÉNY TENANTŮ. Ty jsou uložené v databázi
-   * (`tenants.custom_domain`) a tenhle seznam se skládá při startu, takže se
-   * sem nedostanou samy. Dokud se to nevyřeší jinak, musí je provozovatel
-   * platformy doplnit sem — a je to vědomé omezení, ne opomenutí.
+   * Vlastní domény zákazníků se sem doplňovat NEMUSÍ: ověřené domény načítá
+   * z databáze `PovoleneOriginyService` a obnovuje je za běhu, takže nový
+   * zákazník nevyžaduje restart API.
+   *
+   * Tahle proměnná zůstává pro výjimky, na které databáze nestačí — například
+   * adresa bez šifrování při lokálním zkoušení (z databáze se odvozuje vždy
+   * jen `https://`).
    */
   CORS_EXTRA_ORIGINS?: string;
   /** Základní doména platformy; její subdomény se povolují automaticky. */

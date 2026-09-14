@@ -7,6 +7,14 @@
 // Po nakonfigurování DNS spustí verifikaci. Pokud TXT match, marking
 // custom_domain_verified_at = now() a middleware začne routovat traffic
 // z té domény k tomuhle tenantovi.
+//
+// ── OKAMŽITÉ OBNOVENÍ SEZNAMU PRO CORS ──────────────────────────────────────
+// Ověřené domény drží `PovoleneOriginyService` v paměti, aby se prohlížeči
+// nemusel při každém požadavku dělat dotaz do databáze. Sama se obnovuje jednou
+// za minutu; tady se navíc obnovuje OKAMŽITĚ po každé změně, aby zákazník
+// nemusel po ověření čekat. Bez toho by mu rezervace na vlastní doméně
+// nefungovala až minutu — nebo dřív vůbec, dokud se seznam bral z konfigurace
+// a musel se kvůli tomu restartovat celý API.
 
 import { Inject, Injectable, BadRequestException, ConflictException } from '@nestjs/common';
 import { and, eq, ne, sql } from 'drizzle-orm';
@@ -15,6 +23,7 @@ import { randomBytes } from 'node:crypto';
 import { schema } from '@reserved/db';
 import { serviceContext } from '@reserved/rls-multitenancy';
 import { DbService } from '../db/db.service.js';
+import { PovoleneOriginyService } from '../cors/povolene-originy.service.js';
 
 export interface CustomDomainStatus {
   customDomain: string | null;
@@ -37,7 +46,10 @@ export class CustomDomainsService {
   /** Cílový hostname, kam tenant nasměruje CNAME. Pro produkci z env. */
   private readonly dnsTarget: string;
 
-  constructor(@Inject(DbService) private readonly dbService: DbService) {
+  constructor(
+    @Inject(DbService) private readonly dbService: DbService,
+    @Inject(PovoleneOriginyService) private readonly originy: PovoleneOriginyService,
+  ) {
     this.dnsTarget = process.env.RESERVED_CNAME_TARGET ?? 'cname.reserved.cz';
   }
 
@@ -91,6 +103,11 @@ export class CustomDomainsService {
         .where(eq(schema.tenants.id, tenantId));
     });
 
+    // Nastavení domény ji NEOVĚŘUJE — do seznamu se tedy nedostane. Obnovit se
+    // ale musí: tenant mohl mít předtím jinou, už ověřenou doménu, a ta právě
+    // přestala platit. Bez obnovení by z ní šlo API volat dál.
+    await this.originy.obnov();
+
     return this.getStatus(tenantId);
   }
 
@@ -106,6 +123,9 @@ export class CustomDomainsService {
         })
         .where(eq(schema.tenants.id, tenantId));
     });
+
+    // Smazaná doména musí ze seznamu zmizet hned, ne až za minutu.
+    await this.originy.obnov();
   }
 
   async verify(tenantId: string): Promise<CustomDomainStatus> {
@@ -155,6 +175,10 @@ export class CustomDomainsService {
         })
         .where(eq(schema.tenants.id, tenantId));
     });
+
+    // TOHLE JE TEN PODSTATNÝ OKAMŽIK: doména je právě ověřená a zákazník
+    // očekává, že mu rezervace na ní hned funguje. Obnovení bez restartu API.
+    await this.originy.obnov();
 
     return this.getStatus(tenantId);
   }

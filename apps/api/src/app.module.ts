@@ -14,6 +14,7 @@ import { CatalogModule } from './catalog/catalog.module.js';
 import { ClassSessionsModule } from './class-sessions/class-sessions.module.js';
 import { CorporateAccountsModule } from './corporate-accounts/corporate-accounts.module.js';
 import { CreditPacksModule } from './credit-packs/credit-packs.module.js';
+import { CorsModule } from './cors/cors.module.js';
 import { CustomDomainsModule } from './custom-domains/custom-domains.module.js';
 import { FeatureFlagsModule } from './feature-flags/feature-flags.module.js';
 import { GdprModule } from './gdpr/gdpr.module.js';
@@ -96,6 +97,10 @@ import { TenantMiddleware } from './tenant/tenant.middleware.js';
       { name: 'long', ttl: 3600_000, limit: 5000 },
     ]),
     DbModule,
+    // Seznam adres, ze kterých smí prohlížeč volat API. Globální modul —
+    // musí se ale zaregistrovat tady, jinak se nevytvoří vůbec a start API
+    // spadne na tom, že službu nikdo neposkytuje.
+    CorsModule,
     HealthModule,
     TenantModule,
     AuthModule,
