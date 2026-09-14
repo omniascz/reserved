@@ -1,4 +1,5 @@
 import { useTranslations, useMessages } from 'next-intl';
+import { kontakt } from '@/lib/znacka';
 
 const ADMIN_URL = process.env.NEXT_PUBLIC_ADMIN_BASE_URL ?? 'http://localhost:4002';
 
@@ -58,10 +59,10 @@ export default function FeaturesPage() {
           <h2 className="text-3xl font-bold mb-4">{t('missingTitle')}</h2>
           <p className="text-lg text-slate-600 mb-6">{t('missingText')}</p>
           <a
-            href="mailto:produkt@reserved.cz"
+            href={`mailto:${kontakt('produkt')}`}
             className="text-brand-700 hover:text-brand-800 font-semibold"
           >
-            produkt@reserved.cz →
+            {kontakt('produkt')} →
           </a>
         </div>
       </section>

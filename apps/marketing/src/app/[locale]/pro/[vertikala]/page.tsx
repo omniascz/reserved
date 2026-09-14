@@ -1,5 +1,6 @@
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
+import { NAZEV_PRODUKTU } from '@/lib/znacka';
 
 const ADMIN_URL = process.env.NEXT_PUBLIC_ADMIN_BASE_URL ?? 'http://localhost:4002';
 
@@ -68,8 +69,7 @@ const CONTENT: Record<string, VerticalContent> = {
     testimonial: {
       name: 'Petra Nováková',
       salon: 'Salon Petra, Brno',
-      quote:
-        'Před Reserved jsem trávila hodinu denně přesouváním rezervací z papíru. Teď klienti rezervují sami online, dostávají SMS a já se můžu věnovat klientům. Tržby vzrostly o 30 %.',
+      quote: `Před ${NAZEV_PRODUKTU} jsem trávila hodinu denně přesouváním rezervací z papíru. Teď klienti rezervují sami online, dostávají SMS a já se můžu věnovat klientům. Tržby vzrostly o 30 %.`,
     },
     faq: [
       {
@@ -78,7 +78,7 @@ const CONTENT: Record<string, VerticalContent> = {
       },
       {
         q: 'Můžu přijímat platby kartou?',
-        a: 'Ano. Reserved podporuje platby terminálem (manuální záznam), Stripe online, GoPay, QR platbu z účtu a hotovost.',
+        a: `Ano. ${NAZEV_PRODUKTU} podporuje platby terminálem (manuální záznam), Stripe online, GoPay, QR platbu z účtu a hotovost.`,
       },
       {
         q: 'Jak to funguje se zaměstnankyněmi?',
@@ -136,13 +136,12 @@ const CONTENT: Record<string, VerticalContent> = {
     testimonial: {
       name: 'MUDr. Tomáš Procházka',
       salon: 'FyzioCentrum Brno',
-      quote:
-        'Hledali jsme systém, který zvládne i SOAP poznámky a šifrování. Reserved nás přesvědčil — papírové karty jsme úplně odpárali a pacienti si rezervují sami.',
+      quote: `Hledali jsme systém, který zvládne i SOAP poznámky a šifrování. ${NAZEV_PRODUKTU} nás přesvědčil — papírové karty jsme úplně odpárali a pacienti si rezervují sami.`,
     },
     faq: [
       {
         q: 'Jak je to s GDPR?',
-        a: 'Reserved je plně GDPR compliant — šifrované úložiště, audit log, klient může požádat o export či smazání. Pro zdravotnická data máme dodatečné šifrování (RSA 4096).',
+        a: `${NAZEV_PRODUKTU} je plně GDPR compliant — šifrované úložiště, audit log, klient může požádat o export či smazání. Pro zdravotnická data máme dodatečné šifrování (RSA 4096).`,
       },
       {
         q: 'Můžu mít vícero terapeutů?',
@@ -200,8 +199,7 @@ const CONTENT: Record<string, VerticalContent> = {
     testimonial: {
       name: 'Marek Dvořák',
       salon: 'Fit Studio Praha',
-      quote:
-        'Permanentky byly v Excelu — peklo. Reserved nám automatizoval celý systém včetně B2B firemních účtů. Měsíčně ušetříme 20 hodin administrace.',
+      quote: `Permanentky byly v Excelu — peklo. ${NAZEV_PRODUKTU} nám automatizoval celý systém včetně B2B firemních účtů. Měsíčně ušetříme 20 hodin administrace.`,
     },
     faq: [
       {
@@ -264,13 +262,12 @@ const CONTENT: Record<string, VerticalContent> = {
     testimonial: {
       name: 'MUDr. Helena Černá',
       salon: 'Praktická lékařka, Liberec',
-      quote:
-        'Sestra mi šetří 2 hodiny denně. Pacienti si rezervují sami, dostávají SMS, my máme klid. Reserved navíc běží česky — žádný překlad „appointment" do „rezervace".',
+      quote: `Sestra mi šetří 2 hodiny denně. Pacienti si rezervují sami, dostávají SMS, my máme klid. ${NAZEV_PRODUKTU} navíc běží česky — žádný překlad „appointment" do „rezervace".`,
     },
     faq: [
       {
         q: 'Jak je to s lékařskou dokumentací?',
-        a: 'Reserved není elektronická zdravotní karta v právním smyslu (eRecept, EHR) — ale poznámky, intake forms a historii zvládá s šifrováním a auditem. Pro povinnou dokumentaci dál používej IZIP nebo Medibox.',
+        a: `${NAZEV_PRODUKTU} není elektronická zdravotní karta v právním smyslu (eRecept, EHR) — ale poznámky, intake forms a historii zvládá s šifrováním a auditem. Pro povinnou dokumentaci dál používej IZIP nebo Medibox.`,
       },
       {
         q: 'Můžu nechat různé lékaře v jedné praxi?',
@@ -317,7 +314,7 @@ const CONTENT: Record<string, VerticalContent> = {
       {
         icon: '📅',
         title: 'Termíny zkoušek',
-        text: 'Naplánuj zkušební termíny, žáci se na ně přihlašují přes Reserved.',
+        text: `Naplánuj zkušební termíny, žáci se na ně přihlašují přes ${NAZEV_PRODUKTU}.`,
       },
       {
         icon: '💳',
@@ -328,8 +325,7 @@ const CONTENT: Record<string, VerticalContent> = {
     testimonial: {
       name: 'Pavel Novák',
       salon: 'Autoškola Novák, Plzeň',
-      quote:
-        'Měli jsme Excel s 200 žáky. Reserved nás zachránil — žáci si rezervují jízdy sami, učitelé mají přehled, peněženka mi přestala chybět permanentka.',
+      quote: `Měli jsme Excel s 200 žáky. ${NAZEV_PRODUKTU} nás zachránil — žáci si rezervují jízdy sami, učitelé mají přehled, peněženka mi přestala chybět permanentka.`,
     },
     faq: [
       {
@@ -411,8 +407,8 @@ export default function VerticalLanding({ params }: { params: { vertikala: strin
               Funkce stavěné přesně pro {content.industry}
             </h2>
             <p className="text-lg text-slate-600 max-w-2xl mx-auto">
-              Reserved není generický software. Šablony, scénáře a workflow jsou připraveny pro tvůj
-              obor.
+              {NAZEV_PRODUKTU} není generický software. Šablony, scénáře a workflow jsou připraveny
+              pro tvůj obor.
             </p>
           </div>
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -467,7 +463,7 @@ export default function VerticalLanding({ params }: { params: { vertikala: strin
       <section className="py-20 bg-gradient-to-r from-brand-600 to-brand-800 text-white">
         <div className="max-w-4xl mx-auto px-6 text-center">
           <h2 className="text-3xl md:text-4xl font-bold mb-4">
-            Vyzkoušej Reserved pro tvé {content.industry}
+            Vyzkoušej {NAZEV_PRODUKTU} pro tvé {content.industry}
           </h2>
           <p className="text-lg text-brand-100 mb-8">
             14 dní zdarma. Žádná karta. Pomůžeme s nastavením, pokud chceš.

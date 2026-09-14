@@ -10,6 +10,7 @@ import type { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import express from 'express';
 import helmet from 'helmet';
+import { nazevProduktu } from '@reserved/utils';
 import { AppModule } from './app.module.js';
 import { AuthExceptionFilter } from './auth/auth-exception.filter.js';
 import { PovoleneOriginyService } from './cors/povolene-originy.service.js';
@@ -137,7 +138,7 @@ async function bootstrap(): Promise<void> {
   // V produkci by se mohlo skrýt nebo přesunout za auth.
   if (isDev) {
     const swaggerConfig = new DocumentBuilder()
-      .setTitle('Reserved API')
+      .setTitle(`${nazevProduktu()} API`)
       .setDescription(
         'Multi-tenant booking SaaS API. Tři autentizační režimy:\n' +
           '1. **JWT** (admin endpointy `/admin/*`, portal `/portal/*`, master `/platform/*`)\n' +
@@ -180,7 +181,7 @@ async function bootstrap(): Promise<void> {
   const port = Number(process.env.API_PORT ?? 4010);
   await app.listen(port);
   // eslint-disable-next-line no-console
-  console.log(`Reserved API listening on http://localhost:${port}`);
+  console.log(`${nazevProduktu()} API listening on http://localhost:${port}`);
   if (isDev) {
     // eslint-disable-next-line no-console
     console.log(`OpenAPI docs: http://localhost:${port}/api-docs`);

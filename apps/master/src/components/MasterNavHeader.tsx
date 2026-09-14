@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { logout, getMe, type MasterAdminMe } from '@/lib/api';
+import { NAZEV_PRODUKTU } from '@/lib/znacka';
 
 const NAV_ITEMS = [
   { href: '/', label: 'Dashboard' },
@@ -33,7 +34,7 @@ export function MasterNavHeader(): JSX.Element {
       <div className="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between">
         <div className="flex items-center gap-8">
           <Link href="/" className="font-bold text-lg tracking-tight">
-            Reserved <span className="text-brand-200">Master</span>
+            {NAZEV_PRODUKTU} <span className="text-brand-200">Master</span>
           </Link>
           <nav className="flex gap-1">
             {NAV_ITEMS.map((item) => {

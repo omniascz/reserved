@@ -4,6 +4,7 @@ import { FormEvent, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { AdminApiError, registerTenant, setAuth } from '@/lib/api';
+import { DOMENA, NAZEV_PRODUKTU } from '@/lib/znacka';
 
 const BUSINESS_TYPES = [
   { key: 'kadernictvi', label: 'Kadeřnictví / Barber' },
@@ -120,7 +121,7 @@ export default function RegisterPage() {
     <div className="min-h-screen bg-gradient-to-br from-brand-50 via-slate-50 to-white p-4 flex items-center justify-center">
       <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl overflow-hidden">
         <div className="bg-brand-600 text-white px-8 py-5">
-          <h1 className="text-2xl font-bold">Vyzkoušej Reserved zdarma</h1>
+          <h1 className="text-2xl font-bold">Vyzkoušej {NAZEV_PRODUKTU} zdarma</h1>
           <p className="text-brand-100 text-sm mt-1">
             14 dní zdarma · bez platební karty · krok {step} ze 2
           </p>
@@ -220,7 +221,7 @@ export default function RegisterPage() {
               </Field>
               <Field
                 label="URL adresa"
-                help="Tvá veřejná adresa pro klienty (např. mujsalon.reserved.cz). Kebab-case, jen písmena, čísla a pomlčky."
+                help={`Tvá veřejná adresa pro klienty (např. mujsalon.${DOMENA}). Kebab-case, jen písmena, čísla a pomlčky.`}
               >
                 <div className="flex items-center">
                   <input
@@ -241,7 +242,7 @@ export default function RegisterPage() {
                     placeholder="mujsalon"
                   />
                   <span className="px-3 py-2 bg-slate-100 border border-l-0 border-slate-300 rounded-r-lg text-sm text-slate-600">
-                    .reserved.cz
+                    .{DOMENA}
                   </span>
                 </div>
               </Field>

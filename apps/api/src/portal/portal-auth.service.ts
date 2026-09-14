@@ -13,6 +13,7 @@ import { Inject, Injectable, Logger, UnauthorizedException } from '@nestjs/commo
 import { and, eq, isNull } from 'drizzle-orm';
 import { schema } from '@reserved/db';
 import { serviceContext } from '@reserved/rls-multitenancy';
+import { nazevProduktu } from '@reserved/utils';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { DbService } from '../db/db.service.js';
 import { EmailService } from '../email/email.service.js';
@@ -89,7 +90,7 @@ export class PortalAuthService {
         recipient: dto.email,
         vars: {
           customerName,
-          tenantName: tenant?.name ?? 'Reserved',
+          tenantName: tenant?.name ?? nazevProduktu(),
           magicLinkUrl: url,
           expiresInMinutes: MAGIC_LINK_TTL_MIN,
         },
@@ -245,7 +246,7 @@ export class PortalAuthService {
         recipient: customer.email,
         vars: {
           customerName: customer.firstName,
-          tenantName: tenant?.name ?? 'Reserved',
+          tenantName: tenant?.name ?? nazevProduktu(),
         },
       });
     });

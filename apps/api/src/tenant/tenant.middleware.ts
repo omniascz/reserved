@@ -20,6 +20,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import type { Request, Response, NextFunction } from 'express';
+import { nazevProduktu } from '@reserved/utils';
 import { TenantConfig } from './tenant.config.js';
 import { extractTenantCandidates } from './tenant.resolver.js';
 import { DrizzleTenantLookup } from './tenant-lookup.service.js';
@@ -79,7 +80,7 @@ export class TenantMiddleware implements NestMiddleware {
           throw new ForbiddenException({
             error: {
               code: 'TENANT_SUSPENDED',
-              message: 'Tento ucet je do casu prerusen. Kontaktujte podporu Reserved.',
+              message: `Tento ucet je do casu prerusen. Kontaktujte podporu ${nazevProduktu()}.`,
             },
           });
         }

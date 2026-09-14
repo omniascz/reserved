@@ -1,5 +1,11 @@
 import { useTranslations } from 'next-intl';
 import { Link } from '@/i18n/navigation';
+import { NAZEV_PRODUKTU, kontakt } from '@/lib/znacka';
+
+// Odkaz na dokumentaci API. POZOR: dřív tu byla natvrdo vývojová adresa
+// `http://localhost:4010/api-docs`, která v produkci vede do prázdna — a navíc
+// je dokumentace v produkčním režimu schválně skrytá. Bere se proto z proměnné.
+const API_DOCS_URL = `${process.env.NEXT_PUBLIC_API_DOCS_URL ?? 'http://localhost:4010/api-docs'}`;
 
 export function Footer() {
   const t = useTranslations('footer');
@@ -9,7 +15,7 @@ export function Footer() {
     <footer className="bg-slate-900 text-slate-300 mt-24">
       <div className="max-w-7xl mx-auto px-6 py-12 grid md:grid-cols-4 gap-8">
         <div>
-          <div className="text-2xl font-bold text-white mb-3">Reserved</div>
+          <div className="text-2xl font-bold text-white mb-3">{NAZEV_PRODUKTU}</div>
           <p className="text-sm text-slate-400">{t('tagline')}</p>
         </div>
         <div>
@@ -26,7 +32,7 @@ export function Footer() {
               </Link>
             </li>
             <li>
-              <a href="http://localhost:4010/api-docs" className="hover:text-white">
+              <a href={API_DOCS_URL} className="hover:text-white">
                 {t('apiDocs')}
               </a>
             </li>
@@ -76,7 +82,7 @@ export function Footer() {
               </Link>
             </li>
             <li>
-              <a href="mailto:podpora@reserved.cz" className="hover:text-white">
+              <a href={`mailto:${kontakt('podpora')}`} className="hover:text-white">
                 {t('support')}
               </a>
             </li>

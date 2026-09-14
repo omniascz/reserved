@@ -7,6 +7,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { NavHeader } from '@/components/NavHeader';
 import { getAccessToken } from '@/lib/api';
+import { DOMENA, NAZEV_PRODUKTU } from '@/lib/znacka';
 
 interface Tile {
   href: string;
@@ -46,15 +47,15 @@ const TILES: Tile[] = [
     href: '/settings/domain',
     icon: '🏷️',
     title: 'Vlastní doména',
-    description: 'Napojení booking.svujsalon.cz na Reserved.',
+    description: `Napojení booking.svujsalon.cz na ${NAZEV_PRODUKTU}.`,
     badge: 'new',
     group: 'web',
   },
   {
     href: '/settings/catalog',
     icon: '📂',
-    title: 'Katalog Reserved',
-    description: 'Profil v reserved.cz/katalog s popisem a fotkami.',
+    title: `Katalog ${NAZEV_PRODUKTU}`,
+    description: `Profil v ${DOMENA}/katalog s popisem a fotkami.`,
     badge: 'new',
     group: 'web',
   },

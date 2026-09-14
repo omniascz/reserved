@@ -15,6 +15,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import { and, desc, eq, isNull } from 'drizzle-orm';
 import { schema } from '@reserved/db';
 import { serviceContext } from '@reserved/rls-multitenancy';
+import { nazevProduktu } from '@reserved/utils';
 import { DbService } from '../db/db.service.js';
 import { EmailService } from '../email/email.service.js';
 
@@ -225,7 +226,7 @@ export class EmailVerificationService {
         .limit(1);
 
       const canResendAt = await this.nextResendAt(tx, userId);
-      return { user, tenantName: tenant?.name ?? 'Reserved', canResendAt };
+      return { user, tenantName: tenant?.name ?? nazevProduktu(), canResendAt };
     });
 
     if (ctx.user.verifiedAt !== null) {

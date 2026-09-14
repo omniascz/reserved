@@ -16,6 +16,7 @@
 // mrtvý odkaz.
 
 import { createHash, randomBytes } from 'node:crypto';
+import { nazevProduktu } from '@reserved/utils';
 import { sql } from 'drizzle-orm';
 import type { Database } from '../db.js';
 
@@ -115,13 +116,13 @@ export class VerifyRemindersWorker {
         const odkaz = `${this.appUrl}/verify-email?token=${rawToken}`;
         const telo =
           `Dobrý den ${jmeno},\n\n` +
-          `e-mail k účtu ${provoz} v Reserved zatím není potvrzený. ` +
+          `e-mail k účtu ${provoz} v ${nazevProduktu()} zatím není potvrzený. ` +
           `Dokud ho nepotvrdíte, váš rezervační formulář nepřijímá rezervace od klientů ` +
           `a nejde rozesílat e-maily zákazníkům.\n\n` +
           `Potvrdit můžete tímto odkazem (platí ${TOKEN_TTL_HODIN} hodin):\n\n` +
           `  ${odkaz}\n\n` +
           `Pokud jste si účet nezakládali, tento e-mail ignorujte.\n\n` +
-          `Tým Reserved`;
+          `Tým ${nazevProduktu()}`;
 
         await tx.execute(sql`
           INSERT INTO notifications

@@ -12,6 +12,7 @@ import {
   uploadFile,
   type CatalogProfile,
 } from '@/lib/api';
+import { DOMENA } from '@/lib/znacka';
 
 const DAYS: Array<{ key: string; label: string }> = [
   { key: 'mon', label: 'Pondělí' },
@@ -129,7 +130,7 @@ export default function CatalogSettingsPage() {
       <main className="max-w-3xl mx-auto p-6">
         <h1 className="text-3xl font-bold mb-2">Veřejný katalog</h1>
         <p className="text-slate-600 mb-8">
-          Buď viditelný na <code className="bg-slate-100 px-1 rounded">reserved.cz/katalog</code>.
+          Buď viditelný na <code className="bg-slate-100 px-1 rounded">{DOMENA}/katalog</code>.
           Klienti tě najdou podle města a oboru a rezervují přes náš widget — bez komise.
         </p>
 
@@ -155,7 +156,7 @@ export default function CatalogSettingsPage() {
                 className="mt-1 w-5 h-5"
               />
               <div>
-                <div className="font-semibold">Zobrazovat v katalogu reserved.cz</div>
+                <div className="font-semibold">Zobrazovat v katalogu {DOMENA}</div>
                 <p className="text-sm text-slate-600 mt-1">
                   Pokud zapnuto, tvůj salon se objeví v public listing. Bez tohoto checku zůstaneš
                   neviditelný a klienti tě musí dohledávat přes přímou URL.

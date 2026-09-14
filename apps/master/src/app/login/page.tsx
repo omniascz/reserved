@@ -3,6 +3,7 @@
 import { FormEvent, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { login, setAuth, MasterApiError } from '@/lib/api';
+import { NAZEV_PRODUKTU } from '@/lib/znacka';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -34,7 +35,7 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-brand-700 via-brand-800 to-brand-900 p-4">
       <div className="bg-white p-8 rounded-xl shadow-2xl w-full max-w-md">
-        <h1 className="text-2xl font-bold mb-1 text-brand-900">Reserved Master</h1>
+        <h1 className="text-2xl font-bold mb-1 text-brand-900">{NAZEV_PRODUKTU} Master</h1>
         <p className="text-slate-500 text-sm mb-6">Provozovatel platformy</p>
 
         {error && (

@@ -26,7 +26,7 @@
     "about": "About",
     "contact": "Contact",
     "support": "Support",
-    "copyright": "© 2026 Reserved. Made with ❤️ in the Czech Republic.",
+    "copyright": "© 2026 {produkt}. Made with ❤️ in the Czech Republic.",
     "terms": "Terms of Service",
     "gdpr": "Privacy Policy"
   },
@@ -40,17 +40,15 @@
     "trustTrial": "14-day trial",
     "trustNoCard": "No credit card",
     "trustQuick": "Set up in 5 minutes",
-    "socialProof": "Reserved is used by 250+ studios, clinics, and fitness centers",
     "featuresHeadline": "Everything a salon needs",
     "featuresSub": "From online bookings to client database, payments, and marketing. One system, fully localized.",
-    "compareHeadline": "Why Reserved instead of Booksy or Fresha?",
     "compareSub": "We're the fair alternative. Your clients are yours, not a marketplace's.",
     "pricingHeadline": "Simple pricing, no surprises",
     "pricingSub": "From €25/month. 14 days free, cancel anytime.",
     "pricingMore": "Detailed plan comparison →",
     "ctaBigHeadline": "Start accepting bookings today",
     "ctaBigSub": "Set up in 5 minutes. 14-day trial without a credit card. If you don't like it, just walk away.",
-    "ctaBigButton": "Try Reserved for free →"
+    "ctaBigButton": "Try {produkt} for free →"
   },
   "features": {
     "onlineBooking": {
@@ -87,7 +85,7 @@
     },
     "api": {
       "title": "API + webhooks",
-      "text": "Connect Reserved to your e-shop, CRM, or custom mobile app. Fully documented API."
+      "text": "Connect {produkt} to your e-shop, CRM, or custom mobile app. Fully documented API."
     }
   },
   "compare": {
@@ -131,7 +129,7 @@
     "ctaTrial": "Try free",
     "enterprise": "Need more (chain, custom domain, SSO, SLA)? Email us for an Enterprise quote.",
     "faqTitle": "Frequently asked questions",
-    "ctaBigHeadline": "Try Reserved for free",
+    "ctaBigHeadline": "Try {produkt} for free",
     "ctaBigSub": "14 days, no commitment, no credit card.",
     "ctaBigButton": "Start free →",
     "plans": {
@@ -221,7 +219,7 @@
       },
       {
         "q": "Can I use my own domain (e.g. booking.mysalon.com)?",
-        "a": "Yes, on Business and Enterprise plans. Starter / Pro get a subdomain (mysalon.reserved.cz)."
+        "a": "Yes, on Business and Enterprise plans. Starter / Pro get a subdomain (mysalon.{domena})."
       },
       {
         "q": "Do you take a commission on bookings?",
@@ -229,16 +227,16 @@
       },
       {
         "q": "What if I have special requirements (custom integrations, SLA, SSO)?",
-        "a": "Check out the Enterprise plan or email sales@reserved.cz — we'll prepare a custom quote."
+        "a": "Check out the Enterprise plan or email sales@{domena} — we'll prepare a custom quote."
       }
     ]
   },
   "featuresPage": {
     "title": "Everything a salon needs",
-    "subtitle": "Reserved is a comprehensive operations system for booking-based businesses. Here's the complete feature inventory — nothing hidden behind add-ons, just split across plans.",
+    "subtitle": "{produkt} is a comprehensive operations system for booking-based businesses. Here's the complete feature inventory — nothing hidden behind add-ons, just split across plans.",
     "missingTitle": "Something missing?",
-    "missingText": "Reserved evolves with our customers. If you need a feature you don't see here, write to us — someone's probably already asked for it.",
-    "ctaButton": "Try Reserved for free →",
+    "missingText": "{produkt} evolves with our customers. If you need a feature you don't see here, write to us — someone's probably already asked for it.",
+    "ctaButton": "Try {produkt} for free →",
     "categories": {
       "online": {
         "title": "📅 Online bookings",
@@ -340,7 +338,7 @@
     }
   },
   "aboutPage": {
-    "title": "We're building Reserved for Czechia",
+    "title": "We're building {produkt} for Czechia",
     "subtitle": "Software for salons and clinics that's fair to operators and their clients alike.",
     "whyHeader": "Why we started",
     "whyP1": "We watched Czech salons pay 20% commission to foreign marketplaces for 'acquiring' clients who would have come anyway. Existing systems were either outdated (Reservanto, Reservio) or too expensive for small operators (SimplyBook, Calendly).",
@@ -360,7 +358,7 @@
     },
     "whereHeader": "Where to find us",
     "whereText": "We're based in Prague. We work distributed, but support replies during Czech business hours. Contact:",
-    "ctaButton": "Try Reserved →"
+    "ctaButton": "Try {produkt} →"
   },
   "contactPage": {
     "title": "Contact",
@@ -385,7 +383,7 @@
     },
     "billingHeader": "Billing details",
     "billing": {
-      "company": "Reserved s.r.o.",
+      "company": "{produkt} s.r.o.",
       "ico": "ID: 12345678",
       "dic": "VAT: CZ12345678",
       "address": "Office: Prague, Czech Republic",
@@ -395,7 +393,7 @@
   },
   "legalTerms": {
     "title": "Terms of Service",
-    "subtitle": "General terms and conditions of the Reserved service.",
+    "subtitle": "General terms and conditions of the {produkt} service.",
     "placeholderNote": "This page is a prepared heading structure. The legal text must be supplied before the site goes live.",
     "sections": {
       "provider": "Provider and scope of these terms",

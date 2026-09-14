@@ -12,6 +12,7 @@ import { and, between, eq, sql } from 'drizzle-orm';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { schema } from '@reserved/db';
 import { serviceContext } from '@reserved/rls-multitenancy';
+import { nazevProduktu } from '@reserved/utils';
 import { DbService } from '../db/db.service.js';
 
 function b64url(s: string): string {
@@ -154,10 +155,12 @@ export class IcalService {
     const lines: string[] = [
       'BEGIN:VCALENDAR',
       'VERSION:2.0',
-      'PRODID:-//Reserved//Booking//CS',
+      // Název produktu z proměnné: tenhle soubor si zákazník stáhne do svého
+      // kalendáře, takže se v něm starý název jinak bude ukazovat napořád.
+      `PRODID:-//${nazevProduktu()}//Booking//CS`,
       'CALSCALE:GREGORIAN',
       'METHOD:PUBLISH',
-      `X-WR-CALNAME:Reserved — ${employeeId.slice(0, 8)}`,
+      `X-WR-CALNAME:${nazevProduktu()} — ${employeeId.slice(0, 8)}`,
     ];
     for (const r of rows) {
       const summary = `${r.serviceName ?? 'Rezervace'} — ${r.customerName}`;

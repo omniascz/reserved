@@ -7,6 +7,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { clearAuth, getTenantSlug } from '@/lib/api';
+import { DOMENA, NAZEV_PRODUKTU } from '@/lib/znacka';
 
 interface NavItem {
   href: string;
@@ -109,8 +110,8 @@ const GROUPS: NavGroup[] = [
       },
       {
         href: '/settings/catalog',
-        label: 'Katalog Reserved',
-        description: 'Profil v reserved.cz/katalog',
+        label: `Katalog ${NAZEV_PRODUKTU}`,
+        description: `Profil v ${DOMENA}/katalog`,
         badge: 'new',
       },
     ],
@@ -185,7 +186,7 @@ export function NavHeader() {
       <div className="px-6 py-3 flex items-center justify-between" ref={containerRef}>
         <div className="flex items-center gap-6">
           <Link href="/dashboard" className="text-lg font-bold hover:text-brand-700">
-            Reserved
+            {NAZEV_PRODUKTU}
           </Link>
 
           <nav className="flex gap-1 text-sm">

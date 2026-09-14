@@ -14,6 +14,7 @@ import {
   type AdminApiKeyScope,
 } from '@/lib/api';
 import { NavHeader } from '@/components/NavHeader';
+import { NAZEV_PRODUKTU } from '@/lib/znacka';
 
 function fmtDate(iso: string | null): string {
   if (!iso) return '—';
@@ -66,8 +67,8 @@ export default function ApiKeysPage() {
           <div>
             <h1 className="text-2xl font-bold">API klíče</h1>
             <p className="text-slate-500 text-sm mt-1">
-              Pro programatický přístup k Reserved API z vlastních systémů (e-shop, mobilní appka,
-              CRM). Dokumentace:{' '}
+              Pro programatický přístup k {NAZEV_PRODUKTU} API z vlastních systémů (e-shop, mobilní
+              appka, CRM). Dokumentace:{' '}
               <a
                 href="http://localhost:4010/api-docs"
                 target="_blank"

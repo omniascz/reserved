@@ -4,9 +4,10 @@ import type { ReactNode } from 'react';
 import { DevAutoLogin } from '@/components/DevAutoLogin';
 import { EmailVerificationBanner } from '@/components/EmailVerificationBanner';
 import { ImpersonationBanner } from '@/components/ImpersonationBanner';
+import { NAZEV_PRODUKTU } from '@/lib/znacka';
 
 export const metadata: Metadata = {
-  title: 'Reserved Admin',
+  title: `${NAZEV_PRODUKTU} Admin`,
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

@@ -1,6 +1,7 @@
 import { useTranslations } from 'next-intl';
 import { Link } from '@/i18n/navigation';
 import { LanguageSwitcher } from './LanguageSwitcher';
+import { NAZEV_PRODUKTU } from '@/lib/znacka';
 
 const ADMIN_URL = process.env.NEXT_PUBLIC_ADMIN_BASE_URL ?? 'http://localhost:4002';
 
@@ -20,7 +21,7 @@ export function Header() {
     <header className="bg-white border-b border-slate-200 sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
         <Link href="/" className="flex items-center gap-2">
-          <span className="text-2xl font-bold text-brand-700">Reserved</span>
+          <span className="text-2xl font-bold text-brand-700">{NAZEV_PRODUKTU}</span>
           <span className="text-xs bg-brand-100 text-brand-700 px-2 py-0.5 rounded uppercase font-semibold tracking-wide">
             CZ
           </span>

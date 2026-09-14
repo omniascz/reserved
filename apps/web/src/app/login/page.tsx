@@ -3,6 +3,7 @@
 import { FormEvent, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { login, setAuth, AdminApiError } from '@/lib/api';
+import { NAZEV_PRODUKTU } from '@/lib/znacka';
 
 // Předvyplnění formuláře je jen pro lokální vývoj a NENÍ v kódu — bere se z env
 // (stejně jako DevAutoLogin). Bez těch proměnných je formulář prázdný, a v
@@ -42,7 +43,7 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen flex items-center justify-center p-4">
       <div className="bg-white p-8 rounded-xl shadow-md border border-slate-200 w-full max-w-md">
-        <h1 className="text-2xl font-bold mb-1">Reserved Admin</h1>
+        <h1 className="text-2xl font-bold mb-1">{NAZEV_PRODUKTU} Admin</h1>
         <p className="text-slate-500 text-sm mb-6">Přihlášení do administrace</p>
 
         {error && (

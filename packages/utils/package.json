@@ -9,6 +9,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./znacka": {
+      "types": "./dist/znacka.d.ts",
+      "default": "./dist/znacka.js"
     }
   },
   "scripts": {

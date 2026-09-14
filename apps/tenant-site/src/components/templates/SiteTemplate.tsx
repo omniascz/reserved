@@ -6,6 +6,7 @@
 
 import type { SiteData } from '@/lib/api';
 import { formatPrice, formatDuration, DAY_LABELS } from '@/lib/format';
+import { NAZEV_PRODUKTU, WEB_ADRESA } from '@/lib/znacka';
 
 const WIDGET_URL = process.env.NEXT_PUBLIC_WIDGET_URL ?? 'http://localhost:4004';
 
@@ -440,13 +441,8 @@ export function SiteTemplate({ site, variant }: { site: SiteData; variant: SiteV
         </p>
         <p className="mt-2 opacity-60 text-xs">
           Vytvořeno s ❤️ na{' '}
-          <a
-            href="https://reserved.cz"
-            className="underline"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Reserved
+          <a href={WEB_ADRESA} className="underline" target="_blank" rel="noopener noreferrer">
+            {NAZEV_PRODUKTU}
           </a>
         </p>
       </footer>

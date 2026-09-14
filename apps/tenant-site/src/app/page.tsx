@@ -10,6 +10,7 @@
 import { headers } from 'next/headers';
 import { notFound } from 'next/navigation';
 import { fetchSite, findTenantByHost, type SiteData } from '@/lib/api';
+import { NAZEV_PRODUKTU, WEB_ADRESA } from '@/lib/znacka';
 import { ElegantTemplate } from '@/components/templates/Elegant';
 import { BoldTemplate } from '@/components/templates/Bold';
 import { FreshTemplate } from '@/components/templates/Fresh';
@@ -46,13 +47,10 @@ export default async function TenantSitePage({
           <div className="text-5xl">🌐</div>
           <h1 className="text-2xl font-bold">Mini-web nenalezen</h1>
           <p className="text-slate-600 text-sm">
-            Tato doména není zaregistrovaná v Reserved nebo tenant nemá aktivovaný mini-web.
+            Tato doména není zaregistrovaná v {NAZEV_PRODUKTU} nebo tenant nemá aktivovaný mini-web.
           </p>
-          <a
-            href="https://reserved.cz"
-            className="inline-block text-sm text-brand-600 hover:underline mt-4"
-          >
-            Reserved.cz — booking platforma →
+          <a href={WEB_ADRESA} className="inline-block text-sm text-brand-600 hover:underline mt-4">
+            {NAZEV_PRODUKTU} — booking platforma →
           </a>
         </div>
       </div>
@@ -99,7 +97,7 @@ export async function generateMetadata({
 }) {
   const site = await loadSite(searchParams);
   if (!site) {
-    return { title: 'Reserved' };
+    return { title: NAZEV_PRODUKTU };
   }
   const description =
     site.content.hero?.subheadline ??

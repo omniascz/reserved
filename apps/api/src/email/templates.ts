@@ -1,5 +1,13 @@
 // Jednoduché email šablony. {{var}} substituce — žádné HTML inženýrství.
 // V budoucnu nahradíme React Email nebo MJML; pro MVP stačí plain text.
+//
+// ── NÁZEV PRODUKTU JE PROMĚNNÁ ──────────────────────────────────────────────
+// Šablony píšou `{{productName}}`, ne „Reserved". Hodnotu dosazuje `renderEmail`
+// z proměnné prostředí (`PRODUCT_NAME`), takže po přejmenování produktu se
+// nemusí sahat do textů e-mailů. Bez nastavené proměnné vyjde „Reserved",
+// tedy přesně dnešní stav.
+
+import { nazevProduktu } from '@reserved/utils';
 
 export interface BookingEmailVars {
   customerName: string;
@@ -83,7 +91,7 @@ const TEMPLATES: Record<string, { subject: string; body: string }> = {
     subject: 'Ověřte svůj e-mail — {{tenantName}}',
     body: `Dobrý den {{userName}},
 
-pro provoz {{tenantName}} byl založen účet v Reserved s touto e-mailovou
+pro provoz {{tenantName}} byl založen účet v {{productName}} s touto e-mailovou
 adresou. Potvrďte ji prosím kliknutím na odkaz:
 
   {{verifyUrl}}
@@ -97,7 +105,7 @@ dostanete normálně a můžete si všechno nastavit.
 Pokud jste si účet nezakládali, tento e-mail ignorujte — bez potvrzení
 nebude účet nikomu k užitku.
 
-Tým Reserved`,
+Tým {{productName}}`,
   },
   booking_confirmed: {
     subject: 'Potvrzení rezervace — {{tenantName}}',
@@ -199,7 +207,7 @@ Co s tím:
   - Pokud jste se nepřihlašovali, někdo zkouší uhodnout vaše heslo. Po
     odemčení si ho prosím změňte.
 
-Tým Reserved`,
+Tým {{productName}}`,
   },
 };
 
@@ -217,15 +225,20 @@ function buildOnlineMeetingSection(vars: EmailVars): string {
 }
 
 export function renderEmail(templateCode: string, vars: EmailVars): EmailTemplate {
+  // Název produktu je k dispozici ve VŠECH šablonách, i ve vlastních z rules
+  // engine — ty ho tím pádem můžou používat taky, aniž by ho někdo psal ručně.
+  const znacka = { productName: nazevProduktu() };
+
   // 'custom' template: subject + body přicházejí v __customSubject / __customBody.
   // Rules engine action 'send_email' to využívá pro ad-hoc emaily.
   if (templateCode === 'custom') {
     const cv = vars as CustomEmailVars;
     const subject = cv.__customSubject ?? '(bez předmětu)';
     const body = cv.__customBody ?? '';
+    const customVars = { ...znacka, ...(vars as unknown as Record<string, unknown>) };
     return {
-      subject: render(subject, vars as unknown as Record<string, unknown>),
-      body: render(body, vars as unknown as Record<string, unknown>),
+      subject: render(subject, customVars),
+      body: render(body, customVars),
     };
   }
 
@@ -235,6 +248,7 @@ export function renderEmail(templateCode: string, vars: EmailVars): EmailTemplat
   }
   // Pre-render online meeting section pro booking template-y
   const enrichedVars = {
+    ...znacka,
     ...(vars as unknown as Record<string, unknown>),
     onlineMeetingSection: buildOnlineMeetingSection(vars),
   };
