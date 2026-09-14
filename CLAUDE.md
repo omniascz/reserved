@@ -149,11 +149,39 @@ předkompilované binárky pro `linux-x64` i `linux-arm64`.
 
 **A hlavně: obraz, který se vyrobí, ještě nemusí nastartovat.** Po sestavení
 vždy kontejner spusť a ověř `/api/v1/health`. Samotné `exit code: 0` u buildu
-nic neříká o běhu — a když se build pustí rourou (`| tail`), návratový kód
-patří rouře, ne buildu.
+nic neříká o běhu.
 
 Reálný dopad (2026-09-14): tři neúspěšné pokusy o sestavení obrazu API, z toho
 jeden hlášený jako úspěšný.
+
+### PAST: roura spolkne návratový kód — platí VŠUDE, nejen u buildu
+
+`prikaz | tail -5` vrátí návratový kód **roury**, ne příkazu. V řetězu s `&&`
+tím propadne i selhání: `gh pr checks 58 | tail -5 && gh pr merge 58` sloučí PR
+i tehdy, když kontroly hlásí `fail`.
+
+**Pravidlo: příkaz, na jehož výsledku něco závisí, se NIKDY nepouští rourou.**
+Buď bez roury, nebo si výsledek ulož (`vystup=$(prikaz); kod=$?`) a rozhoduj se
+podle uloženého kódu.
+
+Reálný dopad (2026-09-14): PR #58 byl sloučen do `main` přes dvě červené
+kontroly a `main` zůstal rozbitý. Pravidlo „neslučovat PR s červeným CI"
+přitom bylo zapsané — selhal jeho VÝKON, ne jeho znění.
+
+### PAST: YAML přečte samé číslice jako číslo
+
+V GitHub Actions je `KLIC: 1111111111111111111111111111111111111111111111111111111111111111`
+(64 jedniček) **číslo**, ne text. Do prostředí se předá jako `1.11111111111111E+63`,
+tedy 14 znaků místo 64. Aplikace pak spadne na kontrole délky klíče a vypadá to
+jako vada aplikace, ne konfigurace.
+
+**Pravidlo: tajemství a klíče v YAML vždy do uvozovek** a pokud možno volit
+hodnotu s písmeny, aby se jako číslo nedala přečíst ani omylem. Totéž platí pro
+verze (`node: 22.10` je číslo `22.1`) a pro hodnoty `yes`/`no`/`on`/`off`.
+
+Reálný dopad (2026-09-14): obě kontroly na `main` (CI i E2E Smoke) padaly na
+`PAYMENT_CONFIG_KEY musí být 32 bajtů … dostal jsem 14 B`; API vůbec
+nenastartovalo.
 
 ### PAST: souběh vitest + Playwright shodí testy „chybou aplikace"
 
@@ -323,6 +351,12 @@ gh pr merge <cislo> --merge
 
 Totéž platí pro `e2e-smoke`. Po merge vždy ověřit CI i na `main` — merge commit je
 jiný commit než hlava PR a může dopadnout jinak.
+
+⚠️ **Příkaz, který merge podmiňuje, NIKDY nepouštěj rourou.** `gh pr checks N | tail -5`
+vrátí kód roury, ne kontroly, takže `&& gh pr merge` proběhne i přes červené CI —
+viz „PAST: roura spolkne návratový kód" výše. Stalo se podruhé u PR #58 (2026-09-14),
+i když samotné pravidlo už zapsané bylo. Znění pravidla nestačí; musí ho vynutit tvar
+příkazu.
 
 - Pre-commit hook: format (prettier přes lint-staged) + typecheck + gitleaks (pokud je nainstalovaný);
   commit-msg: commitlint (header max. 100 znaků)
