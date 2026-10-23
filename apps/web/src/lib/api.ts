@@ -1834,6 +1834,7 @@ export const WEBHOOK_EVENT_TYPES = [
   'booking.created',
   'booking.confirmed',
   'booking.cancelled',
+  'booking.rescheduled',
   'booking.completed',
   'booking.no_show',
   'customer.created',
@@ -3175,4 +3176,107 @@ export async function confirmEmailVerification(
     false,
   );
   return data;
+}
+
+// ─── Uložené karty zákazníka (P4 — strh storno / no-show poplatku) ─────
+
+export interface SavedCard {
+  id: string;
+  brand: string | null;
+  last4: string | null;
+  expMonth: number | null;
+  expYear: number | null;
+  createdAt: string;
+}
+
+export async function listCustomerCards(customerId: string): Promise<SavedCard[]> {
+  const { data } = await fetchApi<{ data: SavedCard[] }>(`/admin/customers/${customerId}/cards`);
+  return data;
+}
+
+/** Odkaz na stránku Stripe, kde si zákazník uloží kartu (volitelně ho pošle e-mailem). */
+export async function requestCustomerCard(
+  customerId: string,
+  sendEmail: boolean,
+): Promise<{ setupUrl: string; emailed: boolean }> {
+  const { data } = await fetchApi<{ data: { setupUrl: string; emailed: boolean } }>(
+    `/admin/customers/${customerId}/cards/setup`,
+    { method: 'POST', body: JSON.stringify({ sendEmail }) },
+  );
+  return data;
+}
+
+export async function removeCustomerCard(customerId: string, cardId: string): Promise<void> {
+  await fetchApi(`/admin/customers/${customerId}/cards/${cardId}`, { method: 'DELETE' });
+}
+
+// ─── Další kalendáře zaměstnanců (Outlook, CalDAV) ────────────────────
+
+export type CalendarProvider = 'outlook' | 'caldav';
+
+export interface AdminCalendarConnection {
+  id: string;
+  employeeId: string;
+  provider: CalendarProvider;
+  accountEmail: string | null;
+  calendarName: string | null;
+  isActive: boolean;
+  inboundSyncEnabled: boolean;
+  outboundEnabled: boolean;
+  lastInboundSyncAt: string | null;
+  lastSyncError: string | null;
+  consecutiveErrors: number;
+  subscriptionExpiresAt: string | null;
+  createdAt: string;
+}
+
+export async function listCalendarConnections(): Promise<AdminCalendarConnection[]> {
+  const { data } = await fetchApi<{ data: AdminCalendarConnection[] }>(
+    '/admin/integrations/calendars',
+  );
+  return data;
+}
+
+export async function startOutlookConnect(employeeId: string): Promise<{ authUrl: string }> {
+  const { data } = await fetchApi<{ data: { authUrl: string } }>(
+    `/admin/integrations/calendars/outlook/${employeeId}/start`,
+    { method: 'POST' },
+  );
+  return data;
+}
+
+export async function connectCaldav(input: {
+  employeeId: string;
+  serverUrl: string;
+  username: string;
+  password: string;
+  calendarUrl?: string;
+}): Promise<{ id: string; calendarName: string; calendars: Array<{ url: string; name: string }> }> {
+  const { data } = await fetchApi<{
+    data: { id: string; calendarName: string; calendars: Array<{ url: string; name: string }> };
+  }>('/admin/integrations/calendars/caldav', { method: 'POST', body: JSON.stringify(input) });
+  return data;
+}
+
+export async function updateCalendarConnection(
+  id: string,
+  patch: { inboundSyncEnabled?: boolean; outboundEnabled?: boolean; isActive?: boolean },
+): Promise<void> {
+  await fetchApi(`/admin/integrations/calendars/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(patch),
+  });
+}
+
+export async function syncCalendarConnection(
+  id: string,
+): Promise<{ created: number; updated: number; deleted: number; skipped: number }> {
+  const { data } = await fetchApi<{
+    data: { created: number; updated: number; deleted: number; skipped: number };
+  }>(`/admin/integrations/calendars/${id}/sync`, { method: 'POST' });
+  return data;
+}
+
+export async function revokeCalendarConnection(id: string): Promise<void> {
+  await fetchApi(`/admin/integrations/calendars/${id}`, { method: 'DELETE' });
 }

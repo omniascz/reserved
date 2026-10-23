@@ -58,6 +58,17 @@ export const googleCalendarConnections = pgTable(
     lastSyncedAt: timestamp('last_synced_at', { withTimezone: true }),
     lastSyncError: text('last_sync_error'),
     consecutiveErrors: text('consecutive_errors').notNull().default('0'),
+    /**
+     * Inkrementální synchronizace (G -> R): nextSyncToken z Google. Další
+     * stažení vrátí jen změny od minula. Null = příště stáhnout vše znovu.
+     */
+    syncToken: text('sync_token'),
+    /** Google poslal push „něco se změnilo" → worker stáhne změny co nejdřív. */
+    needsSync: boolean('needs_sync').notNull().default(false),
+    /** Push kanál (events.watch) — ID kanálu, resource ID a konec platnosti. */
+    pushChannelId: varchar('push_channel_id', { length: 64 }),
+    pushResourceId: varchar('push_resource_id', { length: 255 }),
+    pushExpiresAt: timestamp('push_expires_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
     revokedAt: timestamp('revoked_at', { withTimezone: true }),

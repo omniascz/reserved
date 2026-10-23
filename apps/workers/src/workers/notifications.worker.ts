@@ -4,6 +4,8 @@
 //   1. SELECT pending notifications WHERE scheduledAt <= now() LIMIT 50
 //   2. Pro každou: pošli (email/sms), update status
 //   3. Při chybě: attempts++, exponential backoff přes scheduledAt; po 5 chybách → 'failed'
+//   4. Zprávu k rezervaci, která už neplatí (zrušená / přesunutá), nepošle
+//      a označí 'cancelled' — viz lib/stale-notification.ts
 //
 // Single-instance worker (FOR UPDATE SKIP LOCKED přidat při škálování).
 
@@ -13,6 +15,7 @@ import type { Database } from '../db.js';
 import type { EmailProvider } from '../providers/email.provider.js';
 import type { SmsProvider } from '../providers/sms/index.js';
 import type { WhatsAppProvider } from '../providers/whatsapp/index.js';
+import { staleReason } from '../lib/stale-notification.js';
 
 const BATCH_SIZE = 50;
 const MAX_ATTEMPTS = 5;
@@ -35,8 +38,13 @@ export class NotificationsWorker {
       await tx.execute(sql`SELECT set_config('app.current_role', 'service', true)`);
 
       return tx
-        .select()
+        .select({
+          notification: schema.notifications,
+          bookingStatus: schema.bookings.status,
+          bookingStartsAt: schema.bookings.startsAt,
+        })
         .from(schema.notifications)
+        .leftJoin(schema.bookings, eq(schema.bookings.id, schema.notifications.relatedBookingId))
         .where(
           and(
             eq(schema.notifications.status, 'pending'),
@@ -51,9 +59,31 @@ export class NotificationsWorker {
     // eslint-disable-next-line no-console
     console.log(`[notifications] processing ${pending.length} pending notifications`);
 
-    for (const n of pending) {
+    for (const row of pending) {
+      const n = row.notification;
+      const booking =
+        row.bookingStatus !== null && row.bookingStartsAt !== null
+          ? { status: row.bookingStatus, startsAt: row.bookingStartsAt }
+          : null;
+      const reason = staleReason(n.templateCode, n.metadata, booking);
+      if (reason) {
+        await this.markCancelled(n.id, reason);
+        continue;
+      }
       await this.processOne(n);
     }
+  }
+
+  private async markCancelled(id: string, reason: string): Promise<void> {
+    await this.db.transaction(async (tx) => {
+      await tx.execute(sql`SELECT set_config('app.current_role', 'service', true)`);
+      await tx
+        .update(schema.notifications)
+        .set({ status: 'cancelled', lastError: reason, updatedAt: new Date() })
+        .where(and(eq(schema.notifications.id, id), eq(schema.notifications.status, 'pending')));
+    });
+    // eslint-disable-next-line no-console
+    console.log(`[notifications] skipped ${id} — ${reason}`);
   }
 
   private async processOne(n: typeof schema.notifications.$inferSelect): Promise<void> {

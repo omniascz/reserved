@@ -21,6 +21,10 @@ import { DbService } from '../db/db.service.js';
 import { EmailService } from '../email/email.service.js';
 import { EventBus } from '../rules/events.bus.js';
 import { MakeupService } from '../makeup/makeup.service.js';
+import { cancelPendingBookingNotifications } from '../email/booking-notifications.js';
+import { BookingRemindersService } from '../email/booking-reminders.service.js';
+import { AvailabilityService } from '../availability/availability.service.js';
+import { CalendarSyncService } from '../calendars/calendar-sync.service.js';
 import { extractBookingRules } from '../settings/settings.types.js';
 import {
   extractCancellationPolicy,
@@ -48,6 +52,9 @@ export class PortalMeService {
     @Inject(TimePacksService) private readonly timePacks: TimePacksService,
     @Inject(SubscriptionsService) private readonly subscriptions: SubscriptionsService,
     @Inject(MakeupService) private readonly makeup: MakeupService,
+    @Inject(BookingRemindersService) private readonly reminders: BookingRemindersService,
+    @Inject(AvailabilityService) private readonly availability: AvailabilityService,
+    @Inject(CalendarSyncService) private readonly calendars: CalendarSyncService,
   ) {}
 
   // ---------------------------------------------------------------------------
@@ -231,6 +238,9 @@ export class PortalMeService {
           metadata: { source: 'portal', stornoOutcome: outcome.reasonCode },
         });
 
+        // Připomínky a výzvy k potvrzení zrušeného termínu už neposílat.
+        await cancelPendingBookingNotifications(tx, tenantId, [bookingId]);
+
         return { booking: updated!, tenantName: tenant?.name ?? nazevProduktu(), outcome };
       },
     );
@@ -288,6 +298,9 @@ export class PortalMeService {
         // ignoruj — storno proběhlo, náhrada je „bonus navíc"
       }
     }
+
+    // Google Calendar — smaž událost (dřív zůstala viset v kalendáři).
+    void this.calendars.bookingCancelled(tenantId, result.booking.id);
 
     // Emit domain event → rules engine reaguje
     await this.emitBookingEvent('booking_cancelled', tenantId, result.booking, dto.reason);
@@ -392,6 +405,19 @@ export class PortalMeService {
           });
         }
 
+        // Nový čas musí být v pracovní době a volný (stejná pravidla jako
+        // nabídka termínů) — dřív šlo přesunout třeba na noc.
+        if (booking.employeeId) {
+          await this.availability.assertSlotBookable({
+            tenantId,
+            serviceId: booking.serviceId,
+            employeeId: booking.employeeId,
+            branchId: booking.branchId,
+            startsAt: newStartsAt,
+            excludeBookingId: booking.id,
+          });
+        }
+
         try {
           const [updated] = await tx
             .update(schema.bookings)
@@ -419,6 +445,15 @@ export class PortalMeService {
               newStartsAt: newStartsAt.toISOString(),
             },
           });
+
+          // Připomínka starého termínu neplatí — po commitu se naplánuje nová.
+          await cancelPendingBookingNotifications(
+            tx,
+            tenantId,
+            [bookingId],
+            ['booking_reminder'],
+            'booking_rescheduled',
+          );
 
           return {
             booking: updated!,
@@ -448,6 +483,11 @@ export class PortalMeService {
       result.tenantName,
       { oldStartsAt: result.oldStartsAt.toISOString() },
     );
+
+    await this.reminders.scheduleForBooking(tenantId, result.booking);
+
+    // Google Calendar — přesuň událost na nový čas.
+    void this.calendars.bookingRescheduled(tenantId, result.booking);
 
     await this.emitBookingEvent('booking_rescheduled', tenantId, result.booking, dto.reason);
 

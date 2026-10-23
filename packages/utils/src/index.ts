@@ -33,3 +33,25 @@ export {
   konfiguraceJeZasifrovana,
   type SifrovaciKlic,
 } from './crypto.js';
+
+// Odchozí webhooky — podpis, tvar těla a plán opakování (API i worker).
+export {
+  WEBHOOK_PAYLOAD_VERSION,
+  WEBHOOK_MAX_ATTEMPTS,
+  webhookRetryDelayMs,
+  buildWebhookBody,
+  signWebhookBody,
+  postWebhook,
+  type WebhookRequestInput,
+  type WebhookResult,
+} from './webhook.js';
+
+// Místní čas provozovny ↔ UTC (opakované termíny, celodenní události z kalendářů).
+export {
+  offsetForUtcInTimezone,
+  toUtc,
+  toLocalParts,
+  addDaysToDate,
+  addMonthsToDate,
+  isoWeekday,
+} from './mistni-cas.js';

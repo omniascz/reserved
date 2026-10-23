@@ -18,7 +18,20 @@
     },
     "test": {
       "dependsOn": ["^build"],
-      "cache": false
+      "cache": false,
+      "passThroughEnv": [
+        "CALDAV_TEST_URL",
+        "CALDAV_TEST_USER",
+        "CALDAV_TEST_PASSWORD",
+        "STRIPE_MOCK_URL",
+        "STRIPE_API_BASE",
+        "STRIPE_FAKE_PORT",
+        "CALENDAR_FAKE_PORT",
+        "PAYMENT_CONFIG_KEY",
+        "CALENDAR_PUSH_SECRET",
+        "GOOGLE_API_BASE",
+        "MICROSOFT_GRAPH_BASE"
+      ]
     },
     "test:watch": {
       "cache": false,

@@ -94,6 +94,14 @@ services:
       S3_PUBLIC_BASE: ${S3_PUBLIC_BASE:-}
       SENTRY_DSN: ${SENTRY_DSN:-}
       GIT_SHA: ${GIT_SHA:-}
+      # Kalendáře zaměstnanců (nepovinné — bez nich se dané propojení nenabídne).
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      GOOGLE_REDIRECT_URI: https://api.${BASE_DOMAIN}/api/v1/admin/integrations/google/callback
+      MICROSOFT_CLIENT_ID: ${MICROSOFT_CLIENT_ID:-}
+      MICROSOFT_CLIENT_SECRET: ${MICROSOFT_CLIENT_SECRET:-}
+      MICROSOFT_REDIRECT_URI: https://api.${BASE_DOMAIN}/api/v1/admin/integrations/calendars/outlook/callback
+      CALENDAR_PUSH_SECRET: ${CALENDAR_PUSH_SECRET:-}
     volumes:
       # Bez tohohle svazku žijí nahrané soubory jen uvnitř kontejneru a každé
       # nasazení je smaže. Doporučení zůstává používat S3 — tohle je záchranná
@@ -122,6 +130,16 @@ services:
       BULKGATE_APP_ID: ${BULKGATE_APP_ID:-}
       BULKGATE_APP_TOKEN: ${BULKGATE_APP_TOKEN:-}
       BULKGATE_SENDER: ${BULKGATE_SENDER:-Reserved}
+      # Kalendáře zaměstnanců: worker stahuje změny a obnovuje push kanály.
+      # PAYMENT_CONFIG_KEY = stejný klíč jako API (šifruje přístupy ke kalendářům);
+      # bez něj se synchronizace kalendářů ve workeru vypne.
+      PAYMENT_CONFIG_KEY: ${PAYMENT_CONFIG_KEY:?}
+      API_URL: https://api.${BASE_DOMAIN}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      MICROSOFT_CLIENT_ID: ${MICROSOFT_CLIENT_ID:-}
+      MICROSOFT_CLIENT_SECRET: ${MICROSOFT_CLIENT_SECRET:-}
+      CALENDAR_PUSH_SECRET: ${CALENDAR_PUSH_SECRET:-}
 
   # ── Jednorázové migrace ───────────────────────────────────────────────────
   # Nespouští se automaticky: migrace má vždy odpálit člověk nebo skript

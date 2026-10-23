@@ -226,8 +226,12 @@ describe('Ověření e-mailu administrátora (e2e)', () => {
   });
 
   it('po ověření veřejné rezervace fungují', async () => {
+    // Zámek termínu ověřuje i pracovní dobu (Po–Pá 8–20) — vezmi nejbližší
+    // PRACOVNÍ den, ne „zítra" (to by o víkendu neprošlo).
     const zitra = new Date();
-    zitra.setUTCDate(zitra.getUTCDate() + 1);
+    do {
+      zitra.setUTCDate(zitra.getUTCDate() + 1);
+    } while (zitra.getUTCDay() === 0 || zitra.getUTCDay() === 6);
     zitra.setUTCHours(9, 0, 0, 0);
 
     const res = await http<{ data: { sessionToken: string } }>(`/public/${slug}/holds`, {

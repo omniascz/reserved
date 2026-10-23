@@ -1,6 +1,8 @@
 // API klient pro Reserved public endpointy.
 // Žádný auth — tenant identifikován slug-em v URL.
 
+import { notifyBookingSuccess } from './host-events';
+
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4010/api/v1';
 
 export interface ApiError {
@@ -215,6 +217,25 @@ export interface BookingConfirmation {
   startsAt: string;
   endsAt: string;
   status: string;
+  /** Pro měření konverzí (starší API je nevrací). */
+  serviceId?: string | null;
+  priceHellers?: number | null;
+  currency?: string | null;
+}
+
+function reportSuccess(kind: 'appointment' | 'class', b: BookingConfirmation): void {
+  notifyBookingSuccess({
+    version: 1,
+    kind,
+    bookingId: b.id,
+    referenceCode: b.referenceCode,
+    serviceId: b.serviceId ?? null,
+    startsAt: b.startsAt,
+    endsAt: b.endsAt,
+    status: b.status,
+    priceHellers: b.priceHellers ?? null,
+    currency: b.currency ?? null,
+  });
 }
 
 export async function confirmBooking(
@@ -231,6 +252,7 @@ export async function confirmBooking(
     method: 'POST',
     body: JSON.stringify(input),
   });
+  reportSuccess('appointment', data);
   return data;
 }
 
@@ -278,6 +300,7 @@ export async function joinClassSession(
     `/public/${slug}/class-sessions/${sessionId}/join`,
     { method: 'POST', body: JSON.stringify(input) },
   );
+  reportSuccess('class', data);
   return data;
 }
 

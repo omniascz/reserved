@@ -40,6 +40,7 @@ import type {
   JoinClassSessionDto,
   UpdateClassSessionDto,
 } from './dto/class-session.dto.js';
+import { recurrenceOccurrences } from './recurrence-occurrences.js';
 
 const MANAGE_ROLES: AppRole[] = ['owner', 'manager', 'employee', 'receptionist'];
 
@@ -943,21 +944,30 @@ export class ClassSessionsService {
       },
     );
 
-    // 2. Vygeneruj výskyty (max 366 dní).
-    const days = new Set(dto.daysOfWeek);
-    const occurrences: string[] = [];
-    let cursor = new Date(`${dto.startDate}T00:00:00Z`);
-    const end = new Date(`${dto.endDate}T00:00:00Z`);
-    let guard = 0;
-    while (cursor.getTime() <= end.getTime() && guard < 366) {
-      const iso = ((cursor.getUTCDay() + 6) % 7) + 1; // 1=Po..7=Ne
-      if (days.has(iso)) {
-        const dateStr = cursor.toISOString().slice(0, 10);
-        occurrences.push(`${dateStr}T${dto.time}:00.000Z`);
-      }
-      cursor = new Date(cursor.getTime() + 86_400_000);
-      guard++;
-    }
+    // 2. Vygeneruj výskyty (max 366 dní). Čas z formuláře je MÍSTNÍ čas
+    //    pobočky (jinak tenanta), ne UTC.
+    const timezone = await this.dbService.withRlsContext(
+      ctxFor(tenantId, userId, role),
+      async (tx) => {
+        if (dto.branchId) {
+          const [b] = await tx
+            .select({ timezone: schema.branches.timezone })
+            .from(schema.branches)
+            .where(
+              and(eq(schema.branches.id, dto.branchId), eq(schema.branches.tenantId, tenantId)),
+            )
+            .limit(1);
+          if (b?.timezone) return b.timezone;
+        }
+        const [t] = await tx
+          .select({ timezone: schema.tenants.timezone })
+          .from(schema.tenants)
+          .where(eq(schema.tenants.id, tenantId))
+          .limit(1);
+        return t?.timezone ?? 'Europe/Prague';
+      },
+    );
+    const occurrences = recurrenceOccurrences(dto, timezone);
 
     // 3. Vytvoř lekce (reuse create() vč. všech kontrol překryvu); kolize přeskoč.
     const createdIds: string[] = [];

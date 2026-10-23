@@ -13,6 +13,7 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
+    "@reserved/calendar-sync": "workspace:*",
     "@reserved/db": "workspace:*",
     "@reserved/rls-multitenancy": "workspace:*",
     "@reserved/utils": "workspace:*",

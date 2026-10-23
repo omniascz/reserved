@@ -23,6 +23,7 @@
     "@nestjs/swagger": "^8.1.1",
     "@nestjs/terminus": "^10.2.0",
     "@nestjs/throttler": "^6.5.0",
+    "@reserved/calendar-sync": "workspace:*",
     "@reserved/db": "workspace:*",
     "@reserved/rls-multitenancy": "workspace:*",
     "@reserved/rules-engine": "workspace:*",

@@ -1,0 +1,33 @@
+{
+  "name": "@reserved/calendar-sync",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests",
+    "lint": "echo 'lint not configured yet'"
+  },
+  "dependencies": {
+    "@reserved/db": "workspace:*",
+    "@reserved/utils": "workspace:*",
+    "drizzle-orm": "^0.45.0",
+    "ical.js": "2.2.1",
+    "tsdav": "2.3.4"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "postgres": "^3.4.0",
+    "typescript": "^5.7.0",
+    "vitest": "^2.1.0"
+  }
+}

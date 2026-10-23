@@ -11,6 +11,12 @@
 //
 // Bezpecnost: payload je podepsany HMAC-SHA256 v hlavicce
 // X-Reserved-Signature: sha256=<hex>
+//
+// Doruceni (vzor cal.com — doruceni je uloha v trvale fronte, ne smycka
+// v pameti): API zkusi doručit hned jednou. Kdyz to nevyjde a ma smysl to
+// opakovat, necha zaznam 'pending' s `next_attempt_at` a dalsi pokusy
+// prevezme worker `webhook-deliveries` (1 min, 5 min, 30 min, 2 h, 6 h).
+// Doruceni tak prezije i pad nebo restart API.
 
 import {
   BadRequestException,
@@ -21,8 +27,8 @@ import {
   NotFoundException,
   OnModuleInit,
 } from '@nestjs/common';
-import { createHmac, randomBytes } from 'node:crypto';
-import { nazevProduktu } from '@reserved/utils';
+import { randomBytes } from 'node:crypto';
+import { nazevProduktu, postWebhook, webhookRetryDelayMs } from '@reserved/utils';
 import { and, desc, eq } from 'drizzle-orm';
 import { schema } from '@reserved/db';
 import type { WebhookEventType } from '@reserved/db';
@@ -37,6 +43,7 @@ import type { CreateWebhookDto, UpdateWebhookDto } from './dto/webhook.dto.js';
 const TRIGGER_TO_WEBHOOK: Partial<Record<TriggerEvent, WebhookEventType>> = {
   booking_created: 'booking.created',
   booking_cancelled: 'booking.cancelled',
+  booking_rescheduled: 'booking.rescheduled',
   booking_completed: 'booking.completed',
   booking_no_show: 'booking.no_show',
   customer_registered: 'customer.created',
@@ -44,10 +51,13 @@ const TRIGGER_TO_WEBHOOK: Partial<Record<TriggerEvent, WebhookEventType>> = {
 
 const MANAGE_ROLES: AppRole[] = ['owner', 'manager'];
 const REQUEST_TIMEOUT_MS = 10_000;
-/** Kolikrát zkusit doručit webhook, než ho označíme jako failed. */
-const MAX_DELIVERY_ATTEMPTS = 3;
-/** Backoff mezi pokusy (ms) — exponenciální. */
-const RETRY_BACKOFF_MS = [500, 2_000];
+/**
+ * Než API první pokus dokončí, drží záznam „zamčený" — worker ho převezme
+ * až po této době (kdyby API uprostřed doručování spadlo).
+ */
+const FIRST_ATTEMPT_LEASE_MS = 2 * 60_000;
+/** Po kolika trvale nedoručených událostech v řadě se webhook pozastaví. */
+const PAUSE_AFTER_FAILURES = 5;
 
 function ctxFor(tenantId: string, userId: string, role: AppRole): TenantContext {
   return { tenantId, userId, role };
@@ -210,7 +220,8 @@ export class WebhooksService implements OnModuleInit {
       tenantId,
       timestamp: new Date().toISOString(),
     };
-    const result = await this.deliver(webhook, 'test', payload);
+    // Test se neopakuje z fronty — admin chce výsledek hned.
+    const result = await this.deliver(webhook, 'test', payload, { queueRetries: false });
     return {
       ok: result.success,
       responseStatus: result.responseStatus,
@@ -276,21 +287,23 @@ export class WebhooksService implements OnModuleInit {
   }
 
   /**
-   * Pokus o doruceni — zapise vysledek do webhook_deliveries a updatuje
-   * counter chyb na webhook config. Po 5 chybach v rade pozastavi webhook.
+   * První pokus o doručení. Výsledek zapíše do webhook_deliveries; když se
+   * nepovede a má smysl to opakovat, nechá záznam 'pending' pro worker.
+   * Webhook se pozastaví až po 5 TRVALE nedoručených událostech v řadě.
    */
   private async deliver(
     webhook: typeof schema.outgoingWebhooks.$inferSelect,
     eventType: string,
     payload: unknown,
+    opts: { queueRetries: boolean } = { queueRetries: true },
   ): Promise<{
     success: boolean;
     responseStatus: number | null;
     responseBody: string | null;
     error: string | null;
   }> {
-    // Zapis pending delivery
-    const deliveryId = await this.dbService.withRlsContext(
+    // Záznam vznikne PŘED odesláním — kdyby API spadlo, worker ho najde.
+    const delivery = await this.dbService.withRlsContext(
       serviceContext(webhook.tenantId),
       async (tx) => {
         const [d] = await tx
@@ -301,84 +314,50 @@ export class WebhooksService implements OnModuleInit {
             eventType,
             payload: payload as Record<string, unknown>,
             status: 'pending',
-            attempts: 1,
+            attempts: 0,
+            nextAttemptAt: new Date(Date.now() + FIRST_ATTEMPT_LEASE_MS),
           })
-          .returning({ id: schema.webhookDeliveries.id });
-        return d!.id;
+          .returning({
+            id: schema.webhookDeliveries.id,
+            createdAt: schema.webhookDeliveries.createdAt,
+          });
+        return d!;
       },
     );
 
-    const body = JSON.stringify({
+    const result = await postWebhook({
+      url: webhook.url,
+      secret: webhook.secret,
+      webhookId: webhook.id,
+      deliveryId: delivery.id,
       eventType,
       tenantId: webhook.tenantId,
       payload,
-      timestamp: new Date().toISOString(),
+      timestamp: delivery.createdAt,
+      attempt: 1,
+      userAgent: 'Reserved-Webhook/1.0',
+      timeoutMs: REQUEST_TIMEOUT_MS,
     });
-    const signature = createHmac('sha256', webhook.secret).update(body).digest('hex');
 
-    let success = false;
-    let responseStatus: number | null = null;
-    let responseBody: string | null = null;
-    let errorMsg: string | null = null;
-    let attempts = 0;
+    const retryDelay =
+      !result.success && result.retryable && opts.queueRetries ? webhookRetryDelayMs(1) : null;
+    const finalStatus = result.success ? 'sent' : retryDelay !== null ? 'pending' : 'failed';
 
-    // Retry s exponenciálním backoffem — síťová chyba / 5xx / timeout se zkusí
-    // znovu, než webhook označíme jako failed. 4xx (kromě 429) nemá smysl opakovat.
-    for (let i = 0; i < MAX_DELIVERY_ATTEMPTS; i++) {
-      attempts = i + 1;
-      responseStatus = null;
-      responseBody = null;
-      errorMsg = null;
-      try {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-        const res = await fetch(webhook.url, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Reserved-Signature': `sha256=${signature}`,
-            'X-Reserved-Event-Type': eventType,
-            'X-Reserved-Webhook-Id': webhook.id,
-            'X-Reserved-Delivery-Id': deliveryId,
-            'X-Reserved-Attempt': String(attempts),
-            'User-Agent': 'Reserved-Webhook/1.0',
-          },
-          body,
-          signal: controller.signal,
-        });
-        clearTimeout(timeout);
-        responseStatus = res.status;
-        const text = await res.text().catch(() => '');
-        responseBody = text.slice(0, 2000);
-        success = res.ok;
-        if (success) break;
-        errorMsg = `HTTP ${res.status}: ${text.slice(0, 200)}`;
-        // 4xx (kromě 429 rate-limit) je trvalá chyba → neopakuj.
-        if (res.status >= 400 && res.status < 500 && res.status !== 429) break;
-      } catch (err) {
-        errorMsg = err instanceof Error ? err.message : String(err);
-      }
-      // Backoff před dalším pokusem (ne po posledním).
-      if (i < MAX_DELIVERY_ATTEMPTS - 1) {
-        await new Promise((r) => setTimeout(r, RETRY_BACKOFF_MS[i] ?? 2_000));
-      }
-    }
-
-    // Aktualizuj delivery + webhook config
     await this.dbService.withRlsContext(serviceContext(webhook.tenantId), async (tx) => {
       await tx
         .update(schema.webhookDeliveries)
         .set({
-          status: success ? 'sent' : 'failed',
-          responseStatus: responseStatus ?? null,
-          responseBody,
-          lastError: errorMsg,
-          attempts,
+          status: finalStatus,
+          responseStatus: result.responseStatus,
+          responseBody: result.responseBody,
+          lastError: result.error,
+          attempts: 1,
+          nextAttemptAt: retryDelay !== null ? new Date(Date.now() + retryDelay) : null,
           updatedAt: new Date(),
         })
-        .where(eq(schema.webhookDeliveries.id, deliveryId));
+        .where(eq(schema.webhookDeliveries.id, delivery.id));
 
-      if (success) {
+      if (finalStatus === 'sent') {
         await tx
           .update(schema.outgoingWebhooks)
           .set({
@@ -388,22 +367,36 @@ export class WebhooksService implements OnModuleInit {
             updatedAt: new Date(),
           })
           .where(eq(schema.outgoingWebhooks.id, webhook.id));
-      } else {
+      } else if (finalStatus === 'failed') {
         const newCount = webhook.consecutiveErrors + 1;
         await tx
           .update(schema.outgoingWebhooks)
           .set({
             consecutiveErrors: newCount,
             lastErrorAt: new Date(),
-            lastError: errorMsg?.slice(0, 500) ?? null,
-            // Po 5 chybach automaticky pozastav
-            isActive: newCount >= 5 ? false : webhook.isActive,
+            lastError: result.error?.slice(0, 500) ?? null,
+            isActive: newCount >= PAUSE_AFTER_FAILURES ? false : webhook.isActive,
+            updatedAt: new Date(),
+          })
+          .where(eq(schema.outgoingWebhooks.id, webhook.id));
+      } else {
+        // Čeká na opakování — jen poznamenej poslední chybu, počítadlo zatím ne.
+        await tx
+          .update(schema.outgoingWebhooks)
+          .set({
+            lastErrorAt: new Date(),
+            lastError: result.error?.slice(0, 500) ?? null,
             updatedAt: new Date(),
           })
           .where(eq(schema.outgoingWebhooks.id, webhook.id));
       }
     });
 
-    return { success, responseStatus, responseBody, error: errorMsg };
+    return {
+      success: result.success,
+      responseStatus: result.responseStatus,
+      responseBody: result.responseBody,
+      error: result.error,
+    };
   }
 }

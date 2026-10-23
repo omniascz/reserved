@@ -28,6 +28,7 @@ import { PaymentsConfig } from './payments.config.js';
 import { SubscriptionsService } from '../subscriptions/subscriptions.service.js';
 import { generateSpaydString } from './qr-generator.js';
 import { PaymentProviderRegistry } from './providers/provider.registry.js';
+import { SavedCardsService } from './saved-cards.service.js';
 import type { WebhookEvent } from './providers/payment-provider.interface.js';
 import type {
   ListPaymentsQueryDto,
@@ -94,6 +95,7 @@ export class PaymentsService {
     private readonly subscriptions: SubscriptionsService,
     @Inject(EmailService) private readonly email: EmailService,
     @Inject(PaymentsConfig) private readonly paymentsConfig: PaymentsConfig,
+    @Inject(SavedCardsService) private readonly savedCards: SavedCardsService,
   ) {}
 
   /**
@@ -286,10 +288,12 @@ export class PaymentsService {
 
   /**
    * Strhne storno/no-show poplatek za rezervaci přes napojenou bránu.
-   * Najde aktivní payment_connection tenanta a vytvoří na poplatek checkout
-   * (pending platba + odkaz k úhradě). Bez napojené brány vrací charged:false.
-   * Pozn.: bez uložené karty (off-session) zatím generujeme odkaz k zaplacení,
-   * ne tichý strh — reálné off-session účtování doplní saved-card tokenizace.
+   *
+   * 1. Má-li zákazník uloženou kartu (Stripe), strhne poplatek rovnou z ní
+   *    (off-session, viz SavedCardsService) → method 'saved_card'.
+   * 2. Jinak — nebo když banka strh zamítne / chce 3-D Secure — vytvoří na
+   *    poplatek checkout (pending platba + odkaz k úhradě) → method 'checkout_link'.
+   * Bez napojené brány vrací charged:false.
    */
   async chargeStornoFee(input: {
     tenantId: string;
@@ -300,10 +304,22 @@ export class PaymentsService {
     | { charged: false; reason: 'zero_fee' | 'booking_not_found' | 'payments_not_connected' }
     | {
         charged: true;
+        method: 'saved_card';
+        paymentId: string;
+        provider: 'stripe';
+        feeHellers: number;
+        cardLast4: string | null;
+        alreadyCharged: boolean;
+      }
+    | {
+        charged: true;
+        method: 'checkout_link';
         paymentId: string;
         checkoutUrl: string;
         provider: string;
         feeHellers: number;
+        /** Proč neprošel strh z uložené karty (když ho zákazník má). */
+        savedCardError?: { code: string; message: string };
       }
   > {
     if (!input.feeHellers || input.feeHellers <= 0) {
@@ -332,7 +348,34 @@ export class PaymentsService {
     });
     if (!booking) return { charged: false, reason: 'booking_not_found' };
 
-    // Najdi aktivní napojenou bránu (chargesEnabled).
+    // 1. Uložená karta (Stripe) — strh bez účasti zákazníka.
+    let savedCardError: { code: string; message: string } | undefined;
+    if (booking.customerId) {
+      const fee = await this.savedCards.chargeFee({
+        tenantId: input.tenantId,
+        bookingId: booking.id,
+        customerId: booking.customerId,
+        amountHellers: input.feeHellers,
+        currency: booking.currency,
+        description: `Storno/no-show poplatek — rezervace ${booking.referenceCode}`,
+      });
+      if (fee.charged) {
+        return {
+          charged: true,
+          method: 'saved_card',
+          paymentId: fee.paymentId,
+          provider: 'stripe',
+          feeHellers: input.feeHellers,
+          cardLast4: fee.card.last4,
+          alreadyCharged: fee.alreadyCharged,
+        };
+      }
+      if (fee.reason === 'card_failed') {
+        savedCardError = { code: fee.failureCode, message: fee.failureMessage };
+      }
+    }
+
+    // 2. Odkaz k úhradě. Najdi aktivní napojenou bránu (chargesEnabled).
     const provider = await this.dbService.withRlsContext(ctx, async (tx) => {
       const [c] = await tx
         .select({ provider: schema.paymentConnections.provider })
@@ -373,10 +416,12 @@ export class PaymentsService {
 
     return {
       charged: true,
+      method: 'checkout_link',
       paymentId: checkout.paymentId,
       checkoutUrl: checkout.checkoutUrl,
       provider,
       feeHellers: input.feeHellers,
+      ...(savedCardError && { savedCardError }),
     };
   }
 
@@ -424,6 +469,23 @@ export class PaymentsService {
           message: err instanceof Error ? err.message : 'Webhook verification failed.',
         },
       });
+    }
+
+    // 2a. Uložení karty (Checkout v režimu „setup") — není to platba.
+    if (providerType === 'stripe' && event.stripeEventType === 'checkout.session.completed') {
+      const session = (
+        event.rawPayload as {
+          data?: { object?: { id?: string; mode?: string; metadata?: Record<string, string> } };
+        }
+      ).data?.object;
+      if (session?.mode === 'setup' && session.id) {
+        const saved = await this.savedCards.handleSetupCompleted(
+          tenantId,
+          session.id,
+          session.metadata ?? {},
+        );
+        return { paymentId: null, status: saved.saved ? 'card_saved' : 'ignored' };
+      }
     }
 
     // 2b. Subscription eventy delegujeme do SubscriptionsService (sprint 3.3 fáze A3).

@@ -181,18 +181,29 @@ export class RulesService implements OnModuleInit {
         };
       }
 
-      // Pošli klientovi odkaz k úhradě poplatku.
+      // Pošli klientovi odkaz k úhradě poplatku — nebo oznámení, že byl
+      // stržen z uložené karty (opakované spuštění už podruhé nepíše).
       try {
-        await this.email.enqueue({
-          tenantId: ctx.tenantId,
-          templateCode: 'custom',
-          recipient: ctx.payload.customerEmail,
-          relatedBookingId: ctx.payload.bookingId,
-          vars: {
-            __customSubject: 'Storno / no-show poplatek k úhradě',
-            __customBody: `Za zrušení nebo nedostavení účtujeme poplatek ${feeHellers / 100}. Uhradit jej můžete zde: ${result.checkoutUrl}`,
-          },
-        });
+        if (result.method === 'saved_card' && result.alreadyCharged) {
+          // nic — o stržení už zákazník ví
+        } else {
+          await this.email.enqueue({
+            tenantId: ctx.tenantId,
+            templateCode: 'custom',
+            recipient: ctx.payload.customerEmail,
+            relatedBookingId: ctx.payload.bookingId,
+            vars:
+              result.method === 'saved_card'
+                ? {
+                    __customSubject: 'Storno / no-show poplatek stržen z uložené karty',
+                    __customBody: `Za zrušení nebo nedostavení jsme účtovali poplatek ${feeHellers / 100}. Částka byla stržena z vaší uložené karty${result.cardLast4 ? ` končící ${result.cardLast4}` : ''}.`,
+                  }
+                : {
+                    __customSubject: 'Storno / no-show poplatek k úhradě',
+                    __customBody: `Za zrušení nebo nedostavení účtujeme poplatek ${feeHellers / 100}. Uhradit jej můžete zde: ${result.checkoutUrl}`,
+                  },
+          });
+        }
       } catch (err) {
         this.logger.warn(
           `[charge_storno_fee] e-mail s odkazem selhal: ${err instanceof Error ? err.message : String(err)}`,
@@ -211,7 +222,8 @@ export class RulesService implements OnModuleInit {
           charged: true,
           paymentId: result.paymentId,
           provider: result.provider,
-          checkoutUrl: result.checkoutUrl,
+          method: result.method,
+          checkoutUrl: result.method === 'checkout_link' ? result.checkoutUrl : null,
         },
       };
     });

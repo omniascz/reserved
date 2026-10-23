@@ -18,53 +18,11 @@ import type {
   TimeRange,
   WorkingHoursDay,
 } from './availability.types.js';
+import { toUtc } from '../common/local-time.js';
 
 interface Interval {
   start: number; // ms timestamp
   end: number;
-}
-
-function toUtc(localDate: string, localTime: string, timezone: string): Date {
-  // localDate: YYYY-MM-DD, localTime: HH:MM, timezone: e.g. 'Europe/Prague'
-  // Note: This implementation assumes Node 20+ Intl support. For accurate DST
-  // handling in production, consider using Temporal API or date-fns-tz.
-  // Pro tenant default 'Europe/Prague' to funguje korektně přes Intl.
-  const [hh, mm] = localTime.split(':').map(Number);
-  const [yyyy, MM, dd] = localDate.split('-').map(Number);
-
-  // Construct date as if it were UTC, then offset by timezone
-  // This is approximate — see comment above. Stačí pro CZ pro MVP.
-  if (
-    yyyy === undefined ||
-    MM === undefined ||
-    dd === undefined ||
-    hh === undefined ||
-    mm === undefined
-  ) {
-    throw new Error(`Invalid local datetime: ${localDate} ${localTime}`);
-  }
-
-  // Build a candidate UTC moment, then read back its representation in the
-  // tenant timezone and adjust until they match.
-  const candidate = new Date(Date.UTC(yyyy, MM - 1, dd, hh, mm, 0));
-  const offsetMinutes = offsetForUtcInTimezone(candidate, timezone);
-  return new Date(candidate.getTime() - offsetMinutes * 60_000);
-}
-
-function offsetForUtcInTimezone(utcMoment: Date, timezone: string): number {
-  // Vrátí offset timezone vůči UTC v minutách (např. +120 pro CEST).
-  const formatter = new Intl.DateTimeFormat('en-US', {
-    timeZone: timezone,
-    timeZoneName: 'shortOffset',
-  });
-  const parts = formatter.formatToParts(utcMoment);
-  const tz = parts.find((p) => p.type === 'timeZoneName')?.value ?? 'GMT';
-  const m = tz.match(/GMT([+-]?)(\d{1,2}):?(\d{2})?/);
-  if (!m) return 0;
-  const sign = m[1] === '-' ? -1 : 1;
-  const hours = Number(m[2] ?? 0);
-  const mins = Number(m[3] ?? 0);
-  return sign * (hours * 60 + mins);
 }
 
 function subtractIntervals(base: Interval[], toSubtract: Interval[]): Interval[] {
@@ -90,14 +48,10 @@ function timeRangeToInterval(t: TimeRange): Interval {
   return { start: t.startsAt.getTime(), end: t.endsAt.getTime() };
 }
 
-export function calculateAvailableSlots(req: AvailabilityRequest): AvailableSlot[] {
-  if (req.isHoliday) return [];
-
-  const slotInterval = req.slotIntervalMinutes ?? 15;
-  const totalMinutes =
-    req.bufferBeforeMinutes + req.serviceDurationMinutes + req.bufferAfterMinutes;
-  const totalMs = totalMinutes * 60_000;
-
+/**
+ * Otevírací okna dne: pracovní doba minus polední pauzy (UTC intervaly).
+ */
+function openIntervals(req: AvailabilityRequest): Interval[] {
   // 1. Postav workplace okna (každý working_hours item → interval)
   const workingIntervals: Interval[] = [];
   for (const wh of req.workingHours) {
@@ -106,8 +60,6 @@ export function calculateAvailableSlots(req: AvailabilityRequest): AvailableSlot
     if (end.getTime() <= start.getTime()) continue; // sanity
     workingIntervals.push({ start: start.getTime(), end: end.getTime() });
   }
-
-  if (workingIntervals.length === 0) return [];
 
   // 2. Odečti polední pauzy
   const breakIntervals: Interval[] = [];
@@ -120,16 +72,28 @@ export function calculateAvailableSlots(req: AvailabilityRequest): AvailableSlot
       }
     }
   }
+  return subtractIntervals(workingIntervals, breakIntervals);
+}
+
+export function calculateAvailableSlots(req: AvailabilityRequest): AvailableSlot[] {
+  if (req.isHoliday) return [];
+
+  const slotInterval = req.slotIntervalMinutes ?? 15;
+  const totalMinutes =
+    req.bufferBeforeMinutes + req.serviceDurationMinutes + req.bufferAfterMinutes;
+  const totalMs = totalMinutes * 60_000;
+
+  const open = openIntervals(req);
+  if (open.length === 0) return [];
 
   // 3-5. Odečti bookings + holds + blocks
   const occupied: Interval[] = [
-    ...breakIntervals,
     ...req.existingBookings.map(timeRangeToInterval),
     ...req.activeHolds.map(timeRangeToInterval),
     ...req.blocks.map(timeRangeToInterval),
   ];
 
-  const freeIntervals = subtractIntervals(workingIntervals, occupied);
+  const freeIntervals = subtractIntervals(open, occupied);
 
   // 6. Generuj sloty s krokem slotInterval
   const slots: AvailableSlot[] = [];
@@ -172,4 +136,35 @@ export function isSlotFree(slotStart: Date, slotEnd: Date, occupied: TimeRange[]
     }
   }
   return true;
+}
+
+export type SlotUnavailableReason = 'HOLIDAY' | 'OUTSIDE_WORKING_HOURS' | 'BLOCKED' | 'SLOT_TAKEN';
+
+/**
+ * Proč konkrétní začátek NEJDE zarezervovat (nebo `null`, když jde).
+ *
+ * Inspirováno cal.com `ensureAvailableUsers` (calcom/cal.diy@0f19cc4
+ * packages/features/bookings/lib/handleNewBooking/ensureAvailableUsers.ts,
+ * MIT): těsně před zápisem znovu ověřit pracovní dobu a konflikty, ne jen
+ * spoléhat na to, že klient poslal čas z nabídky. Na zarovnání na krok slotů
+ * nezáleží — rozhoduje, jestli se termín i s buffery vejde do volného okna.
+ */
+export function slotUnavailableReason(
+  req: AvailabilityRequest,
+  startsAt: Date,
+): SlotUnavailableReason | null {
+  if (req.isHoliday) return 'HOLIDAY';
+
+  const range: Interval = {
+    start: startsAt.getTime() - req.bufferBeforeMinutes * 60_000,
+    end: startsAt.getTime() + (req.serviceDurationMinutes + req.bufferAfterMinutes) * 60_000,
+  };
+  const inside = openIntervals(req).some((o) => o.start <= range.start && range.end <= o.end);
+  if (!inside) return 'OUTSIDE_WORKING_HOURS';
+
+  const overlaps = (list: TimeRange[]) =>
+    list.some((t) => range.start < t.endsAt.getTime() && t.startsAt.getTime() < range.end);
+  if (overlaps(req.blocks)) return 'BLOCKED';
+  if (overlaps(req.existingBookings) || overlaps(req.activeHolds)) return 'SLOT_TAKEN';
+  return null;
 }

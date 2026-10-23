@@ -1,0 +1,2 @@
+ALTER TABLE "webhook_deliveries" ADD COLUMN "next_attempt_at" timestamp with time zone;--> statement-breakpoint
+CREATE INDEX "webhook_deliveries_queue_idx" ON "webhook_deliveries" USING btree ("status","next_attempt_at");

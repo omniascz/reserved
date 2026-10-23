@@ -27,6 +27,7 @@ import {
   type RescheduleBookingDto,
 } from '../bookings/dto/booking.dto.js';
 import { BookingsService } from '../bookings/bookings.service.js';
+import { AvailabilityService } from '../availability/availability.service.js';
 import { ApiKeyGuard, requireScope } from '../api-keys/api-key.guard.js';
 import { ApiKeyThrottlerGuard } from '../api-keys/api-key-throttler.guard.js';
 
@@ -38,7 +39,10 @@ const SYSTEM_USER = '00000000-0000-0000-0000-000000000000';
 @UseGuards(ApiKeyGuard, ApiKeyThrottlerGuard)
 @Controller('external/v1/bookings')
 export class ExternalBookingsController {
-  constructor(@Inject(BookingsService) private readonly svc: BookingsService) {}
+  constructor(
+    @Inject(BookingsService) private readonly svc: BookingsService,
+    @Inject(AvailabilityService) private readonly availability: AvailabilityService,
+  ) {}
 
   @Get()
   async list(
@@ -70,6 +74,16 @@ export class ExternalBookingsController {
     @Body(new ZodValidationPipe(AdminCreateBookingSchema)) dto: AdminCreateBookingDto,
   ) {
     requireScope(req.apiKey, 'bookings:write');
+    // Integrace (telefonní robot) smí jen termín, který by nabídla i dostupnost:
+    // pracovní doba, pauzy, svátky, bloky a Google kalendář. Dřív hlídala jen
+    // DB proti překryvu, takže šlo zarezervovat třeba neděli ve 3:00.
+    await this.availability.assertSlotBookable({
+      tenantId: req.apiKey!.tenantId,
+      serviceId: dto.serviceId,
+      employeeId: dto.employeeId,
+      branchId: dto.branchId ?? null,
+      startsAt: new Date(dto.startsAt),
+    });
     const data = await this.svc.adminCreate(req.apiKey!.tenantId, SYSTEM_USER, 'owner', dto);
     return { data };
   }
@@ -92,6 +106,18 @@ export class ExternalBookingsController {
     @Body(new ZodValidationPipe(RescheduleBookingSchema)) dto: RescheduleBookingDto,
   ) {
     requireScope(req.apiKey, 'bookings:write');
+    const booking = await this.svc.getForAdmin(req.apiKey!.tenantId, SYSTEM_USER, 'owner', id);
+    const employeeId = dto.newEmployeeId ?? booking.employeeId;
+    if (employeeId) {
+      await this.availability.assertSlotBookable({
+        tenantId: req.apiKey!.tenantId,
+        serviceId: booking.serviceId,
+        employeeId,
+        branchId: booking.branchId,
+        startsAt: new Date(dto.newStartsAt),
+        excludeBookingId: id,
+      });
+    }
     const data = await this.svc.reschedule(req.apiKey!.tenantId, SYSTEM_USER, 'owner', id, dto);
     return { data };
   }
