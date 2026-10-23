@@ -58,19 +58,19 @@ export class GoogleCalendarController {
   ) {
     const adminUrl = process.env.ADMIN_BASE_URL ?? 'http://localhost:4002';
     if (error) {
-      return res.redirect(`${adminUrl}/settings?google_error=${encodeURIComponent(error)}`);
+      return res.redirect(`${adminUrl}/integrations?google_error=${encodeURIComponent(error)}`);
     }
     if (!code || !state) {
-      return res.redirect(`${adminUrl}/settings?google_error=missing_code_or_state`);
+      return res.redirect(`${adminUrl}/integrations?google_error=missing_code_or_state`);
     }
     try {
       const result = await this.svc.handleCallback(code, state);
       return res.redirect(
-        `${adminUrl}/settings?google_success=1&email=${encodeURIComponent(result.googleEmail ?? '')}`,
+        `${adminUrl}/integrations?google_success=1&email=${encodeURIComponent(result.googleEmail ?? '')}`,
       );
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'unknown';
-      return res.redirect(`${adminUrl}/settings?google_error=${encodeURIComponent(msg)}`);
+      return res.redirect(`${adminUrl}/integrations?google_error=${encodeURIComponent(msg)}`);
     }
   }
 

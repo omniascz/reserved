@@ -34,7 +34,7 @@ CHECK omezení, unikátní i částečné indexy. **Snapshot NEobsahuje:**
 - **9 EXCLUDE omezení** samotných — ochrana proti dvojí rezervaci na úrovni DB
   (v migracích je 10 příkazů `EXCLUDE USING`, protože `bookings_no_overlap` migrace 0050 zahodí
   a vytvoří znovu jako částečný)
-- **95 RLS politik** + `ENABLE/FORCE ROW LEVEL SECURITY` — izolace tenantů
+- **100 RLS politik** + `ENABLE/FORCE ROW LEVEL SECURITY` — izolace tenantů
 - **SQL funkce `app.current_role_or_null()` a `app.current_tenant_id_or_null()`**, na kterých RLS stojí
 - granty pro roli `app_user`
 
@@ -600,13 +600,14 @@ reserved/
 │   ├── marketing/    Veřejný web (Next.js, CS/EN)
 │   ├── tenant-site/  Mini-web tenanta (Next.js)
 │   ├── mobile/       Klientská mobilní app (Expo)
-│   └── workers/      Pollery nad Postgresem (notifikace, slot holdy, narozeniny)
+│   └── workers/      Pollery nad Postgresem (notifikace, slot holdy, webhooky, kalendáře…)
 ├── packages/
 │   ├── db/           Drizzle schema + migrations + seed
 │   ├── rls-multitenancy/ Tenant kontext (RLS)
 │   ├── types/        Shared DTOs, enums, branded types
 │   ├── ui/           (zatím prázdný)
 │   ├── rules-engine/ Rules evaluator
+│   ├── calendar-sync/ Kalendáře zaměstnanců (Google, Outlook, CalDAV) — sdílí API i workers
 │   └── utils/        Shared helpers
 ├── tests/e2e/        Full-stack E2E testy proti běžícímu API
 ├── docker-compose.dev.yml  Postgres 16 (5433) + Mailhog

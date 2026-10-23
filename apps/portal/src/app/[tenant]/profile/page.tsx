@@ -1,8 +1,9 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { PortalHeader } from '@/components/PortalHeader';
+import { SavedCard } from '@/components/SavedCard';
 import {
   getAccessToken,
   getProfile,
@@ -193,7 +194,7 @@ export default function ProfilePage() {
 
         <form
           onSubmit={handleSetPassword}
-          className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 space-y-3"
+          className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 mb-6 space-y-3"
         >
           <h2 className="font-semibold">
             {profile.hasPassword ? 'Změna hesla' : 'Nastavit heslo'}
@@ -219,6 +220,11 @@ export default function ProfilePage() {
             {pwSaving ? 'Ukládám…' : profile.hasPassword ? 'Změnit heslo' : 'Nastavit heslo'}
           </button>
         </form>
+
+        {/* useSearchParams potřebuje Suspense (Next.js App Router) */}
+        <Suspense fallback={null}>
+          <SavedCard />
+        </Suspense>
       </main>
     </div>
   );

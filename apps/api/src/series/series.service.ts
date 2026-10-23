@@ -25,6 +25,8 @@ import { BundlePacksService } from '../bundle-packs/bundle-packs.service.js';
 import { CreditPacksService } from '../credit-packs/credit-packs.service.js';
 import { extractMeetingSettings, type MeetingSettings } from '../settings/settings.types.js';
 import type { CreateSeriesDto } from './dto/series.dto.js';
+import { seriesOccurrence } from './occurrence.js';
+import { cancelPendingBookingNotifications } from '../email/booking-notifications.js';
 
 const MANAGE_ROLES: AppRole[] = ['owner', 'manager', 'employee', 'receptionist'];
 
@@ -45,15 +47,6 @@ function generateReferenceCode(): string {
       .toUpperCase()
       .replace(/[0OIL1]/g, 'X');
   return `S-${part()}-${part()}`;
-}
-
-/** Vrací další výskyt podle frekvence (UTC). */
-function addOccurrence(base: Date, frequency: string, index: number): Date {
-  const d = new Date(base);
-  if (frequency === 'weekly') d.setUTCDate(d.getUTCDate() + 7 * index);
-  else if (frequency === 'biweekly') d.setUTCDate(d.getUTCDate() + 14 * index);
-  else if (frequency === 'monthly') d.setUTCMonth(d.getUTCMonth() + index);
-  return d;
 }
 
 @Injectable()
@@ -182,12 +175,25 @@ export class SeriesService {
       });
 
       const [tenant] = await tx
-        .select({ slug: schema.tenants.slug, settings: schema.tenants.settings })
+        .select({
+          slug: schema.tenants.slug,
+          settings: schema.tenants.settings,
+          timezone: schema.tenants.timezone,
+        })
         .from(schema.tenants)
         .where(eq(schema.tenants.id, tenantId))
         .limit(1);
       const meeting = extractMeetingSettings(tenant?.settings);
       const slug = tenant?.slug ?? 'reserved';
+
+      // Výskyty se počítají v místním čase pobočky (jinak tenanta), aby
+      // série držela hodinu i přes změnu letního času.
+      const [branch] = await tx
+        .select({ timezone: schema.branches.timezone })
+        .from(schema.branches)
+        .where(and(eq(schema.branches.id, branchId), eq(schema.branches.tenantId, tenantId)))
+        .limit(1);
+      const timezone = branch?.timezone ?? tenant?.timezone ?? 'Europe/Prague';
 
       // 4. Záznam série
       const firstStart = new Date(dto.startsAt);
@@ -213,7 +219,7 @@ export class SeriesService {
       const skipped: Array<{ startsAt: Date }> = [];
 
       for (let i = 0; i < dto.occurrences; i++) {
-        const startsAt = addOccurrence(firstStart, dto.frequency, i);
+        const startsAt = seriesOccurrence(firstStart, dto.frequency, i, timezone);
         const endsAt = new Date(startsAt.getTime() + service.durationMinutes * 60_000);
         const bufferStartsAt = new Date(startsAt.getTime() - service.bufferBeforeMinutes * 60_000);
         const bufferEndsAt = new Date(endsAt.getTime() + service.bufferAfterMinutes * 60_000);
@@ -394,6 +400,12 @@ export class SeriesService {
             reason: 'series_cancelled',
           });
         }
+        // Připomínky zrušených termínů už neposílat.
+        await cancelPendingBookingNotifications(
+          tx,
+          tenantId,
+          cancelled.map((c) => c.id),
+        );
         return cancelled.map((c) => c.id);
       },
     );

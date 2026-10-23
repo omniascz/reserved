@@ -17,6 +17,7 @@ import {
   type AdminGoogleConnection,
 } from '@/lib/api';
 import { NAZEV_PRODUKTU } from '@/lib/znacka';
+import { OtherCalendars } from './OtherCalendars';
 
 function formatDate(iso: string | null): string {
   if (!iso) return '—';
@@ -46,12 +47,19 @@ function IntegrationsContent() {
   useEffect(() => {
     const successFlag = searchParams?.get('google_success');
     const errorFlag = searchParams?.get('google_error');
+    const outlookOk = searchParams?.get('outlook_success');
+    const outlookErr = searchParams?.get('outlook_error');
     const email = searchParams?.get('email');
     if (successFlag) {
       setSuccess(`Google Calendar úspěšně propojen${email ? ` (${email})` : ''}.`);
       setTimeout(() => setSuccess(null), 5000);
     } else if (errorFlag) {
       setError(`Propojení selhalo: ${decodeURIComponent(errorFlag)}`);
+    } else if (outlookOk) {
+      setSuccess(`Outlook úspěšně propojen${email ? ` (${email})` : ''}.`);
+      setTimeout(() => setSuccess(null), 5000);
+    } else if (outlookErr) {
+      setError(`Propojení Outlooku selhalo: ${decodeURIComponent(outlookErr)}`);
     }
   }, [searchParams]);
 
@@ -150,8 +158,8 @@ function IntegrationsContent() {
       <main className="flex-1 p-6 max-w-5xl mx-auto w-full">
         <h2 className="text-2xl font-bold mb-2">Integrace</h2>
         <p className="text-sm text-slate-500 mb-6">
-          Externí služby propojené s {NAZEV_PRODUKTU}. Aktuálně Google Calendar 2-way sync
-          rezervací.
+          Externí služby propojené s {NAZEV_PRODUKTU}: kalendáře zaměstnanců (Google, Outlook, Apple
+          a další CalDAV) — obousměrná synchronizace rezervací.
         </p>
 
         {error && (
@@ -295,13 +303,30 @@ function IntegrationsContent() {
           )}
         </section>
 
+        {!loading && employees.length > 0 && (
+          <OtherCalendars
+            employees={employees}
+            onMessage={(m) => {
+              if (m.error) setError(m.error);
+              if (m.success) {
+                setSuccess(m.success);
+                setTimeout(() => setSuccess(null), 6000);
+              }
+            }}
+          />
+        )}
+
         <section className="mt-6 bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm">
           <h3 className="font-semibold text-amber-900 mb-1">Co je potřeba pro funkčnost</h3>
           <p className="text-amber-800 text-xs leading-relaxed">
             Aby Google Calendar fungoval, musí být v API serveru nastavené env vars
             <code className="px-1">GOOGLE_CLIENT_ID</code>,{' '}
             <code className="px-1">GOOGLE_CLIENT_SECRET</code> a{' '}
-            <code className="px-1">GOOGLE_REDIRECT_URI</code>. Kontaktuj support pokud nefunguje.
+            <code className="px-1">GOOGLE_REDIRECT_URI</code>; pro Outlook{' '}
+            <code className="px-1">MICROSOFT_CLIENT_ID</code>,{' '}
+            <code className="px-1">MICROSOFT_CLIENT_SECRET</code> a{' '}
+            <code className="px-1">MICROSOFT_REDIRECT_URI</code>. CalDAV nic nevyžaduje. Kontaktuj
+            support pokud nefunguje.
           </p>
         </section>
       </main>

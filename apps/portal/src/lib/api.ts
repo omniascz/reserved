@@ -336,3 +336,31 @@ export function formatDateTime(iso: string): string {
     minute: '2-digit',
   });
 }
+
+// ─── Uložená karta (P4) ───────────────────────────────────────────────
+
+export interface PortalSavedCard {
+  id: string;
+  brand: string | null;
+  last4: string | null;
+  expMonth: number | null;
+  expYear: number | null;
+  createdAt: string;
+}
+
+export async function listMyCards(): Promise<PortalSavedCard[]> {
+  const { data } = await fetchApi<{ data: PortalSavedCard[] }>('/portal/me/cards');
+  return data;
+}
+
+/** Vrátí odkaz na stránku Stripe, kde si zákazník kartu uloží. */
+export async function startCardSetup(): Promise<string> {
+  const { data } = await fetchApi<{ data: { setupUrl: string } }>('/portal/me/cards/setup', {
+    method: 'POST',
+  });
+  return data.setupUrl;
+}
+
+export async function removeMyCard(id: string): Promise<void> {
+  await fetchApi(`/portal/me/cards/${id}`, { method: 'DELETE' });
+}

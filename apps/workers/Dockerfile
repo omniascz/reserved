@@ -20,6 +20,7 @@ COPY packages/rls-multitenancy/package.json packages/rls-multitenancy/
 COPY packages/rules-engine/package.json packages/rules-engine/
 COPY packages/types/package.json packages/types/
 COPY packages/utils/package.json packages/utils/
+COPY packages/calendar-sync/package.json packages/calendar-sync/
 COPY packages/ui/package.json packages/ui/
 RUN pnpm install --frozen-lockfile
 
@@ -32,6 +33,8 @@ COPY packages/types/src packages/types/src
 COPY packages/types/tsconfig.json packages/types/
 COPY packages/utils/src packages/utils/src
 COPY packages/utils/tsconfig.json packages/utils/
+COPY packages/calendar-sync/src packages/calendar-sync/src
+COPY packages/calendar-sync/tsconfig.json packages/calendar-sync/
 COPY packages/rules-engine/src packages/rules-engine/src
 COPY packages/rules-engine/tsconfig.json packages/rules-engine/
 COPY packages/rls-multitenancy/src packages/rls-multitenancy/src

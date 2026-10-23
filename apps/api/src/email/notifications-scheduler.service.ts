@@ -18,6 +18,8 @@ export interface ScheduleEmailInput {
   /** Kdy poslat (UTC). Pokud je v minulosti, worker pošle hned. */
   scheduledAt: Date;
   relatedBookingId?: string | null;
+  /** Volná metadata (např. `bookingStartsAt`, podle kterého worker pozná přesun). */
+  metadata?: Record<string, unknown>;
 }
 
 export interface ScheduleSmsInput {
@@ -28,6 +30,7 @@ export interface ScheduleSmsInput {
   body: string;
   scheduledAt: Date;
   relatedBookingId?: string | null;
+  metadata?: Record<string, unknown>;
 }
 
 @Injectable()
@@ -54,6 +57,7 @@ export class NotificationsScheduler {
             relatedBookingId: input.relatedBookingId ?? null,
             scheduledAt: input.scheduledAt,
             status: 'pending',
+            metadata: input.metadata ?? {},
           })
           .returning({ id: schema.notifications.id });
         return row!;
@@ -81,6 +85,7 @@ export class NotificationsScheduler {
             relatedBookingId: input.relatedBookingId ?? null,
             scheduledAt: input.scheduledAt,
             status: 'pending',
+            metadata: input.metadata ?? {},
           })
           .returning({ id: schema.notifications.id });
         return row!;

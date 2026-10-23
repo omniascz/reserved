@@ -20,6 +20,7 @@ import { NoShowRiskBadge } from '@/components/NoShowRiskBadge';
 import { CustomerBundlePacks } from './CustomerBundlePacks';
 import { CustomerCreditPacks } from './CustomerCreditPacks';
 import { CustomerPayments } from './CustomerPayments';
+import { CustomerSavedCards } from './CustomerSavedCards';
 import { CustomerSubscriptions } from './CustomerSubscriptions';
 import { CustomerTimePacks } from './CustomerTimePacks';
 
@@ -343,6 +344,10 @@ export default function CustomerDetailPage({ params }: { params: { id: string } 
 
         <div className="mt-6">
           <CustomerPayments customerId={params.id} />
+        </div>
+
+        <div className="mt-6">
+          <CustomerSavedCards customerId={params.id} />
         </div>
 
         {/* GDPR — export a výmaz osobních údajů */}

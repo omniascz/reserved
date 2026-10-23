@@ -26,6 +26,27 @@ const EnvSchema = z.object({
    * bez užitku zatěžoval databázi.
    */
   WORKER_AUTH_CLEANUP_TICK_SECONDS: z.coerce.number().int().positive().default(86400),
+  /** Opakování nedoručených webhooků z fronty — nejkratší odstup je 1 min. */
+  WORKER_WEBHOOK_TICK_SECONDS: z.coerce.number().int().positive().default(30),
+  /**
+   * Kalendáře zaměstnanců (Google, Outlook, CalDAV): jak často se dívat, komu
+   * je čas synchronizovat (push „změna" nebo uplynul interval), a ten interval.
+   */
+  WORKER_CALENDAR_TICK_SECONDS: z.coerce.number().int().positive().default(60),
+  CALENDAR_SYNC_INTERVAL_MINUTES: z.coerce.number().int().positive().default(15),
+  /** Klíč, kterým API šifruje přístupy ke kalendářům (stejný jako v API). */
+  PAYMENT_CONFIG_KEY: z.string().min(1).optional(),
+  GOOGLE_CLIENT_ID: z.string().optional(),
+  GOOGLE_CLIENT_SECRET: z.string().optional(),
+  GOOGLE_API_BASE: z.string().url().optional(),
+  GOOGLE_TOKEN_URL: z.string().url().optional(),
+  MICROSOFT_CLIENT_ID: z.string().optional(),
+  MICROSOFT_CLIENT_SECRET: z.string().optional(),
+  MICROSOFT_GRAPH_BASE: z.string().url().optional(),
+  MICROSOFT_TOKEN_URL: z.string().url().optional(),
+  /** Veřejná adresa API (bez /api/v1) — push kanály se zakládají jen na https. */
+  API_URL: z.string().optional(),
+  CALENDAR_PUSH_SECRET: z.string().optional(),
   /**
    * Základ odkazu do administrace — musí odpovídat APP_URL, se kterou odkazy
    * staví API (EmailVerificationService). Bez toho by připomínka odkazovala

@@ -25,6 +25,7 @@ const EVENT_LABELS: Record<WebhookEventType, string> = {
   'booking.created': 'Nová rezervace',
   'booking.confirmed': 'Potvrzená rezervace',
   'booking.cancelled': 'Zrušená rezervace',
+  'booking.rescheduled': 'Přesunutá rezervace',
   'booking.completed': 'Dokončená rezervace',
   'booking.no_show': 'Klient nedorazil',
   'customer.created': 'Nový zákazník',
@@ -479,17 +480,26 @@ X-Reserved-Signature: sha256=<hmac-hex>
 X-Reserved-Event-Type: booking.created
 X-Reserved-Webhook-Id: <uuid>
 X-Reserved-Delivery-Id: <uuid>
+X-Reserved-Attempt: 1
+X-Reserved-Webhook-Version: 1
 
 {
   "eventType": "booking.created",
   "tenantId": "<uuid>",
   "payload": { /* event-specific data */ },
-  "timestamp": "2026-05-14T10:00:00Z"
+  "timestamp": "2026-05-14T10:00:00Z",
+  "version": "1"
 }`}
           </pre>
           <p className="text-slate-600 mt-2">
             <strong>Verifikace podpisu:</strong> spočti HMAC-SHA256(secret, raw_body) a porovnej s
             hodnotou v <code>X-Reserved-Signature</code> (formát <code>sha256=&lt;hex&gt;</code>).
+          </p>
+          <p className="text-slate-600 mt-2">
+            <strong>Opakování:</strong> když endpoint neodpoví 2xx (nebo vrátí 429 / 5xx), zkusíme
+            to znovu za 1 min, 5 min, 30 min, 2 h a 6 h. Stejná událost má při každém pokusu stejné{' '}
+            <code>X-Reserved-Delivery-Id</code> i <code>timestamp</code> — podle nich duplicity
+            poznáš. Chyba 4xx (kromě 429) se neopakuje.
           </p>
         </section>
       </main>

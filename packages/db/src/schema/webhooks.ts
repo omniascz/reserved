@@ -86,6 +86,13 @@ export const webhookDeliveries = pgTable(
     responseBody: text('response_body'),
     /** Posledni chybova zprava. */
     lastError: text('last_error'),
+    /**
+     * Kdy zkusit doručit znovu (jen u 'pending'). Frontu zpracovává worker
+     * `webhook-deliveries` — doručení tak přežije i pád / restart API.
+     * Slouží zároveň jako zámek: kdo doručení převezme, posune ho o pár minut
+     * dopředu, aby ho souběžně nevzal nikdo jiný.
+     */
+    nextAttemptAt: timestamp('next_attempt_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
@@ -93,6 +100,7 @@ export const webhookDeliveries = pgTable(
     tenantIdx: index('webhook_deliveries_tenant_idx').on(table.tenantId),
     webhookIdx: index('webhook_deliveries_webhook_idx').on(table.webhookId, table.createdAt),
     statusIdx: index('webhook_deliveries_status_idx').on(table.status, table.createdAt),
+    queueIdx: index('webhook_deliveries_queue_idx').on(table.status, table.nextAttemptAt),
   }),
 );
 
@@ -108,6 +116,7 @@ export const WEBHOOK_EVENT_TYPES = [
   'booking.created',
   'booking.confirmed',
   'booking.cancelled',
+  'booking.rescheduled',
   'booking.completed',
   'booking.no_show',
   'customer.created',

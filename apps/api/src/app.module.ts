@@ -19,6 +19,7 @@ import { CustomDomainsModule } from './custom-domains/custom-domains.module.js';
 import { FeatureFlagsModule } from './feature-flags/feature-flags.module.js';
 import { GdprModule } from './gdpr/gdpr.module.js';
 import { GoogleCalendarModule } from './google-calendar/google-calendar.module.js';
+import { CalendarsModule } from './calendars/calendars.module.js';
 import { SubscriptionsModule } from './subscriptions/subscriptions.module.js';
 import { TimePacksModule } from './time-packs/time-packs.module.js';
 import { CustomersModule } from './customers/customers.module.js';
@@ -126,6 +127,7 @@ import { TenantMiddleware } from './tenant/tenant.middleware.js';
     CustomDomainsModule,
     SubscriptionsModule,
     GoogleCalendarModule,
+    CalendarsModule,
     PaymentsModule,
     BlocksModule,
     HolidaysModule,
@@ -207,6 +209,9 @@ export class AppModule implements NestModule {
         { path: 'portal/auth/refresh', method: RequestMethod.POST },
         { path: 'portal/auth/logout', method: RequestMethod.POST },
         { path: 'payments/webhooks/(.*)', method: RequestMethod.ALL },
+        // Push notifikace kalendářů (Google, Microsoft) — tenanta nenesou,
+        // připojení se dohledá podle kanálu / subscription a ověří tokenem.
+        { path: 'integrations/(.*)', method: RequestMethod.ALL },
       )
       .forRoutes('*');
   }

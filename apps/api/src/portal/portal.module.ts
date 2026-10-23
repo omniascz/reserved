@@ -1,3 +1,6 @@
+import { PaymentsModule } from '../payments/payments.module.js';
+import { CalendarsModule } from '../calendars/calendars.module.js';
+import { AvailabilityModule } from '../availability/availability.module.js';
 import { Module } from '@nestjs/common';
 import { DbModule } from '../db/db.module.js';
 import { EmailModule } from '../email/email.module.js';
@@ -28,6 +31,9 @@ import { PortalGuard } from './portal.guard.js';
     ContentModule,
     SeriesModule,
     MakeupModule,
+    AvailabilityModule,
+    CalendarsModule,
+    PaymentsModule,
   ],
   controllers: [PortalAuthController, PortalMeController],
   providers: [PortalAuthService, PortalMeService, PortalJwtService, PortalGuard],

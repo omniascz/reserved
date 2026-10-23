@@ -298,6 +298,16 @@ export class PublicController {
     const tenant = await this.resolveTenant(slug);
     await this.assertTenantCanAcceptBookings(tenant.id);
 
+    // Termín musí být jeden z těch, které by nabídla dostupnost — dřív
+    // hlídala jen DB proti překryvu, takže přímým voláním API šlo zamknout
+    // a pak potvrdit i termín mimo pracovní dobu.
+    await this.availability.assertSlotBookable({
+      tenantId: tenant.id,
+      serviceId: dto.serviceId,
+      employeeId: dto.employeeId,
+      startsAt: new Date(dto.startsAt),
+    });
+
     return this.dbService.withRlsContext(serviceContext(tenant.id), async (tx) => {
       // 1. Načti službu pro durations
       const svcRows = await tx
@@ -419,6 +429,10 @@ export class PublicController {
         startsAt: booking.startsAt,
         endsAt: booking.endsAt,
         status: booking.status,
+        // Pro měření konverzí na webu provozovny (widget → embed.js → pixel/GA).
+        serviceId: booking.serviceId,
+        priceHellers: booking.pricePaidHellers,
+        currency: booking.currency,
       },
     };
   }
@@ -474,6 +488,10 @@ export class PublicController {
         startsAt: booking.startsAt,
         endsAt: booking.endsAt,
         status: booking.status,
+        // Pro měření konverzí na webu provozovny (widget → embed.js → pixel/GA).
+        serviceId: booking.serviceId,
+        priceHellers: booking.pricePaidHellers,
+        currency: booking.currency,
       },
     };
   }

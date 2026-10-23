@@ -1,11 +1,13 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   Inject,
   NotFoundException,
   Param,
+  ParseUUIDPipe,
   Patch,
   Post,
   Req,
@@ -17,6 +19,7 @@ import { Public } from '../auth/decorators/public.decorator.js';
 import { ZodValidationPipe } from '../auth/zod-validation.pipe.js';
 import { PortalGuard } from './portal.guard.js';
 import { PortalMeService } from './portal-me.service.js';
+import { SavedCardsService } from '../payments/saved-cards.service.js';
 import { ContentService } from '../content/content.service.js';
 import { SeriesService } from '../series/series.service.js';
 
@@ -47,6 +50,7 @@ export class PortalMeController {
     @Inject(PortalMeService) private readonly me: PortalMeService,
     @Inject(ContentService) private readonly content: ContentService,
     @Inject(SeriesService) private readonly series: SeriesService,
+    @Inject(SavedCardsService) private readonly cards: SavedCardsService,
   ) {}
 
   private requireAuth(req: Request): { tenantId: string; customerId: string } {
@@ -141,5 +145,35 @@ export class PortalMeController {
   ): Promise<{ data: unknown }> {
     const { tenantId, customerId } = this.requireAuth(req);
     return { data: await this.me.reschedule(tenantId, customerId, id, dto) };
+  }
+
+  // ─── Uložená karta (P4) ─────────────────────────────────────────────
+  // Karta slouží jen ke strhnutí storno / no-show poplatku podle podmínek
+  // provozovny. Číslo karty zadává zákazník na stránce Stripe, ne u nás.
+
+  @Get('cards')
+  async listCards(@Req() req: Request): Promise<{ data: unknown }> {
+    const { tenantId, customerId } = this.requireAuth(req);
+    return { data: await this.cards.listForCustomer(tenantId, customerId) };
+  }
+
+  @Post('cards/setup')
+  @HttpCode(201)
+  async startCardSetup(@Req() req: Request): Promise<{ data: { setupUrl: string } }> {
+    const { tenantId, customerId } = this.requireAuth(req);
+    return {
+      data: await this.cards.startCardSetup({
+        tenantId,
+        customerId,
+        ...(await this.cards.portalReturnUrls(tenantId)),
+      }),
+    };
+  }
+
+  @Delete('cards/:id')
+  @HttpCode(204)
+  async removeCard(@Req() req: Request, @Param('id', ParseUUIDPipe) id: string): Promise<void> {
+    const { tenantId, customerId } = this.requireAuth(req);
+    await this.cards.remove(tenantId, customerId, id);
   }
 }

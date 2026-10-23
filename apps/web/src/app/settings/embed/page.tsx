@@ -297,6 +297,38 @@ export default function EmbedSettingsPage() {
           </details>
         </section>
 
+        {/* Měření konverzí */}
+        <section className="bg-white border border-slate-200 rounded-xl p-6 mb-6">
+          <h2 className="font-bold text-lg mb-3">
+            5. Měření rezervací (Meta pixel, Google Analytics)
+          </h2>
+          <p className="text-sm text-slate-700 mb-3">
+            Když zákazník dokončí rezervaci ve vloženém widgetu, váš web se to dozví — reklama tak
+            může počítat rezervace jako konverze. Platí pro vložení přes <code>embed.js</code>.
+          </p>
+          <ul className="text-sm text-slate-700 ml-6 space-y-2 list-disc">
+            <li>
+              <strong>Google Tag Manager</strong> — nic nenastavujete. Do <code>dataLayer</code> se
+              zapíše událost <code>reserved_booking</code> s hodnotou a měnou.
+            </li>
+            <li>
+              <strong>Meta pixel</strong> — přidejte do kódu{' '}
+              <code>data-meta-event=&quot;Schedule&quot;</code> (nebo <code>Purchase</code>). Pixel
+              musí být na stránce nainstalovaný. Událost nese <code>eventID</code> pro deduplikaci s
+              Conversions API.
+            </li>
+            <li>
+              <strong>Google Analytics 4</strong> — přidejte{' '}
+              <code>data-ga-event=&quot;purchase&quot;</code>.
+            </li>
+            <li>
+              <strong>Vlastní kód</strong> —{' '}
+              <code>window.addEventListener(&apos;reserved:booking&apos;, (e) =&gt; …)</code>, údaje
+              jsou v <code>e.detail</code>.
+            </li>
+          </ul>
+        </section>
+
         {/* Preview link */}
         <section className="bg-amber-50 border border-amber-200 rounded-xl p-6">
           <h2 className="font-bold mb-2">💡 Vyzkoušej widget před vložením</h2>

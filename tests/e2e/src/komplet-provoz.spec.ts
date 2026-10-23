@@ -398,6 +398,7 @@ describe('Komplexní fitness provoz E2E', () => {
   // ─── 7. Veřejný self-service 1:1 (celý web flow) ─────────────────────
   describe('7) Veřejný self-service 1:1 (availability → hold → booking)', () => {
     let slotStart: string;
+    let lastSlotStart: string;
     let sessionToken: string;
 
     it('availability vrací volné sloty pro Adama (box)', async () => {
@@ -410,6 +411,7 @@ describe('Komplexní fitness provoz E2E', () => {
       expect(adam).toBeDefined();
       expect(adam!.slots.length).toBeGreaterThan(0);
       slotStart = adam!.slots[0]!.startsAt;
+      lastSlotStart = adam!.slots.at(-1)!.startsAt;
     });
 
     it('vytvoření holdu na slot', async () => {
@@ -433,18 +435,40 @@ describe('Komplexní fitness provoz E2E', () => {
       expect(res.data.status).toBe('confirmed');
     });
 
-    it('dvojí rezervace obsazeného slotu se chytí při potvrzení (ne při holdu)', async () => {
-      // Hold je měkký zámek — nekontroluje existující rezervace, jen jiné aktivní
-      // holdy. Druhý hold na již obsazený slot tedy projde...
-      const second = await apiCall<{ data: { sessionToken: string } }>(`/public/${slug}/holds`, {
+    it('hold na už obsazený slot se odmítne hned (kontrola dostupnosti)', async () => {
+      // Dřív hold kontroloval jen jiné holdy a kolize se chytila až při
+      // potvrzení. Teď hold ověří dostupnost (vzor cal.com ensureAvailableUsers).
+      const fail = await expectFail(`/public/${slug}/holds`, {
         method: 'POST',
         body: JSON.stringify({ serviceId: svcBox, employeeId: empA, startsAt: slotStart }),
       });
-      // ...ale potvrzení rezervace už narazí na reálnou rezervaci (DB EXCLUDE) → kolize.
+      expect(fail).toMatch(/SLOT_TAKEN/);
+    });
+
+    it('slot obsazený mezi holdem a potvrzením se chytí při potvrzení (DB EXCLUDE)', async () => {
+      // Hold na volný slot projde…
+      const hold = await apiCall<{ data: { sessionToken: string } }>(`/public/${slug}/holds`, {
+        method: 'POST',
+        body: JSON.stringify({ serviceId: svcBox, employeeId: empA, startsAt: lastSlotStart }),
+      });
+      // …mezitím recepce zapíše na stejný čas rezervaci ručně…
+      await apiCall('/admin/bookings', {
+        method: 'POST',
+        token,
+        body: JSON.stringify({
+          serviceId: svcBox,
+          employeeId: empA,
+          startsAt: lastSlotStart,
+          customerName: 'Recepce Telefonem',
+          customerEmail: 'recepce@kp.local',
+          skipEmail: true,
+        }),
+      });
+      // …a potvrzení holdu už narazí na reálnou rezervaci (DB EXCLUDE) → kolize.
       const fail = await expectFail(`/public/${slug}/bookings`, {
         method: 'POST',
         body: JSON.stringify({
-          sessionToken: second.data.sessionToken,
+          sessionToken: hold.data.sessionToken,
           customerName: 'Pozdní klient',
           customerEmail: 'pozdni@kp.local',
         }),

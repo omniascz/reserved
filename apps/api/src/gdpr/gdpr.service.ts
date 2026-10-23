@@ -38,6 +38,7 @@ import { randomUUID } from 'node:crypto';
 import { sql } from 'drizzle-orm';
 import { type AppRole, type TenantContext } from '@reserved/rls-multitenancy';
 import { DbService, type Database } from '../db/db.service.js';
+import { SavedCardsService } from '../payments/saved-cards.service.js';
 import type { EraseRequestDto } from './dto/gdpr.dto.js';
 
 /** Export i výmaz smí jen vlastník a manažer — ne recepční ani řadový zaměstnanec. */
@@ -93,6 +94,7 @@ const TABULKY_PODLE_ID = [
   'reviews',
   'intake_submissions',
   'payments',
+  'customer_payment_methods',
   'customer_credit_packs',
   'customer_bundle_packs',
   'customer_time_packs',
@@ -105,7 +107,10 @@ const TABULKY_PODLE_ID = [
 
 @Injectable()
 export class GdprService {
-  constructor(@Inject(DbService) private readonly dbService: DbService) {}
+  constructor(
+    @Inject(DbService) private readonly dbService: DbService,
+    @Inject(SavedCardsService) private readonly savedCards: SavedCardsService,
+  ) {}
 
   // ─────────────────────────────────────────────────────────────────────────
   // EXPORT
@@ -384,6 +389,10 @@ export class GdprService {
   ) {
     assertCanManage(role);
 
+    // Uložené karty: smazat i ve Stripe (drží jméno a e-mail zákazníka). Mimo
+    // transakci — volání brány v ní nemá co dělat; řádky smaže výmaz níž.
+    await this.savedCards.removeAllForCustomer(tenantId, customerId);
+
     return this.dbService.withRlsContext(ctxFor(tenantId, userId, role), async (tx) => {
       const zakaznik = await this.nactiZakaznika(tx, tenantId, customerId);
       const puvodniEmail = String(zakaznik.email ?? '').toLowerCase();
@@ -408,6 +417,7 @@ export class GdprService {
         'customer_notes',
         'customer_sessions',
         'intake_submissions',
+        'customer_payment_methods',
       ] as const) {
         const res = await tx.execute(
           sql`DELETE FROM ${sql.identifier(tabulka)}

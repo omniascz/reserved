@@ -17,16 +17,16 @@ import { type AppRole, type TenantContext, serviceContext } from '@reserved/rls-
 import { randomBytes } from 'node:crypto';
 import { BundlePacksService } from '../bundle-packs/bundle-packs.service.js';
 import { CreditPacksService } from '../credit-packs/credit-packs.service.js';
-import { GoogleCalendarService } from '../google-calendar/google-calendar.service.js';
+import { CalendarSyncService } from '../calendars/calendar-sync.service.js';
 import { LoyaltyService } from '../loyalty/loyalty.service.js';
 import { SubscriptionsService } from '../subscriptions/subscriptions.service.js';
 import { TimePacksService } from '../time-packs/time-packs.service.js';
 import { CustomersService } from '../customers/customers.service.js';
 import { DbService } from '../db/db.service.js';
 import { EmailService } from '../email/email.service.js';
-import { NotificationsScheduler } from '../email/notifications-scheduler.service.js';
+import { cancelPendingBookingNotifications } from '../email/booking-notifications.js';
+import { BookingRemindersService, type ReminderInput } from '../email/booking-reminders.service.js';
 import { OnboardingService } from '../onboarding/onboarding.service.js';
-import { extractNotificationSettings } from '../settings/settings.types.js';
 import { EventBus } from '../rules/events.bus.js';
 import type { BookingEventPayload, TriggerEvent } from '@reserved/rules-engine';
 import type {
@@ -74,8 +74,8 @@ export class BookingsService {
     @Inject(BundlePacksService) private readonly bundlePacks: BundlePacksService,
     @Inject(TimePacksService) private readonly timePacks: TimePacksService,
     @Inject(SubscriptionsService) private readonly subscriptions: SubscriptionsService,
-    @Inject(GoogleCalendarService) private readonly googleCal: GoogleCalendarService,
-    @Inject(NotificationsScheduler) private readonly scheduler: NotificationsScheduler,
+    @Inject(CalendarSyncService) private readonly calendars: CalendarSyncService,
+    @Inject(BookingRemindersService) private readonly reminders: BookingRemindersService,
     @Inject(OnboardingService) private readonly onboarding: OnboardingService,
     @Inject(LoyaltyService) private readonly loyalty: LoyaltyService,
   ) {}
@@ -84,77 +84,9 @@ export class BookingsService {
    * Naplanuje pripomínky pro novou rezervaci podle tenant settings.
    * Vola se po confirmFromHold + adminCreate.
    */
-  private async scheduleBookingReminders(input: {
-    tenantId: string;
-    bookingId: string;
-    startsAt: Date;
-    endsAt: Date;
-    customerEmail: string;
-    customerName: string;
-    customerPhone: string | null;
-    serviceName: string;
-    employeeName: string;
-    tenantName: string;
-    referenceCode: string;
-    onlineMeetingUrl: string | null;
-  }): Promise<void> {
-    // Načti tenant settings pro notifikace
-    const tenantRows = await this.dbService.withRlsContext(
-      serviceContext(input.tenantId),
-      async (tx) => {
-        return tx
-          .select({ settings: schema.tenants.settings })
-          .from(schema.tenants)
-          .where(eq(schema.tenants.id, input.tenantId))
-          .limit(1);
-      },
-    );
-    const settings = extractNotificationSettings(tenantRows[0]?.settings);
-    if (settings.reminderHoursBefore === 0) return;
-
-    const reminderTime = new Date(
-      input.startsAt.getTime() - settings.reminderHoursBefore * 3600_000,
-    );
-    if (reminderTime.getTime() <= Date.now()) {
-      // Rezervace je tak brzy, ze nas reminder by uz mel byt v minulosti — preskakujeme
-      return;
-    }
-
-    const emailVars = {
-      customerName: input.customerName,
-      serviceName: input.serviceName,
-      employeeName: input.employeeName,
-      tenantName: input.tenantName,
-      startsAt: input.startsAt.toLocaleString('cs-CZ'),
-      endsAt: input.endsAt.toLocaleString('cs-CZ'),
-      referenceCode: input.referenceCode,
-      onlineMeetingUrl: input.onlineMeetingUrl,
-    };
-
-    // Primární kanál podle settings
-    if (settings.primaryChannel === 'email' || !settings.smsEnabled || !input.customerPhone) {
-      await this.scheduler.scheduleEmail({
-        tenantId: input.tenantId,
-        templateCode: 'booking_reminder',
-        recipient: input.customerEmail,
-        vars: emailVars,
-        scheduledAt: reminderTime,
-        relatedBookingId: input.bookingId,
-      });
-    }
-    if (settings.smsEnabled && input.customerPhone) {
-      const smsBody =
-        `Pripominka rezervace v ${input.tenantName}: ${input.serviceName} ${input.startsAt.toLocaleString('cs-CZ')}. ` +
-        `Kod: ${input.referenceCode}. Stornovat min ${settings.reminderHoursBefore}h predem.`;
-      await this.scheduler.scheduleSms({
-        tenantId: input.tenantId,
-        templateCode: 'booking_reminder',
-        recipient: input.customerPhone,
-        body: smsBody,
-        scheduledAt: reminderTime,
-        relatedBookingId: input.bookingId,
-      });
-    }
+  private async scheduleBookingReminders(input: ReminderInput): Promise<void> {
+    const scheduled = await this.reminders.schedule(input);
+    if (!scheduled) return;
 
     // Onboarding: prvni rezervace prijata (idempotent)
     void this.onboarding.markStep(input.tenantId, 'firstBookingReceived').catch(() => undefined);
@@ -429,24 +361,8 @@ export class BookingsService {
         // Emit booking_created event pro Rules Engine
         await this.emitBookingEvent('booking_created', tenantId, result.booking, 'customer');
 
-        // Google Calendar sync (faze C1) — best-effort, errors swallowed
-        if (result.booking.employeeId) {
-          this.googleCal.syncBookingCreated({
-            tenantId,
-            bookingId: result.booking.id,
-            employeeId: result.booking.employeeId,
-            booking: {
-              id: result.booking.id,
-              startsAt: result.booking.startsAt,
-              endsAt: result.booking.endsAt,
-              customerName: result.booking.customerName,
-              customerEmail: result.booking.customerEmail,
-              customerPhone: result.booking.customerPhone,
-              serviceName: result.service.name,
-              referenceCode: result.booking.referenceCode,
-            },
-          });
-        }
+        // Kalendáře zaměstnance (Google, Outlook, CalDAV) — best-effort, chyby nehází.
+        void this.calendars.bookingCreated(tenantId, result.booking);
 
         return result.booking;
       });
@@ -545,23 +461,22 @@ export class BookingsService {
         const bufferEndsAt = new Date(endsAt.getTime() + service.bufferAfterMinutes * 60_000);
         const refCode = generateReferenceCode();
 
-        // 3a. Subscription benefity: najdi customer podle emailu (mozna existuje)
-        // a aplikuj discount/exclusive check.
-        const existingCustomer = await tx
-          .select({ id: schema.customers.id })
-          .from(schema.customers)
-          .where(
-            and(
-              eq(schema.customers.tenantId, tenantId),
-              eq(schema.customers.email, dto.customerEmail),
-            ),
-          )
-          .limit(1);
-        const existingCustomerId = existingCustomer[0]?.id ?? null;
+        // 3a. Zákazník: najdi nebo založ (stejně jako veřejný widget). Bez toho
+        // rezervace od admina / z API (telefonní robot) nevisela na zákazníkovi:
+        // nebyla vidět v portálu ani v historii a nepřipsaly se za ni body.
+        const nameParts = dto.customerName.trim().split(/\s+/);
+        const firstName = nameParts[0] ?? dto.customerName;
+        const lastName = nameParts.slice(1).join(' ') || firstName;
+        const { id: customerId } = await this.customers.findOrCreate(tx, tenantId, {
+          firstName,
+          lastName,
+          email: dto.customerEmail,
+          phone: dto.customerPhone ?? null,
+        });
 
         const discount = await this.subscriptions.getBookingDiscountFor({
           tenantId,
-          customerId: existingCustomerId,
+          customerId,
           serviceId: dto.serviceId,
           basePriceHellers: service.priceHellers,
         });
@@ -582,6 +497,7 @@ export class BookingsService {
               branchId,
               serviceId: dto.serviceId,
               employeeId: dto.employeeId,
+              customerId,
               customerName: dto.customerName,
               customerEmail: dto.customerEmail,
               customerPhone: dto.customerPhone ?? null,
@@ -645,6 +561,9 @@ export class BookingsService {
         }
       })
       .then(async (result) => {
+        // Kalendáře zaměstnance (Google, Outlook, CalDAV) — best-effort, chyby nehází.
+        void this.calendars.bookingCreated(tenantId, result.booking);
+
         if (result.skipEmail) return result.booking;
 
         const empRows = await this.dbService.withRlsContext(
@@ -762,6 +681,9 @@ export class BookingsService {
           .set({ status: 'cancelled' })
           .where(eq(schema.bookingResources.bookingId, bookingId));
 
+        // Připomínky a výzvy k potvrzení zrušeného termínu už neposílat.
+        await cancelPendingBookingNotifications(tx, tenantId, [bookingId]);
+
         return updated!;
       },
     );
@@ -803,7 +725,7 @@ export class BookingsService {
     await this.emitBookingEvent('booking_cancelled', tenantId, result, 'admin', dto.reason);
 
     // Google Calendar sync — smaz event (best-effort, errors swallowed)
-    this.googleCal.syncBookingCancelled({ tenantId, bookingId: result.id });
+    void this.calendars.bookingCancelled(tenantId, result.id);
 
     return result;
   }
@@ -895,6 +817,15 @@ export class BookingsService {
               ),
             );
 
+          // Připomínka starého termínu neplatí — po commitu se naplánuje nová.
+          await cancelPendingBookingNotifications(
+            tx,
+            tenantId,
+            [bookingId],
+            ['booking_reminder'],
+            'booking_rescheduled',
+          );
+
           return { booking: updated!, oldStartsAt: existing.startsAt };
         } catch (err) {
           const e = err as { code?: string; cause?: { code?: string } };
@@ -917,6 +848,11 @@ export class BookingsService {
         oldStartsAt: result.oldStartsAt.toISOString(),
       });
     }
+
+    await this.reminders.scheduleForBooking(tenantId, result.booking);
+
+    // Google Calendar — přesuň událost (dřív zůstala na starém čase).
+    void this.calendars.bookingRescheduled(tenantId, result.booking);
 
     await this.emitBookingEvent(
       'booking_rescheduled',

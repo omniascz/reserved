@@ -7,6 +7,8 @@
 //   - pack-expiry:       propadlé permanentky → 'expired' (tick po hodině)
 //   - verify-reminders:  připomínky k ověření e-mailu 48 h / 7 dní (tick po hodině)
 //   - auth-cleanup:      úklid evidence neúspěšných přihlášení (tick jednou denně)
+//   - webhook-deliveries: opakování nedoručených webhooků z fronty (tick každých 30s)
+//   - calendar-sync:     kalendáře zaměstnanců → bloky dostupnosti + obnova push kanálů (60s)
 //
 // Graceful shutdown na SIGTERM / SIGINT.
 
@@ -22,6 +24,8 @@ import { BirthdaysWorker } from './workers/birthdays.worker.js';
 import { PackExpiryWorker } from './workers/pack-expiry.worker.js';
 import { VerifyRemindersWorker } from './workers/verify-reminders.worker.js';
 import { AuthCleanupWorker } from './workers/auth-cleanup.worker.js';
+import { WebhookDeliveriesWorker } from './workers/webhook-deliveries.worker.js';
+import { calendarSyncConfig, CalendarSyncWorker } from './workers/calendar-sync.worker.js';
 
 async function bootstrap(): Promise<void> {
   const env = loadConfig();
@@ -39,6 +43,15 @@ async function bootstrap(): Promise<void> {
   const packExpiryWorker = new PackExpiryWorker(db);
   const verifyRemindersWorker = new VerifyRemindersWorker(db, env.APP_URL);
   const authCleanupWorker = new AuthCleanupWorker(db);
+  const webhookDeliveriesWorker = new WebhookDeliveriesWorker(db);
+  const calendarCfg = calendarSyncConfig(env);
+  const calendarSyncWorker = calendarCfg
+    ? new CalendarSyncWorker(db, calendarCfg, env.CALENDAR_SYNC_INTERVAL_MINUTES)
+    : null;
+  if (!calendarSyncWorker) {
+    // eslint-disable-next-line no-console
+    console.warn('[workers] calendar-sync vypnutý: chybí PAYMENT_CONFIG_KEY (šifrování přístupů).');
+  }
 
   const pollers: Poller[] = [
     new Poller({
@@ -85,6 +98,26 @@ async function bootstrap(): Promise<void> {
         await authCleanupWorker.tick();
       },
     }),
+    // Odchozí webhooky, které API napoprvé nedoručilo (1 min → 6 h).
+    new Poller({
+      name: 'webhook-deliveries',
+      intervalSeconds: env.WORKER_WEBHOOK_TICK_SECONDS,
+      tick: async () => {
+        await webhookDeliveriesWorker.tick();
+      },
+    }),
+    // Kalendáře zaměstnanců: změny z Google / Outlook / CalDAV → bloky.
+    ...(calendarSyncWorker
+      ? [
+          new Poller({
+            name: 'calendar-sync',
+            intervalSeconds: env.WORKER_CALENDAR_TICK_SECONDS,
+            tick: async () => {
+              await calendarSyncWorker.tick();
+            },
+          }),
+        ]
+      : []),
   ];
 
   pollers.forEach((p) => p.start());

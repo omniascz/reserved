@@ -24,11 +24,22 @@
  *   data-container     CSS selector kam vložit iframe (default = vedle <script>)
  *   data-max-width     max šířka iframe v px (default 600)
  *   data-height        výchozí výška před auto-resize (default 600)
+ *   data-meta-event    po dokončené rezervaci zavolá Meta pixel: fbq('track', <hodnota>, …)
+ *                      např. "Schedule" nebo "Purchase" (eventID = reserved-<id> pro CAPI deduplikaci)
+ *   data-ga-event      po dokončené rezervaci zavolá GA4: gtag('event', <hodnota>, …), např. "purchase"
+ *   data-on-booking    jméno globální funkce, kterou zavolá s údaji o rezervaci
+ *
+ * Měření konverzí: po dokončené rezervaci stránka vždy dostane událost
+ *   window.addEventListener('reserved:booking', function (e) { console.log(e.detail); });
+ * a když používá Google Tag Manager, i záznam v dataLayer ({ event: 'reserved_booking', … }).
+ * e.detail = { bookingId, referenceCode, serviceId, startsAt, endsAt, status,
+ *              kind: 'appointment'|'class', value (Kč), priceHellers, currency }
  *
  * Příklady:
  *   <script src=".../embed.js" data-slug="petra-salon"></script>
  *   <script src=".../embed.js" data-slug="petra-salon" data-mode="modal" data-button-text="Objednat"></script>
  *   <script src=".../embed.js" data-slug="petra-salon" data-container="#booking"></script>
+ *   <script src=".../embed.js" data-slug="petra-salon" data-meta-event="Schedule"></script>
  */
 (function () {
   'use strict';
@@ -68,16 +79,39 @@
   // data-view: 'booking' (default) | 'timetable' (rozvrh lekcí) | 'calendar' (měsíční kalendář)
   var view = thisScript.getAttribute('data-view') || 'booking';
   var service = thisScript.getAttribute('data-service'); // volitelné: předvybraná služba (calendar)
+  // Měření konverzí (viz hlavička)
+  var metaEvent = thisScript.getAttribute('data-meta-event');
+  var gaEvent = thisScript.getAttribute('data-ga-event');
+  var onBooking = thisScript.getAttribute('data-on-booking');
+  var widgetOrigin;
+  try {
+    widgetOrigin = new URL(WIDGET_BASE).origin;
+  } catch (err) {
+    widgetOrigin = null;
+  }
 
   var sub = view === 'timetable' ? '/timetable' : view === 'calendar' ? '/calendar' : '';
   var query = [];
   if (lang === 'en') query.push('lang=en');
   if (view === 'calendar' && service) query.push('service=' + encodeURIComponent(service));
   var widgetUrl =
-    WIDGET_BASE + '/' + encodeURIComponent(slug) + sub + (query.length ? '?' + query.join('&') : '');
+    WIDGET_BASE +
+    '/' +
+    encodeURIComponent(slug) +
+    sub +
+    (query.length ? '?' + query.join('&') : '');
 
   // Unikátní ID pro tento embed (umožní více widgetů na jedné stránce)
   var widgetId = 'rw-' + Math.random().toString(36).slice(2, 9);
+
+  // Nastavení měření pro tenhle widget (každý widget na stránce může mít jiné)
+  window.__reservedEmbedConfigs = window.__reservedEmbedConfigs || {};
+  window.__reservedEmbedConfigs[widgetId] = {
+    origin: widgetOrigin,
+    metaEvent: metaEvent,
+    gaEvent: gaEvent,
+    onBooking: onBooking,
+  };
 
   function createIframe() {
     var iframe = document.createElement('iframe');
@@ -95,7 +129,9 @@
 
   function injectInline() {
     var iframe = createIframe();
-    var target = containerSelector ? document.querySelector(containerSelector) : thisScript.parentNode;
+    var target = containerSelector
+      ? document.querySelector(containerSelector)
+      : thisScript.parentNode;
     if (!target) {
       console.error('[Reserved] embed.js: container not found: ' + containerSelector);
       return;
@@ -118,7 +154,9 @@
       'display:inline-block;background:' +
       buttonColor +
       ';color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;font-family:system-ui,sans-serif;';
-    var target = containerSelector ? document.querySelector(containerSelector) : thisScript.parentNode;
+    var target = containerSelector
+      ? document.querySelector(containerSelector)
+      : thisScript.parentNode;
     if (target === thisScript.parentNode) {
       target.insertBefore(btn, thisScript);
     } else {
@@ -141,7 +179,9 @@
       openModal();
     });
 
-    var target = containerSelector ? document.querySelector(containerSelector) : thisScript.parentNode;
+    var target = containerSelector
+      ? document.querySelector(containerSelector)
+      : thisScript.parentNode;
     if (target === thisScript.parentNode) {
       target.insertBefore(btn, thisScript);
     } else {
@@ -213,6 +253,86 @@
           frame.style.height = e.data.height + 'px';
         }
       });
+    });
+  }
+
+  // Dokončená rezervace → měření konverzí na stránce provozovny.
+  // Vzor cal.com embed (bookingSuccessfulV2). Bere jen zprávy z NAŠICH iframů
+  // (zdroj i origin), aby konverzi nešlo podvrhnout z cizího okna.
+  if (!window.__reservedEmbedBookingBound) {
+    window.__reservedEmbedBookingBound = true;
+    var reportedBookings = {};
+    window.addEventListener('message', function (e) {
+      if (!e.data || e.data.type !== 'reserved:booking_success') return;
+      var frames = document.querySelectorAll('iframe[id^="rw-"]');
+      var cfg = null;
+      for (var i = 0; i < frames.length; i++) {
+        if (frames[i].contentWindow === e.source) {
+          cfg = (window.__reservedEmbedConfigs || {})[frames[i].id] || null;
+          break;
+        }
+      }
+      if (!cfg || (cfg.origin && e.origin !== cfg.origin)) return;
+
+      var d = e.data;
+      if (!d.bookingId || reportedBookings[d.bookingId]) return; // každou jen jednou
+      reportedBookings[d.bookingId] = true;
+
+      var value = typeof d.priceHellers === 'number' ? d.priceHellers / 100 : undefined;
+      var detail = {
+        bookingId: d.bookingId,
+        referenceCode: d.referenceCode,
+        serviceId: d.serviceId,
+        startsAt: d.startsAt,
+        endsAt: d.endsAt,
+        status: d.status,
+        kind: d.kind,
+        value: value,
+        priceHellers: d.priceHellers,
+        currency: d.currency,
+      };
+
+      try {
+        window.dispatchEvent(new CustomEvent('reserved:booking', { detail: detail }));
+      } catch (err) {
+        console.error('[Reserved] embed.js: reserved:booking event failed', err);
+      }
+      if (Array.isArray(window.dataLayer)) {
+        window.dataLayer.push({
+          event: 'reserved_booking',
+          value: value,
+          currency: d.currency,
+          reserved: detail,
+        });
+      }
+      if (cfg.metaEvent && typeof window.fbq === 'function') {
+        window.fbq(
+          'track',
+          cfg.metaEvent,
+          {
+            value: value,
+            currency: d.currency,
+            content_ids: d.serviceId ? [d.serviceId] : [],
+            content_type: 'product',
+          },
+          { eventID: 'reserved-' + d.bookingId },
+        );
+      }
+      if (cfg.gaEvent && typeof window.gtag === 'function') {
+        window.gtag('event', cfg.gaEvent, {
+          value: value,
+          currency: d.currency,
+          transaction_id: d.referenceCode,
+          items: d.serviceId ? [{ item_id: d.serviceId }] : [],
+        });
+      }
+      if (cfg.onBooking && typeof window[cfg.onBooking] === 'function') {
+        try {
+          window[cfg.onBooking](detail);
+        } catch (err) {
+          console.error('[Reserved] embed.js: data-on-booking callback failed', err);
+        }
+      }
     });
   }
 
